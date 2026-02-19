@@ -1,16 +1,32 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smart_shot/core/theme/theme_provider.dart';
 import 'package:smart_shot/features/gallery/presentation/gallery_provider.dart';
 import 'package:smart_shot/features/search/search_provider.dart';
 import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
 import 'package:smart_shot/features/gallery/domain/screenshot.dart';
 
-class GalleryScreen extends ConsumerWidget {
+class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends ConsumerState<GalleryScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+    // Trigger initial sync and permission request after frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(galleryRepositoryProvider).syncGallery();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final searchQuery = ref.watch(searchQueryProvider);
     final isSearching = searchQuery.isNotEmpty;
 
@@ -18,10 +34,18 @@ class GalleryScreen extends ConsumerWidget {
         ? ref.watch(searchResultsProvider)
         : ref.watch(galleryStreamProvider);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('SmartShot'),
         actions: [
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () {
+               ref.read(themeModeNotifierProvider.notifier).toggle();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {

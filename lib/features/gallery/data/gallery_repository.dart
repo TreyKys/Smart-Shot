@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -21,8 +22,12 @@ class GalleryRepository {
   Future<void> syncGallery() async {
     final isar = await _ref.read(isarProvider.future);
 
+    // Request permissions immediately
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
-    if (!ps.isAuth) return;
+    if (!ps.isAuth) {
+      debugPrint("Permission not granted: $ps");
+      return;
+    }
 
     final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
       type: RequestType.image,
@@ -31,10 +36,14 @@ class GalleryRepository {
       ),
     );
 
-    if (paths.isEmpty) return;
+    if (paths.isEmpty) {
+        debugPrint("No asset paths found.");
+        return;
+    }
 
     // Use the "Recent" album (usually the first one)
     final recentAlbum = paths.first;
+    debugPrint("Syncing album: ${recentAlbum.name}");
 
     // Fetch a large batch. For production, pagination is better.
     // Fetching 500 for MVP.
@@ -69,15 +78,40 @@ class GalleryRepository {
     _processPendingScreenshots();
   }
 
+  Future<void> addFile(File file) async {
+    final isar = await _ref.read(isarProvider.future);
+
+    // Check if file exists in DB
+    final existing = await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
+
+    if (existing == null) {
+      await isar.writeTxn(() async {
+         final screenshot = Screenshot()
+          ..filePath = file.path
+          ..timestamp = await file.lastModified()
+          ..isProcessed = false;
+         await isar.screenshots.put(screenshot);
+      });
+      // Trigger processing for the new file
+      _processPendingScreenshots();
+    } else {
+        debugPrint("File already exists in gallery: ${file.path}");
+    }
+  }
+
   Future<void> _processPendingScreenshots() async {
     final isar = await _ref.read(isarProvider.future);
     final ocrService = _ref.read(ocrServiceProvider);
 
     final unprocessed = await isar.screenshots.filter().isProcessedEqualTo(false).findAll();
+    debugPrint("Processing ${unprocessed.length} pending screenshots...");
 
     for (final screenshot in unprocessed) {
       final file = File(screenshot.filePath);
-      if (!file.existsSync()) continue;
+      if (!file.existsSync()) {
+          debugPrint("File not found for processing: ${screenshot.filePath}");
+          continue;
+      }
 
       final text = await ocrService.processImage(file);
 
@@ -87,6 +121,7 @@ class GalleryRepository {
          await isar.screenshots.put(screenshot);
       });
     }
+    debugPrint("Processing complete.");
   }
 
   Stream<List<Screenshot>> watchScreenshots() async* {
