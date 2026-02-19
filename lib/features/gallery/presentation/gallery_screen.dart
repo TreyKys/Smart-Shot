@@ -87,6 +87,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
               crossAxisCount: 3,
               crossAxisSpacing: 4,
               mainAxisSpacing: 4,
+              childAspectRatio: 0.7, // Taller items to accommodate tags
             ),
             itemCount: screenshots.length,
             itemBuilder: (context, index) {
@@ -95,21 +96,68 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                 onTap: () {
                   // Show detail?
                 },
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.file(
-                      File(screenshot.filePath),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image)),
-                    ),
-                    if (screenshot.isProcessed)
-                      const Positioned(
-                        right: 4,
-                        bottom: 4,
-                        child: Icon(Icons.check_circle, size: 16, color: Colors.green),
-                      )
-                  ],
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  elevation: 2,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(
+                        File(screenshot.filePath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image)),
+                      ),
+                      // Status Indicator
+                      if (screenshot.isProcessed)
+                        const Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Icon(Icons.check_circle, size: 16, color: Colors.green),
+                        ),
+
+                      // Tags Overlay
+                      if (screenshot.tags != null && screenshot.tags!.isNotEmpty)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.8),
+                                  Colors.transparent
+                                ],
+                              ),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: Wrap(
+                              spacing: 2,
+                              runSpacing: 2,
+                              children: screenshot.tags!.take(3).map((tag) => Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      tag,
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.bold
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  )).toList(),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             },

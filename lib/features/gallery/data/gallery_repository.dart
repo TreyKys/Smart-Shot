@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:smart_shot/core/database/isar_service.dart';
 import 'package:smart_shot/features/gallery/domain/screenshot.dart';
 import 'package:smart_shot/features/ingestion/services/ocr_service.dart';
+import 'package:smart_shot/features/ingestion/services/llm_service.dart';
 
 part 'gallery_repository.g.dart';
 
@@ -41,17 +42,38 @@ class GalleryRepository {
         return;
     }
 
-    // Use the "Recent" album (usually the first one)
-    final recentAlbum = paths.first;
-    debugPrint("Syncing album: ${recentAlbum.name}");
+    // Attempt to find the "Recent" or "All" album
+    final recentAlbum = paths.firstWhere((path) => path.isAll, orElse: () => paths.first);
+    debugPrint("Syncing album: ${recentAlbum.name} (id: ${recentAlbum.id}), count: ${await recentAlbum.assetCountAsync}");
 
-    // Fetch a large batch. For production, pagination is better.
-    // Fetching 500 for MVP.
-    final List<AssetEntity> assets = await recentAlbum.getAssetListRange(start: 0, end: 500);
+    // Fetch batch
+    final int count = await recentAlbum.assetCountAsync;
+    final int fetchCount = count > 500 ? 500 : count;
 
+    if (fetchCount == 0) {
+      debugPrint("No assets in album.");
+      return;
+    }
+
+    final List<AssetEntity> assets = await recentAlbum.getAssetListRange(start: 0, end: fetchCount);
+    debugPrint("Fetched ${assets.length} assets from PhotoManager.");
+
+    int addedCount = 0;
     for (final asset in assets) {
-      final file = await asset.file;
-      if (file == null) continue;
+      if (asset.type != AssetType.image) continue;
+
+      File? file;
+      try {
+        file = await asset.file;
+      } catch (e) {
+        debugPrint("Error getting file for asset ${asset.id}: $e");
+        continue;
+      }
+
+      if (file == null) {
+        debugPrint("File is null for asset ${asset.id}. It might be cloud-only.");
+        continue;
+      }
 
       // Check if exists using a transaction is safer but slower in loop.
       // Better to batch read.
@@ -67,12 +89,14 @@ class GalleryRepository {
       if (existing == null) {
         await isar.writeTxn(() async {
            final screenshot = Screenshot()
-            ..filePath = file.path
+            ..filePath = file!.path
             ..timestamp = asset.createDateTime;
            await isar.screenshots.put(screenshot);
         });
+        addedCount++;
       }
     }
+    debugPrint("Sync complete. Added $addedCount new screenshots.");
 
     // Trigger processing
     _processPendingScreenshots();
@@ -92,6 +116,7 @@ class GalleryRepository {
           ..isProcessed = false;
          await isar.screenshots.put(screenshot);
       });
+      debugPrint("Added file via Share: ${file.path}");
       // Trigger processing for the new file
       _processPendingScreenshots();
     } else {
@@ -102,8 +127,11 @@ class GalleryRepository {
   Future<void> _processPendingScreenshots() async {
     final isar = await _ref.read(isarProvider.future);
     final ocrService = _ref.read(ocrServiceProvider);
+    final llmService = _ref.read(llmServiceProvider);
 
     final unprocessed = await isar.screenshots.filter().isProcessedEqualTo(false).findAll();
+    if (unprocessed.isEmpty) return;
+
     debugPrint("Processing ${unprocessed.length} pending screenshots...");
 
     for (final screenshot in unprocessed) {
@@ -113,10 +141,39 @@ class GalleryRepository {
           continue;
       }
 
+      // 1. OCR
       final text = await ocrService.processImage(file);
+      debugPrint("OCR Text length: ${text.length}");
+
+      // 2. LLM Processing
+      final Map<String, dynamic> llmResult = await llmService.processOCRText(text);
 
       await isar.writeTxn(() async {
          screenshot.ocrText = text;
+
+         if (llmResult.isNotEmpty) {
+           screenshot.cleanText = llmResult['cleanText'] as String?;
+
+           if (llmResult['tags'] != null) {
+             screenshot.tags = (llmResult['tags'] as List).map((e) => e.toString()).toList();
+           }
+           if (llmResult['urls'] != null) {
+             screenshot.urls = (llmResult['urls'] as List).map((e) => e.toString()).toList();
+           }
+           if (llmResult['emails'] != null) {
+             screenshot.emails = (llmResult['emails'] as List).map((e) => e.toString()).toList();
+           }
+           if (llmResult['phoneNumbers'] != null) {
+             screenshot.phoneNumbers = (llmResult['phoneNumbers'] as List).map((e) => e.toString()).toList();
+           }
+           if (llmResult['dates'] != null) {
+             screenshot.dates = (llmResult['dates'] as List).map((e) => e.toString()).toList();
+           }
+           if (llmResult['cryptoAddresses'] != null) {
+             screenshot.cryptoAddresses = (llmResult['cryptoAddresses'] as List).map((e) => e.toString()).toList();
+           }
+         }
+
          screenshot.isProcessed = true;
          await isar.screenshots.put(screenshot);
       });

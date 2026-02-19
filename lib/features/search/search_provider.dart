@@ -24,24 +24,20 @@ Future<List<Screenshot>> searchResults(SearchResultsRef ref) async {
     return [];
   }
 
-  // For MVP, perform a case-insensitive contains search on the full query string.
-  // This supports "Wifi Password" if they appear adjacent.
-  // To support "Wifi ... Password", we need more complex filtering.
-  // Attempting to filter by multiple terms if they are separated.
-
   final terms = query.trim().split(RegExp(r'\s+'));
-
-  // If we have multiple terms, we can try to filter for the first one,
-  // then filter the list in Dart for the rest. This is efficient enough for 1000 items.
-
   if (terms.isEmpty) return [];
 
   final firstTerm = terms.first;
 
-  // Fetch candidates that match the first term
+  // Search across OCR text, clean text, and tags
   var candidates = await isar.screenshots
       .filter()
-      .ocrTextContains(firstTerm, caseSensitive: false)
+      .group((q) => q
+          .ocrTextContains(firstTerm, caseSensitive: false)
+          .or()
+          .cleanTextContains(firstTerm, caseSensitive: false)
+          .or()
+          .tagsElementContains(firstTerm, caseSensitive: false))
       .sortByTimestampDesc()
       .findAll();
 
@@ -49,8 +45,14 @@ Future<List<Screenshot>> searchResults(SearchResultsRef ref) async {
   if (terms.length > 1) {
     final remainingTerms = terms.sublist(1);
     candidates = candidates.where((s) {
-      final text = s.ocrText?.toLowerCase() ?? '';
-      return remainingTerms.every((term) => text.contains(term.toLowerCase()));
+      final ocr = s.ocrText?.toLowerCase() ?? '';
+      final clean = s.cleanText?.toLowerCase() ?? '';
+      final tags = s.tags?.map((t) => t.toLowerCase()).join(' ') ?? '';
+
+      // Combine all searchable text for checking
+      final combined = "$ocr $clean $tags";
+
+      return remainingTerms.every((term) => combined.contains(term.toLowerCase()));
     }).toList();
   }
 
