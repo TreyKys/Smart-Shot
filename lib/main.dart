@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
 import 'package:smart_shot/features/gallery/presentation/gallery_screen.dart';
+import 'package:smart_shot/core/theme/theme_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +39,12 @@ class _SmartShotAppState extends ConsumerState<SmartShotApp> {
   void _handleSharedFiles(List<SharedMediaFile> files) {
     if (files.isEmpty) return;
     debugPrint("Shared files received: ${files.length}");
-    // Future expansion: Ingest these files into the gallery/OCR pipeline.
+
+    final galleryRepo = ref.read(galleryRepositoryProvider);
+    for (final file in files) {
+      // Ingest into gallery
+      galleryRepo.addFile(File(file.path));
+    }
   }
 
   @override
@@ -47,10 +55,17 @@ class _SmartShotAppState extends ConsumerState<SmartShotApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeModeNotifierProvider);
+
     return MaterialApp(
       title: 'SmartShot',
+      themeMode: themeMode,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple, brightness: Brightness.light),
+        useMaterial3: true,
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple, brightness: Brightness.dark),
         useMaterial3: true,
       ),
       home: const GalleryScreen(),
