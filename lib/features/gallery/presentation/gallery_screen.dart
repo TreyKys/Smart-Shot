@@ -6,6 +6,7 @@ import 'package:smart_shot/features/gallery/presentation/gallery_provider.dart';
 import 'package:smart_shot/features/search/search_provider.dart';
 import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
 import 'package:smart_shot/features/gallery/domain/screenshot.dart';
+import 'package:smart_shot/features/gallery/presentation/image_detail_screen.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
@@ -94,7 +95,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
               final screenshot = screenshots[index];
               return GestureDetector(
                 onTap: () {
-                  // Show detail?
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => ImageDetailScreen(screenshot: screenshot),
+                    ),
+                  );
                 },
                 child: Card(
                   clipBehavior: Clip.antiAlias,
@@ -118,42 +123,30 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                       // Tags Overlay
                       if (screenshot.tags != null && screenshot.tags!.isNotEmpty)
                         Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.8),
-                                  Colors.transparent
-                                ],
-                              ),
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            child: Wrap(
-                              spacing: 2,
-                              runSpacing: 2,
-                              children: screenshot.tags!.take(3).map((tag) => Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(4),
+                          left: 4,
+                          right: 4,
+                          bottom: 4,
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            alignment: WrapAlignment.start,
+                            children: screenshot.tags!.take(3).map((tag) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black87,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    child: Text(
-                                      tag,
-                                      style: const TextStyle(
-                                        fontSize: 9,
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.bold
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  )).toList(),
-                            ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                )).toList(),
                           ),
                         ),
                     ],

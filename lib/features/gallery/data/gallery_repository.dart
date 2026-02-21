@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:smart_shot/core/database/isar_service.dart';
@@ -23,10 +24,18 @@ class GalleryRepository {
   Future<void> syncGallery() async {
     final isar = await _ref.read(isarProvider.future);
 
-    // Request permissions immediately
+    // 1. Request native permission first (Android 13+ specific)
+    // This forces the OS dialog if not already granted.
+    final PermissionStatus status = await Permission.photos.request();
+    debugPrint("Native Permission.photos status: $status");
+
+    // 2. Request PhotoManager permission (Library sync)
+    // This ensures PhotoManager is aware of the permission state.
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
+    debugPrint("PhotoManager PermissionState: $ps");
+
     if (!ps.isAuth) {
-      debugPrint("Permission not granted: $ps");
+      debugPrint("Permission not granted according to PhotoManager: $ps");
       return;
     }
 
