@@ -7,6 +7,10 @@ import 'package:smart_shot/features/search/search_provider.dart';
 import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
 import 'package:smart_shot/features/gallery/domain/screenshot.dart';
 import 'package:smart_shot/features/gallery/presentation/image_detail_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_shot/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
+import 'package:smart_shot/features/gallery/presentation/widgets/gallery_drawer.dart';
+import 'package:smart_shot/features/gallery/services/background_service.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
@@ -20,16 +24,49 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
   @override
   void initState() {
     super.initState();
-    // Trigger initial sync and permission request after frame
+    // Check consent before sync
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(galleryRepositoryProvider).syncGallery();
+      _checkSmartIndexingConsent();
     });
+  }
+
+  Future<void> _checkSmartIndexingConsent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final mode = prefs.getString('smart_indexing_mode');
+
+    if (mode == null) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false, // Force choice
+        builder: (context) => SmartIndexingDialog(
+          onLiveMode: () async {
+            Navigator.of(context).pop();
+            await prefs.setString('smart_indexing_mode', 'live');
+            await prefs.setInt('live_mode_timestamp', DateTime.now().millisecondsSinceEpoch);
+            ref.read(galleryRepositoryProvider).syncGallery();
+          },
+          onDeepScan: () async {
+            Navigator.of(context).pop();
+            await prefs.setString('smart_indexing_mode', 'deep');
+            scheduleDeepScan();
+            ref.read(galleryRepositoryProvider).syncGallery();
+          },
+        ),
+      );
+    } else {
+      if (mode == 'deep') {
+        scheduleDeepScan(); // Ensure it's scheduled
+      }
+      ref.read(galleryRepositoryProvider).syncGallery();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final searchQuery = ref.watch(searchQueryProvider);
     final isSearching = searchQuery.isNotEmpty;
+    final selectedTag = ref.watch(selectedTagProvider);
 
     final AsyncValue<List<Screenshot>> content = isSearching
         ? ref.watch(searchResultsProvider)
@@ -38,8 +75,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      drawer: const GalleryDrawer(),
       appBar: AppBar(
-        title: const Text('SmartShot'),
+        title: Text(selectedTag != null ? 'Tag: $selectedTag' : 'SmartShot'),
         actions: [
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),

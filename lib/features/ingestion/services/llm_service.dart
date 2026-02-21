@@ -20,7 +20,7 @@ class LLMService {
       debugPrint("Warning: GEMINI_API_KEY is not set or is default in .env");
     }
     _model = GenerativeModel(
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       apiKey: _apiKey,
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',
@@ -48,6 +48,11 @@ class LLMService {
     5. "phoneNumbers": A list of phone numbers found.
     6. "dates": A list of dates or deadlines found.
     7. "cryptoAddresses": A list of cryptocurrency addresses found.
+    8. "suggested_actions": A JSON array of suggested actions based on the content.
+       - Each action object must have:
+         - "label": A short, descriptive button label (e.g., "Copy Contract Address", "Track Package", "Open Link").
+         - "payload": The actual data for the action (e.g., the URL, the address, the phone number).
+         - "intent_type": One of "url", "copy", "dial".
 
     Output strictly valid JSON.
     """;

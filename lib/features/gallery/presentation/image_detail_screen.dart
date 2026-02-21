@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:smart_shot/features/gallery/domain/screenshot.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ImageDetailScreen extends StatelessWidget {
   final Screenshot screenshot;
@@ -40,6 +42,22 @@ class ImageDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            if (screenshot.suggestedActions != null && screenshot.suggestedActions!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: screenshot.suggestedActions!.map((action) => ActionChip(
+                    avatar: _getActionIcon(action.intentType),
+                    label: Text(action.label ?? "Action"),
+                    onPressed: () => _handleAction(context, action),
+                  )).toList(),
+                ),
+              ),
+            if (screenshot.suggestedActions != null && screenshot.suggestedActions!.isNotEmpty)
+              const SizedBox(height: 8),
+
             if (screenshot.tags != null && screenshot.tags!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -75,5 +93,50 @@ class ImageDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Icon? _getActionIcon(String? intentType) {
+    switch (intentType) {
+      case 'url': return const Icon(Icons.link, size: 16);
+      case 'copy': return const Icon(Icons.copy, size: 16);
+      case 'dial': return const Icon(Icons.phone, size: 16);
+      default: return const Icon(Icons.touch_app, size: 16);
+    }
+  }
+
+  Future<void> _handleAction(BuildContext context, SuggestedAction action) async {
+    final payload = action.payload;
+    if (payload == null || payload.isEmpty) return;
+
+    try {
+      if (action.intentType == 'url') {
+        final uri = Uri.tryParse(payload);
+        if (uri != null) {
+           // Try to launch without check first, or just launch
+           if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not launch URL")));
+              }
+           }
+        }
+      } else if (action.intentType == 'dial') {
+        final uri = Uri(scheme: 'tel', path: payload);
+        if (!await launchUrl(uri)) {
+           if (context.mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not dial number")));
+           }
+        }
+      } else if (action.intentType == 'copy') {
+        await Clipboard.setData(ClipboardData(text: payload));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Copied: $payload")));
+        }
+      }
+    } catch (e) {
+      debugPrint("Action failed: $e");
+      if (context.mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
   }
 }

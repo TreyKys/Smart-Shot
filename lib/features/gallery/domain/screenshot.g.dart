@@ -62,18 +62,24 @@ const ScreenshotSchema = CollectionSchema(
       name: r'phoneNumbers',
       type: IsarType.stringList,
     ),
-    r'tags': PropertySchema(
+    r'suggestedActions': PropertySchema(
       id: 9,
+      name: r'suggestedActions',
+      type: IsarType.objectList,
+      target: r'SuggestedAction',
+    ),
+    r'tags': PropertySchema(
+      id: 10,
       name: r'tags',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'urls': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'urls',
       type: IsarType.stringList,
     )
@@ -138,7 +144,7 @@ const ScreenshotSchema = CollectionSchema(
     )
   },
   links: {},
-  embeddedSchemas: {},
+  embeddedSchemas: {r'SuggestedAction': SuggestedActionSchema},
   getId: _screenshotGetId,
   getLinks: _screenshotGetLinks,
   attach: _screenshotAttach,
@@ -219,6 +225,20 @@ int _screenshotEstimateSize(
     }
   }
   {
+    final list = object.suggestedActions;
+    if (list != null) {
+      bytesCount += 3 + list.length * 3;
+      {
+        final offsets = allOffsets[SuggestedAction]!;
+        for (var i = 0; i < list.length; i++) {
+          final value = list[i];
+          bytesCount +=
+              SuggestedActionSchema.estimateSize(value, offsets, allOffsets);
+        }
+      }
+    }
+  }
+  {
     final list = object.tags;
     if (list != null) {
       bytesCount += 3 + list.length * 3;
@@ -260,9 +280,15 @@ void _screenshotSerialize(
   writer.writeBool(offsets[6], object.isProcessed);
   writer.writeString(offsets[7], object.ocrText);
   writer.writeStringList(offsets[8], object.phoneNumbers);
-  writer.writeStringList(offsets[9], object.tags);
-  writer.writeDateTime(offsets[10], object.timestamp);
-  writer.writeStringList(offsets[11], object.urls);
+  writer.writeObjectList<SuggestedAction>(
+    offsets[9],
+    allOffsets,
+    SuggestedActionSchema.serialize,
+    object.suggestedActions,
+  );
+  writer.writeStringList(offsets[10], object.tags);
+  writer.writeDateTime(offsets[11], object.timestamp);
+  writer.writeStringList(offsets[12], object.urls);
 }
 
 Screenshot _screenshotDeserialize(
@@ -282,9 +308,15 @@ Screenshot _screenshotDeserialize(
   object.isProcessed = reader.readBool(offsets[6]);
   object.ocrText = reader.readStringOrNull(offsets[7]);
   object.phoneNumbers = reader.readStringList(offsets[8]);
-  object.tags = reader.readStringList(offsets[9]);
-  object.timestamp = reader.readDateTime(offsets[10]);
-  object.urls = reader.readStringList(offsets[11]);
+  object.suggestedActions = reader.readObjectList<SuggestedAction>(
+    offsets[9],
+    SuggestedActionSchema.deserialize,
+    allOffsets,
+    SuggestedAction(),
+  );
+  object.tags = reader.readStringList(offsets[10]);
+  object.timestamp = reader.readDateTime(offsets[11]);
+  object.urls = reader.readStringList(offsets[12]);
   return object;
 }
 
@@ -314,10 +346,17 @@ P _screenshotDeserializeProp<P>(
     case 8:
       return (reader.readStringList(offset)) as P;
     case 9:
-      return (reader.readStringList(offset)) as P;
+      return (reader.readObjectList<SuggestedAction>(
+        offset,
+        SuggestedActionSchema.deserialize,
+        allOffsets,
+        SuggestedAction(),
+      )) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringList(offset)) as P;
     case 11:
+      return (reader.readDateTime(offset)) as P;
+    case 12:
       return (reader.readStringList(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -2660,6 +2699,113 @@ extension ScreenshotQueryFilter
     });
   }
 
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'suggestedActions',
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'suggestedActions',
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'suggestedActions',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'suggestedActions',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'suggestedActions',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'suggestedActions',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'suggestedActions',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'suggestedActions',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
   QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> tagsIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -3192,7 +3338,14 @@ extension ScreenshotQueryFilter
 }
 
 extension ScreenshotQueryObject
-    on QueryBuilder<Screenshot, Screenshot, QFilterCondition> {}
+    on QueryBuilder<Screenshot, Screenshot, QFilterCondition> {
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      suggestedActionsElement(FilterQuery<SuggestedAction> q) {
+    return QueryBuilder.apply(this, (query) {
+      return query.object(q, r'suggestedActions');
+    });
+  }
+}
 
 extension ScreenshotQueryLinks
     on QueryBuilder<Screenshot, Screenshot, QFilterCondition> {}
@@ -3502,6 +3655,13 @@ extension ScreenshotQueryProperty
     });
   }
 
+  QueryBuilder<Screenshot, List<SuggestedAction>?, QQueryOperations>
+      suggestedActionsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'suggestedActions');
+    });
+  }
+
   QueryBuilder<Screenshot, List<String>?, QQueryOperations> tagsProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'tags');
@@ -3520,3 +3680,573 @@ extension ScreenshotQueryProperty
     });
   }
 }
+
+// **************************************************************************
+// IsarEmbeddedGenerator
+// **************************************************************************
+
+// coverage:ignore-file
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+
+const SuggestedActionSchema = Schema(
+  name: r'SuggestedAction',
+  id: 5067764616342620424,
+  properties: {
+    r'intentType': PropertySchema(
+      id: 0,
+      name: r'intentType',
+      type: IsarType.string,
+    ),
+    r'label': PropertySchema(
+      id: 1,
+      name: r'label',
+      type: IsarType.string,
+    ),
+    r'payload': PropertySchema(
+      id: 2,
+      name: r'payload',
+      type: IsarType.string,
+    )
+  },
+  estimateSize: _suggestedActionEstimateSize,
+  serialize: _suggestedActionSerialize,
+  deserialize: _suggestedActionDeserialize,
+  deserializeProp: _suggestedActionDeserializeProp,
+);
+
+int _suggestedActionEstimateSize(
+  SuggestedAction object,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  var bytesCount = offsets.last;
+  {
+    final value = object.intentType;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.label;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.payload;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  return bytesCount;
+}
+
+void _suggestedActionSerialize(
+  SuggestedAction object,
+  IsarWriter writer,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  writer.writeString(offsets[0], object.intentType);
+  writer.writeString(offsets[1], object.label);
+  writer.writeString(offsets[2], object.payload);
+}
+
+SuggestedAction _suggestedActionDeserialize(
+  Id id,
+  IsarReader reader,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  final object = SuggestedAction();
+  object.intentType = reader.readStringOrNull(offsets[0]);
+  object.label = reader.readStringOrNull(offsets[1]);
+  object.payload = reader.readStringOrNull(offsets[2]);
+  return object;
+}
+
+P _suggestedActionDeserializeProp<P>(
+  IsarReader reader,
+  int propertyId,
+  int offset,
+  Map<Type, List<int>> allOffsets,
+) {
+  switch (propertyId) {
+    case 0:
+      return (reader.readStringOrNull(offset)) as P;
+    case 1:
+      return (reader.readStringOrNull(offset)) as P;
+    case 2:
+      return (reader.readStringOrNull(offset)) as P;
+    default:
+      throw IsarError('Unknown property with id $propertyId');
+  }
+}
+
+extension SuggestedActionQueryFilter
+    on QueryBuilder<SuggestedAction, SuggestedAction, QFilterCondition> {
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'intentType',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'intentType',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'intentType',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'intentType',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'intentType',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'intentType',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'intentType',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'intentType',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'intentType',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'intentType',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'intentType',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      intentTypeIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'intentType',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'label',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'label',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'label',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'label',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'label',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'label',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'label',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'label',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'label',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'label',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'label',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      labelIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'label',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'payload',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'payload',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'payload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'payload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'payload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'payload',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'payload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'payload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'payload',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'payload',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'payload',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SuggestedAction, SuggestedAction, QAfterFilterCondition>
+      payloadIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'payload',
+        value: '',
+      ));
+    });
+  }
+}
+
+extension SuggestedActionQueryObject
+    on QueryBuilder<SuggestedAction, SuggestedAction, QFilterCondition> {}

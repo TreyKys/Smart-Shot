@@ -5,12 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
 import 'package:smart_shot/features/gallery/presentation/gallery_screen.dart';
+import 'package:smart_shot/features/gallery/services/background_service.dart';
 import 'package:smart_shot/core/theme/theme_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:workmanager/workmanager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+  Workmanager().initialize(callbackDispatcher);
   runApp(const ProviderScope(child: SmartShotApp()));
 }
 
