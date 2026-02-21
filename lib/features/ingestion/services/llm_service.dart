@@ -20,7 +20,7 @@ class LLMService {
       debugPrint("Warning: GEMINI_API_KEY is not set or is default in .env");
     }
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3-flash',
       apiKey: _apiKey,
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',
