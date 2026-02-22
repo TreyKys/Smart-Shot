@@ -76,12 +76,22 @@ class GalleryRepository {
     int index = 0;
     for (final asset in assets) {
       index++;
-      // Live Mode Check: Stop processing deep history
-      if (mode == 'live' && timestamp > 0) {
-          // If we are past the initial "recent buffer" (e.g. 40 items) AND the asset is older than the start time
-          if (index > 40 && asset.createDateTime.millisecondsSinceEpoch <= timestamp) {
-              debugPrint("Live mode: Reached cutoff at index $index. Stopping sync.");
-              break;
+
+      // Live Mode Check: Stop processing deep history, but allow a buffer of recent images (40)
+      if (mode == 'live') {
+          // If we are past the initial "recent buffer" (e.g. 40 items)
+          if (index > 40) {
+             // If we have a timestamp set (meaning live mode was activated previously), respect it.
+             if (timestamp > 0 && asset.createDateTime.millisecondsSinceEpoch <= timestamp) {
+                 debugPrint("Live mode: Reached cutoff at index $index. Stopping sync.");
+                 break;
+             }
+             // If no timestamp (first run of live mode), we just stop after 40 to avoid deep scanning.
+             // (Actually, the dialog sets the timestamp, so this branch might be rare if flow is correct, but safe to have)
+             if (timestamp == 0) {
+                 debugPrint("Live mode: Reached buffer limit (40). Stopping sync.");
+                 break;
+             }
           }
       }
 
@@ -174,6 +184,10 @@ class GalleryRepository {
     debugPrint("Processing ${unprocessed.length} pending screenshots...");
 
     for (final screenshot in unprocessed) {
+      // Add delay to respect rate limits (15 RPM -> 1 req / 4 sec)
+      // We do this at start of loop, effectively spacing out requests.
+      await Future.delayed(const Duration(seconds: 4));
+
       final file = File(screenshot.filePath);
       if (!file.existsSync()) {
           debugPrint("File not found for processing: ${screenshot.filePath}");

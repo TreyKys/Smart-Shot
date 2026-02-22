@@ -65,12 +65,29 @@ class LLMService {
       if (responseText == null) return {};
 
       // Sanitize response if it contains markdown code blocks (just in case the model ignores the mime type instruction, though usually it respects it)
-      final jsonString = responseText.replaceAll(RegExp(r'^```json\s*', multiLine: true), '').replaceAll(RegExp(r'\s*```$', multiLine: true), '').trim();
+      // Also handle potential leading/trailing whitespace around the code block.
+      var jsonString = responseText.trim();
+      if (jsonString.startsWith('```json')) {
+        jsonString = jsonString.replaceFirst(RegExp(r'^```json\s*'), '');
+      } else if (jsonString.startsWith('```')) {
+        jsonString = jsonString.replaceFirst(RegExp(r'^```\s*'), '');
+      }
+      if (jsonString.endsWith('```')) {
+        jsonString = jsonString.replaceFirst(RegExp(r'\s*```$'), '');
+      }
+
+      jsonString = jsonString.trim();
 
       try {
-        return jsonDecode(jsonString) as Map<String, dynamic>;
+        final decoded = jsonDecode(jsonString);
+        if (decoded is Map<String, dynamic>) {
+            return decoded;
+        } else {
+             debugPrint("LLM returned valid JSON but not a Map: $decoded");
+             return {};
+        }
       } catch (e) {
-        debugPrint("Error parsing LLM JSON response: $e\nResponse: $responseText");
+        debugPrint("Error parsing LLM JSON response: $e\nRaw Response: $responseText");
         return {};
       }
     } catch (e) {
