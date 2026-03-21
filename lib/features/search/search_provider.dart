@@ -1,7 +1,7 @@
 import 'package:isar/isar.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:smart_shot/core/database/isar_service.dart';
-import 'package:smart_shot/features/gallery/domain/screenshot.dart';
+import 'package:sift/core/database/isar_service.dart';
+import 'package:sift/features/gallery/domain/screenshot.dart';
 
 part 'search_provider.g.dart';
 

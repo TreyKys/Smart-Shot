@@ -13,9 +13,10 @@ LLMService llmService(LlmServiceRef ref) {
 
 class LLMService {
   late final GenerativeModel _model;
-  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
+  late final String _apiKey;
 
-  LLMService() {
+  LLMService({String? apiKey}) {
+    _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? "";
     if (_apiKey.isEmpty || _apiKey == "INSERT_API_KEY_HERE") {
       debugPrint("Warning: GEMINI_API_KEY is not set or is default in .env");
     }

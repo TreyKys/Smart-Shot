@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
-import 'package:smart_shot/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/gallery/data/gallery_repository.dart';
+import 'package:sift/features/gallery/domain/screenshot.dart';
 
 part 'gallery_provider.g.dart';
 

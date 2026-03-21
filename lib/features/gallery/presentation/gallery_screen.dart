@@ -1,16 +1,17 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smart_shot/core/theme/theme_provider.dart';
-import 'package:smart_shot/features/gallery/presentation/gallery_provider.dart';
-import 'package:smart_shot/features/search/search_provider.dart';
-import 'package:smart_shot/features/gallery/data/gallery_repository.dart';
-import 'package:smart_shot/features/gallery/domain/screenshot.dart';
-import 'package:smart_shot/features/gallery/presentation/image_detail_screen.dart';
+import 'package:sift/core/theme/theme_provider.dart';
+import 'package:sift/features/gallery/presentation/gallery_provider.dart';
+import 'package:sift/features/search/search_provider.dart';
+import 'package:sift/features/gallery/data/gallery_repository.dart';
+import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smart_shot/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
-import 'package:smart_shot/features/gallery/presentation/widgets/gallery_drawer.dart';
-import 'package:smart_shot/features/gallery/services/background_service.dart';
+import 'package:sift/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
+import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
+import 'package:sift/features/gallery/services/background_service.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
@@ -77,7 +78,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     return Scaffold(
       drawer: const GalleryDrawer(),
       appBar: AppBar(
-        title: Text(selectedTag != null ? 'Tag: $selectedTag' : 'SmartShot'),
+        title: Text(selectedTag != null ? 'Tag: $selectedTag' : 'Sift'),
         actions: [
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
@@ -119,15 +120,25 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       body: content.when(
         data: (screenshots) {
           if (screenshots.isEmpty) {
-             return Center(child: Text(isSearching ? "No results found." : "No screenshots yet."));
+             return Center(
+               child: Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+                   const Icon(Icons.cleaning_services, size: 64, color: Colors.grey),
+                   const SizedBox(height: 16),
+                   Text(
+                     isSearching ? "No results found." : "Your gallery is clean.\nTake a screenshot to extract data.",
+                     textAlign: TextAlign.center,
+                     style: const TextStyle(color: Colors.grey, fontSize: 16),
+                   ),
+                 ],
+               ),
+             );
           }
-          return GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 4,
-              mainAxisSpacing: 4,
-              childAspectRatio: 0.7, // Taller items to accommodate tags
-            ),
+          return MasonryGridView.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
             itemCount: screenshots.length,
             itemBuilder: (context, index) {
               final screenshot = screenshots[index];
@@ -143,13 +154,34 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                   clipBehavior: Clip.antiAlias,
                   elevation: 2,
                   child: Stack(
-                    fit: StackFit.expand,
                     children: [
                       Image.file(
                         File(screenshot.filePath),
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image)),
+                        errorBuilder: (context, error, stackTrace) => const SizedBox(
+                          height: 150,
+                          child: Center(child: Icon(Icons.broken_image)),
+                        ),
                       ),
+                      // Loading State Overlay
+                      if (!screenshot.isProcessed)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black54,
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                SizedBox(height: 8),
+                                Text(
+                                  "Sifting... filtering out the noise.",
+                                  style: TextStyle(color: Colors.white, fontSize: 10),
+                                  textAlign: TextAlign.center,
+                                )
+                              ],
+                            ),
+                          ),
+                        ),
                       // Status Indicator
                       if (screenshot.isProcessed)
                         const Positioned(
@@ -157,9 +189,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                           right: 4,
                           child: Icon(Icons.check_circle, size: 16, color: Colors.green),
                         ),
-
                       // Tags Overlay
-                      if (screenshot.tags != null && screenshot.tags!.isNotEmpty)
+                      if (screenshot.isProcessed && screenshot.tags != null && screenshot.tags!.isNotEmpty)
                         Positioned(
                           left: 4,
                           right: 4,

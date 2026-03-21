@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:smart_shot/features/gallery/domain/screenshot.dart';
-import 'package:smart_shot/features/ingestion/services/llm_service.dart';
-import 'package:smart_shot/features/ingestion/services/ocr_service.dart';
+import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/ingestion/services/llm_service.dart';
+import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:workmanager/workmanager.dart';
 
 const String kDeepScanTask = "com.smartshot.deepscan";
