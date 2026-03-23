@@ -11,6 +11,7 @@ import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/pro/pro_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 part 'gallery_repository.g.dart';
 
@@ -248,11 +249,11 @@ class GalleryRepository {
     return text;
   }
 
-  static Future<Map<String, dynamic>> _runLlmIsolate(Map<String, String> args) async {
+  static Future<Map<String, dynamic>> _runLlmIsolate(Map<String, dynamic> args) async {
     // We cannot easily pass LLMService across isolate boundary because of GenerativeModel,
     // so we construct a temporary one with the passed in key.
-    final llmService = LLMService(apiKey: args['apiKey'] ?? "");
-    return await llmService.processOCRText(args['text'] ?? "");
+    final llmService = LLMService(apiKey: args['apiKey'] as String? ?? "");
+    return await llmService.processOCRText(args['text'] as String? ?? "");
   }
 
   Stream<List<Screenshot>> watchScreenshots({String? tag}) async* {

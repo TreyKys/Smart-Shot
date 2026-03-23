@@ -58,8 +58,8 @@ class ProService extends _$ProService {
 
   Future<void> purchasePackage(Package package) async {
     try {
-      final customerInfo = await Purchases.purchasePackage(package);
-      state = customerInfo.entitlements.all["pro_entitlement"]?.isActive ?? false;
+      final purchaseResult = await Purchases.purchasePackage(package);
+      state = purchaseResult.customerInfo.entitlements.all["pro_entitlement"]?.isActive ?? false;
       await _prefs.setBool('is_pro', state);
     } catch (e) {
       debugPrint("Purchase error: $e");
