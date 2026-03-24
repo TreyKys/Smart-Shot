@@ -192,7 +192,7 @@ class GalleryRepository {
       final llmService = _ref.read(llmServiceProvider);
       await Future.delayed(const Duration(seconds: 4)); // Respect rate limits
 
-      final Map<String, dynamic> llmResult = await compute(_runLlmIsolate, {
+      final Map<String, dynamic> llmResult = await compute(_runLlmIsolate, <String, String>{
         'text': text,
         'apiKey': dotenv.env['GEMINI_API_KEY'] ?? "",
       });
@@ -249,11 +249,11 @@ class GalleryRepository {
     return text;
   }
 
-  static Future<Map<String, dynamic>> _runLlmIsolate(Map<String, dynamic> args) async {
+  static Future<Map<String, dynamic>> _runLlmIsolate(Map<String, String> args) async {
     // We cannot easily pass LLMService across isolate boundary because of GenerativeModel,
     // so we construct a temporary one with the passed in key.
-    final llmService = LLMService(apiKey: args['apiKey'] as String? ?? "");
-    return await llmService.processOCRText(args['text'] as String? ?? "");
+    final llmService = LLMService(apiKey: args['apiKey'] ?? "");
+    return await llmService.processOCRText(args['text'] ?? "");
   }
 
   Stream<List<Screenshot>> watchScreenshots({String? tag}) async* {
