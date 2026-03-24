@@ -5,10 +5,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smart_shot/core/database/isar_service.dart';
-import 'package:smart_shot/features/gallery/domain/screenshot.dart';
-import 'package:smart_shot/features/ingestion/services/ocr_service.dart';
-import 'package:smart_shot/features/ingestion/services/llm_service.dart';
+import 'package:sift/core/database/isar_service.dart';
+import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/ingestion/services/ocr_service.dart';
+import 'package:sift/features/ingestion/services/llm_service.dart';
+import 'package:sift/features/economy/economy_service.dart';
+import 'package:sift/features/pro/pro_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 part 'gallery_repository.g.dart';
 
@@ -56,81 +59,71 @@ class GalleryRepository {
     final recentAlbum = paths.firstWhere((path) => path.isAll, orElse: () => paths.first);
     debugPrint("Syncing album: ${recentAlbum.name} (id: ${recentAlbum.id}), count: ${await recentAlbum.assetCountAsync}");
 
-    // Fetch batch
+    // Fetch batch in rigid pagination
     final int count = await recentAlbum.assetCountAsync;
-    final int fetchCount = count > 500 ? 500 : count;
-
-    if (fetchCount == 0) {
-      debugPrint("No assets in album.");
-      return;
-    }
-
-    final List<AssetEntity> assets = await recentAlbum.getAssetListRange(start: 0, end: fetchCount);
-    debugPrint("Fetched ${assets.length} assets from PhotoManager.");
-
     final prefs = await SharedPreferences.getInstance();
-    final mode = prefs.getString('smart_indexing_mode');
+    final isPro = _ref.read(proServiceProvider);
+    final isDeepScan = prefs.getString('smart_indexing_mode') == 'deep' && isPro;
     final timestamp = prefs.getInt('live_mode_timestamp') ?? 0;
 
     int addedCount = 0;
-    int index = 0;
-    for (final asset in assets) {
-      index++;
 
-      // Live Mode Check: Stop processing deep history, but allow a buffer of recent images (40)
-      if (mode == 'live') {
-          // If we are past the initial "recent buffer" (e.g. 40 items)
-          if (index > 40) {
-             // If we have a timestamp set (meaning live mode was activated previously), respect it.
-             if (timestamp > 0 && asset.createDateTime.millisecondsSinceEpoch <= timestamp) {
-                 debugPrint("Live mode: Reached cutoff at index $index. Stopping sync.");
-                 break;
-             }
-             // If no timestamp (first run of live mode), we just stop after 40 to avoid deep scanning.
-             // (Actually, the dialog sets the timestamp, so this branch might be rare if flow is correct, but safe to have)
-             if (timestamp == 0) {
-                 debugPrint("Live mode: Reached buffer limit (40). Stopping sync.");
-                 break;
-             }
-          }
+    // Process in batches of 20
+    const batchSize = 20;
+    for (int i = 0; i < count; i += batchSize) {
+      final List<AssetEntity> assets = await recentAlbum.getAssetListRange(start: i, end: i + batchSize);
+      if (assets.isEmpty) break;
+
+      bool stopSyncing = false;
+
+      for (final asset in assets) {
+        // Free users only get "live" mode regardless of deep scan preference.
+        // Even Pro users respect live mode if that's what they chose.
+        if (!isDeepScan) {
+           if (i + assets.indexOf(asset) > 40) { // Keep buffer of 40
+              if (timestamp > 0 && asset.createDateTime.millisecondsSinceEpoch <= timestamp) {
+                   debugPrint("Live mode: Reached cutoff. Stopping sync.");
+                   stopSyncing = true;
+                   break;
+               }
+               if (timestamp == 0) {
+                   debugPrint("Live mode: Reached buffer limit. Stopping sync.");
+                   stopSyncing = true;
+                   break;
+               }
+           }
+        }
+
+        if (asset.type != AssetType.image) continue;
+
+        File? file;
+        try {
+          file = await asset.file;
+        } catch (e) {
+          debugPrint("Error getting file for asset ${asset.id}: $e");
+          continue;
+        }
+
+        if (file == null) continue;
+
+        final existing = await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
+
+        if (existing == null) {
+          await isar.writeTxn(() async {
+             final screenshot = Screenshot()
+              ..filePath = file!.path
+              ..timestamp = asset.createDateTime;
+             await isar.screenshots.put(screenshot);
+          });
+          addedCount++;
+        }
       }
 
-      if (asset.type != AssetType.image) continue;
-
-      File? file;
-      try {
-        file = await asset.file;
-      } catch (e) {
-        debugPrint("Error getting file for asset ${asset.id}: $e");
-        continue;
-      }
-
-      if (file == null) {
-        debugPrint("File is null for asset ${asset.id}. It might be cloud-only.");
-        continue;
-      }
-
-      // Check if exists using a transaction is safer but slower in loop.
-      // Better to batch read.
-      // For MVP, we'll check individually inside the writeTxn or before.
-
-      // We can use put by index if we had a unique ID, but filePath is unique index.
-      // Isar put will update if id matches, but here we don't know the ID.
-      // We rely on checking filePath.
-
-      // Optimization: Check if it exists before writing.
-      final existing = await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
-
-      if (existing == null) {
-        await isar.writeTxn(() async {
-           final screenshot = Screenshot()
-            ..filePath = file!.path
-            ..timestamp = asset.createDateTime;
-           await isar.screenshots.put(screenshot);
-        });
-        addedCount++;
-      }
+      if (stopSyncing) break;
+      // Yield to keep UI smooth
+      await Future.delayed(const Duration(milliseconds: 50));
     }
+
     debugPrint("Sync complete. Added $addedCount new screenshots.");
 
     // Trigger processing
@@ -161,49 +154,50 @@ class GalleryRepository {
 
   Future<void> _processPendingScreenshots() async {
     final isar = await _ref.read(isarProvider.future);
-    final ocrService = _ref.read(ocrServiceProvider);
-    final llmService = _ref.read(llmServiceProvider);
-    final prefs = await SharedPreferences.getInstance();
-    final mode = prefs.getString('smart_indexing_mode');
 
     // Filter pending screenshots
     var query = isar.screenshots.filter().isProcessedEqualTo(false);
-    List<Screenshot> unprocessed;
-
-    if (mode == 'deep') {
-      // In deep scan mode, only process a small batch in foreground (e.g., 5) to give immediate feedback,
-      // let background task handle the rest.
-      unprocessed = await query.limit(5).findAll();
-    } else {
-      // Live mode (or unset): Process all pending (which should be few due to sync filtering)
-      unprocessed = await query.findAll();
-    }
+    final unprocessed = await query.findAll();
 
     if (unprocessed.isEmpty) return;
 
     debugPrint("Processing ${unprocessed.length} pending screenshots...");
 
+    // Spawn an Isolate for processing to keep UI smooth
     for (final screenshot in unprocessed) {
-      // Add delay to respect rate limits (15 RPM -> 1 req / 4 sec)
-      // We do this at start of loop, effectively spacing out requests.
-      await Future.delayed(const Duration(seconds: 4));
-
       final file = File(screenshot.filePath);
-      if (!file.existsSync()) {
-          debugPrint("File not found for processing: ${screenshot.filePath}");
-          continue;
-      }
+      if (!file.existsSync()) continue;
 
-      // 1. OCR
-      final text = await ocrService.processImage(file);
-      debugPrint("OCR Text length: ${text.length}");
-
-      // 2. LLM Processing
-      final Map<String, dynamic> llmResult = await llmService.processOCRText(text);
+      // Ensure we have an active instance of the ocr service and isolate computation
+      final text = await compute(_runOcrIsolate, file.path);
 
       await isar.writeTxn(() async {
          screenshot.ocrText = text;
+         await isar.screenshots.put(screenshot);
+      });
 
+      // 2. LLM (Layer 2 - Bounded by Energy)
+      final hasEnergy = await _ref.read(economyServiceProvider.notifier).hasEnoughEnergy();
+      if (!hasEnergy) {
+          debugPrint("Skipping LLM: Not enough energy.");
+          // Still mark as processed so it doesn't loop forever, but user gets no AI analysis
+          await isar.writeTxn(() async {
+              screenshot.isProcessed = true;
+              await isar.screenshots.put(screenshot);
+          });
+          continue;
+      }
+
+      // We have energy, process
+      final llmService = _ref.read(llmServiceProvider);
+      await Future.delayed(const Duration(seconds: 4)); // Respect rate limits
+
+      final Map<String, dynamic> llmResult = await compute(_runLlmIsolate, <String, String>{
+        'text': text,
+        'apiKey': dotenv.env['GEMINI_API_KEY'] ?? "",
+      });
+
+      await isar.writeTxn(() async {
          if (llmResult.isNotEmpty) {
            screenshot.cleanText = llmResult['cleanText'] as String?;
 
@@ -240,8 +234,26 @@ class GalleryRepository {
          screenshot.isProcessed = true;
          await isar.screenshots.put(screenshot);
       });
+
+      // Consume energy after successful process
+      await _ref.read(economyServiceProvider.notifier).consumeEnergy(1);
     }
     debugPrint("Processing complete.");
+  }
+
+  // Top-level functions for compute()
+  static Future<String> _runOcrIsolate(String filePath) async {
+    final ocrService = OcrService();
+    final text = await ocrService.processImage(File(filePath));
+    ocrService.dispose();
+    return text;
+  }
+
+  static Future<Map<String, dynamic>> _runLlmIsolate(Map<String, String> args) async {
+    // We cannot easily pass LLMService across isolate boundary because of GenerativeModel,
+    // so we construct a temporary one with the passed in key.
+    final llmService = LLMService(apiKey: args['apiKey'] ?? "");
+    return await llmService.processOCRText(args['text'] ?? "");
   }
 
   Stream<List<Screenshot>> watchScreenshots({String? tag}) async* {

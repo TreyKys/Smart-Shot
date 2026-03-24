@@ -1,7 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smart_shot/features/gallery/presentation/gallery_provider.dart';
+import 'package:sift/features/gallery/presentation/gallery_provider.dart';
+import 'package:sift/features/settings/settings_screen.dart';
 
 class GalleryDrawer extends ConsumerWidget {
   const GalleryDrawer({super.key});
@@ -34,6 +35,18 @@ class GalleryDrawer extends ConsumerWidget {
             onTap: () {
               ref.read(selectedTagProvider.notifier).select(null);
               Navigator.pop(context);
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Settings & Pro'),
+            onTap: () {
+              Navigator.pop(context); // Close drawer
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
             },
           ),
           const Divider(),
