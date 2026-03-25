@@ -79,9 +79,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               trailing: ElevatedButton(
                 onPressed: () {
+                   // Show a loading snackbar or dialog since ads can be slow to load
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     const SnackBar(
+                       content: Row(
+                         children: [
+                           SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                           SizedBox(width: 16),
+                           Text('Loading high-value ad...'),
+                         ],
+                       ),
+                       duration: Duration(seconds: 2),
+                     )
+                   );
                    ref.read(economyServiceProvider.notifier).showRewardedAd(onBlockCompleted: () {
                      if (context.mounted) {
-                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Energy Refilled!')));
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Energy Refilled by +5!')));
                      }
                    });
                 },

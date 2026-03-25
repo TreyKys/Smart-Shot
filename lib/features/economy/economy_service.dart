@@ -142,10 +142,7 @@ class EconomyService extends _$EconomyService {
     await _checkMidnightReset();
     int refillsToday = _prefs.getInt('refills_today') ?? 0;
 
-    int rewardAmount = 0;
-    if (refillsToday == 0) rewardAmount = 10;
-    else if (refillsToday == 1) rewardAmount = 20;
-    else rewardAmount = 40; // Capped at 40
+    int rewardAmount = 5; // Strictly 5 scans per block
 
     final currentEnergy = _getCurrentEnergy();
     await _prefs.setInt('ai_energy', currentEnergy + rewardAmount);

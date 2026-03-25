@@ -9,7 +9,7 @@ import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
-import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
+import 'package:sift/features/gallery/presentation/widgets/sift_bottom_sheet.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
@@ -35,32 +35,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString('smart_indexing_mode');
 
-    if (mode == null) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false, // Force choice
-        builder: (context) => SmartIndexingDialog(
-          onLiveMode: () async {
-            Navigator.of(context).pop();
-            await prefs.setString('smart_indexing_mode', 'live');
-            await prefs.setInt('live_mode_timestamp', DateTime.now().millisecondsSinceEpoch);
-            ref.read(galleryRepositoryProvider).syncGallery();
-          },
-          onDeepScan: () async {
-            Navigator.of(context).pop();
-            await prefs.setString('smart_indexing_mode', 'deep');
-            scheduleDeepScan();
-            ref.read(galleryRepositoryProvider).syncGallery();
-          },
-        ),
-      );
-    } else {
-      if (mode == 'deep') {
-        scheduleDeepScan(); // Ensure it's scheduled
-      }
-      ref.read(galleryRepositoryProvider).syncGallery();
+    if (mode == 'deep') {
+      scheduleDeepScan(); // Ensure it's scheduled
     }
+    // Now that consent is handled in onboarding, just sync
+    ref.read(galleryRepositoryProvider).syncGallery();
   }
 
   @override
@@ -76,22 +55,21 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      drawer: const GalleryDrawer(),
       appBar: AppBar(
-        title: Text(selectedTag != null ? 'Tag: $selectedTag' : 'Sift'),
+        title: Text(selectedTag != null ? 'Tag: $selectedTag' : 'Sift', style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () {
-               ref.read(themeModeNotifierProvider.notifier).toggle();
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
                ref.read(galleryRepositoryProvider).syncGallery();
             },
-          )
+          ),
+          IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () {
+               showSiftBottomSheet(context);
+            },
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
@@ -165,21 +143,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                       ),
                       // Loading State Overlay
                       if (!screenshot.isProcessed)
-                        Positioned.fill(
-                          child: Container(
-                            color: Colors.black54,
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                SizedBox(height: 8),
-                                Text(
-                                  "Sifting... filtering out the noise.",
-                                  style: TextStyle(color: Colors.white, fontSize: 10),
-                                  textAlign: TextAlign.center,
-                                )
-                              ],
-                            ),
+                        const Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: LinearProgressIndicator(
+                            backgroundColor: Colors.black54,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.cyanAccent),
+                            minHeight: 4,
                           ),
                         ),
                       // Status Indicator
