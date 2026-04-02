@@ -108,7 +108,7 @@ class ImageDetailScreen extends ConsumerWidget {
                 ),
               ),
              const SizedBox(height: 16),
-            if (screenshot.cleanText != null)
+            if (screenshot.cleanText != null && screenshot.cleanText!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                 child: SelectableText(
@@ -116,12 +116,22 @@ class ImageDetailScreen extends ConsumerWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               )
-            else if (screenshot.ocrText != null)
+            else if (screenshot.ocrText != null && screenshot.ocrText!.isNotEmpty)
                Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                 child: SelectableText(
                   "Raw OCR:\n${screenshot.ocrText!}",
                   style: Theme.of(context).textTheme.bodySmall,
+                ),
+              )
+            else
+               Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                child: Center(
+                  child: Text(
+                    "No text detected.",
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                  ),
                 ),
               ),
           ],

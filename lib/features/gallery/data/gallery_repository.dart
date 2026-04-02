@@ -192,9 +192,16 @@ class GalleryRepository {
       final llmService = _ref.read(llmServiceProvider);
       await Future.delayed(const Duration(seconds: 4)); // Respect rate limits
 
+      final apiKey = dotenv.env['GEMINI_API_KEY'];
+      if (apiKey == null || apiKey.isEmpty || apiKey == "INSERT_API_KEY_HERE") {
+          debugPrint("Main Thread: API Key missing or invalid before sending to Isolate.");
+      } else {
+          debugPrint("Main Thread: Sending valid API Key to Isolate.");
+      }
+
       final Map<String, dynamic> llmResult = await compute(_runLlmIsolate, <String, String>{
         'text': text,
-        'apiKey': dotenv.env['GEMINI_API_KEY'] ?? "",
+        'apiKey': apiKey ?? "",
       });
 
       await isar.writeTxn(() async {
@@ -252,8 +259,21 @@ class GalleryRepository {
   static Future<Map<String, dynamic>> _runLlmIsolate(Map<String, String> args) async {
     // We cannot easily pass LLMService across isolate boundary because of GenerativeModel,
     // so we construct a temporary one with the passed in key.
-    final llmService = LLMService(apiKey: args['apiKey'] ?? "");
-    return await llmService.processOCRText(args['text'] ?? "");
+    try {
+      final apiKey = args['apiKey'];
+      if (apiKey == null || apiKey.isEmpty || apiKey == "INSERT_API_KEY_HERE") {
+        debugPrint("CRITICAL: API Key is missing or default in Isolate!");
+        return {};
+      }
+      final llmService = LLMService(apiKey: apiKey);
+      final result = await llmService.processOCRText(args['text'] ?? "");
+      debugPrint("LLM Isolate raw parsed result: $result");
+      return result;
+    } catch (e, stacktrace) {
+      debugPrint("CRITICAL LLM ISOLATE ERROR: $e");
+      debugPrint("STACKTRACE: $stacktrace");
+      return {};
+    }
   }
 
   Stream<List<Screenshot>> watchScreenshots({String? tag}) async* {
