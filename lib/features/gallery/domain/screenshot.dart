@@ -15,9 +15,17 @@ class Screenshot {
   @Index(type: IndexType.value, caseSensitive: false)
   String? ocrText;
 
-  List<String>? tags;
+  @Index(type: IndexType.value, caseSensitive: false)
+  String? cleanText;
 
-  String? actionUrl;
+  List<String>? tags;
+  List<String>? urls;
+  List<String>? emails;
+  List<String>? phoneNumbers;
+  List<String>? dates;
+  List<String>? cryptoAddresses;
+
+  String? actionUrl; // Deprecated, kept for compatibility if needed
 
   bool isProcessed = false;
 }
