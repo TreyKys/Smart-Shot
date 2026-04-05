@@ -22,3 +22,24 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
+subprojects {
+    // 1. The Isar Namespace Fix
+    if (name == "isar_flutter_libs") {
+        pluginManager.withPlugin("com.android.library") {
+            extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+                namespace = "dev.isar.isar_flutter_libs"
+            }
+        }
+    }
+
+    // 2. The JVM Mismatch Fix (Forces all plugins to use Java 17)
+    pluginManager.withPlugin("com.android.library") {
+        extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+            compileOptions {
+                sourceCompatibility = org.gradle.api.JavaVersion.VERSION_17
+                targetCompatibility = org.gradle.api.JavaVersion.VERSION_17
+            }
+        }
+    }
+}
