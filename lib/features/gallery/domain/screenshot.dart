@@ -35,5 +35,13 @@ class Screenshot {
 
   String? actionUrl; // Deprecated, kept for compatibility if needed
 
+  /// Perceptual dHash fingerprint — stored in SharedPreferences, not Isar
+  @ignore
+  String? perceptualHash;
+
+  /// File size in bytes — computed on demand, not persisted in Isar
+  @ignore
+  int? fileSizeBytes;
+
   bool isProcessed = false;
 }

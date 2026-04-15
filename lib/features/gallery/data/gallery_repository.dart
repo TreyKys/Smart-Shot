@@ -5,10 +5,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smart_shot/core/database/isar_service.dart';
-import 'package:smart_shot/features/gallery/domain/screenshot.dart';
-import 'package:smart_shot/features/ingestion/services/ocr_service.dart';
-import 'package:smart_shot/features/ingestion/services/llm_service.dart';
+import 'package:sift/core/database/isar_service.dart';
+import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/gallery/services/dedup_service.dart';
+import 'package:sift/features/ingestion/services/llm_service.dart';
+import 'package:sift/features/ingestion/services/ocr_service.dart';
+import 'package:sift/features/economy/economy_service.dart';
+import 'package:sift/features/pro/pro_service.dart';
 
 part 'gallery_repository.g.dart';
 
@@ -22,77 +25,81 @@ class GalleryRepository {
 
   GalleryRepository(this._ref);
 
+  // ── Sync ─────────────────────────────────────────────────────────────────────
+
   Future<void> syncGallery() async {
     final isar = await _ref.read(isarProvider.future);
 
-    // 1. Request native permission first (Android 13+ specific)
-    // This forces the OS dialog if not already granted.
     final PermissionStatus status = await Permission.photos.request();
-    debugPrint("Native Permission.photos status: $status");
+    debugPrint('Permission.photos: $status');
 
-    // 2. Request PhotoManager permission (Library sync)
-    // This ensures PhotoManager is aware of the permission state.
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
-    debugPrint("PhotoManager PermissionState: $ps");
+    debugPrint('PhotoManager: $ps');
 
     if (!ps.isAuth) {
-      debugPrint("Permission not granted according to PhotoManager: $ps");
+      debugPrint('Permission denied');
       return;
     }
 
-    final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
+    final paths = await PhotoManager.getAssetPathList(
       type: RequestType.image,
       filterOption: FilterOptionGroup(
         orders: [const OrderOption(type: OrderOptionType.createDate, asc: false)],
       ),
     );
 
-    if (paths.isEmpty) {
-        debugPrint("No asset paths found.");
-        return;
-    }
+    if (paths.isEmpty) return;
 
-    // Attempt to find the "Recent" or "All" album
-    final recentAlbum = paths.firstWhere((path) => path.isAll, orElse: () => paths.first);
-    debugPrint("Syncing album: ${recentAlbum.name} (id: ${recentAlbum.id}), count: ${await recentAlbum.assetCountAsync}");
-
-    // Fetch batch
-    final int count = await recentAlbum.assetCountAsync;
-    final int fetchCount = count > 500 ? 500 : count;
-
-    if (fetchCount == 0) {
-      debugPrint("No assets in album.");
-      return;
-    }
-
-    final List<AssetEntity> assets = await recentAlbum.getAssetListRange(start: 0, end: fetchCount);
-    debugPrint("Fetched ${assets.length} assets from PhotoManager.");
+    final album = paths.firstWhere((p) => p.isAll, orElse: () => paths.first);
+    final count = await album.assetCountAsync;
+    if (count == 0) return;
 
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString('smart_indexing_mode');
-    final timestamp = prefs.getInt('live_mode_timestamp') ?? 0;
+    final liveTs = prefs.getInt('live_mode_timestamp') ?? 0;
 
-    int addedCount = 0;
-    int index = 0;
-    for (final asset in assets) {
-      index++;
+    // Fetch the first 10 immediately for fast UI, then yield rest lazily
+    final firstBatch = await album.getAssetListRange(start: 0, end: 10);
+    await _ingestAssets(firstBatch, isar, mode, liveTs, prefs, startIndex: 0);
 
-      // Live Mode Check: Stop processing deep history, but allow a buffer of recent images (40)
-      if (mode == 'live') {
-          // If we are past the initial "recent buffer" (e.g. 40 items)
-          if (index > 40) {
-             // If we have a timestamp set (meaning live mode was activated previously), respect it.
-             if (timestamp > 0 && asset.createDateTime.millisecondsSinceEpoch <= timestamp) {
-                 debugPrint("Live mode: Reached cutoff at index $index. Stopping sync.");
-                 break;
-             }
-             // If no timestamp (first run of live mode), we just stop after 40 to avoid deep scanning.
-             // (Actually, the dialog sets the timestamp, so this branch might be rare if flow is correct, but safe to have)
-             if (timestamp == 0) {
-                 debugPrint("Live mode: Reached buffer limit (40). Stopping sync.");
-                 break;
-             }
-          }
+    // Background yielding loop for the rest
+    final total = count > 500 ? 500 : count;
+    if (total > 10) {
+      Future.microtask(() async {
+        for (int offset = 10; offset < total; offset += 20) {
+          final end = (offset + 20).clamp(0, total);
+          final batch = await album.getAssetListRange(start: offset, end: end);
+          await _ingestAssets(batch, isar, mode, liveTs, prefs,
+              startIndex: offset);
+          await Future.delayed(Duration.zero); // yield to event loop
+        }
+        _processPendingScreenshots();
+      });
+    } else {
+      _processPendingScreenshots();
+    }
+  }
+
+  Future<void> _ingestAssets(
+    List<AssetEntity> assets,
+    Isar isar,
+    String? mode,
+    int liveTs,
+    SharedPreferences prefs, {
+    required int startIndex,
+  }) async {
+    for (int i = 0; i < assets.length; i++) {
+      final asset = assets[i];
+      final idx = startIndex + i;
+
+      // Live mode cutoff
+      if (mode == 'live' && idx > 40) {
+        if (liveTs > 0 &&
+            asset.createDateTime.millisecondsSinceEpoch <= liveTs) {
+          debugPrint('Live mode cutoff at index $idx');
+          break;
+        }
+        if (liveTs == 0) break;
       }
 
       if (asset.type != AssetType.image) continue;
@@ -101,155 +108,293 @@ class GalleryRepository {
       try {
         file = await asset.file;
       } catch (e) {
-        debugPrint("Error getting file for asset ${asset.id}: $e");
+        debugPrint('Error getting file for ${asset.id}: $e');
         continue;
       }
+      if (file == null) continue;
 
-      if (file == null) {
-        debugPrint("File is null for asset ${asset.id}. It might be cloud-only.");
-        continue;
+      final existing =
+          await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
+      if (existing != null) continue;
+
+      // Perceptual dedup
+      final hash =
+          await compute(DedupService.hashIsolateEntry, file.absolute.path);
+      if (hash != null) {
+        final duplicate = await _findDuplicate(isar, hash);
+        if (duplicate) {
+          debugPrint('Dedup: skipping duplicate ${file.path}');
+          continue;
+        }
       }
 
-      // Check if exists using a transaction is safer but slower in loop.
-      // Better to batch read.
-      // For MVP, we'll check individually inside the writeTxn or before.
+      final fileSize = await file.length();
 
-      // We can use put by index if we had a unique ID, but filePath is unique index.
-      // Isar put will update if id matches, but here we don't know the ID.
-      // We rely on checking filePath.
+      await isar.writeTxn(() async {
+        final shot = Screenshot()
+          ..filePath = file!.path
+          ..timestamp = asset.createDateTime
+          ..isProcessed = false;
+        await isar.screenshots.put(shot);
+      });
 
-      // Optimization: Check if it exists before writing.
-      final existing = await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
+      // Store hash in SharedPreferences (not Isar — @ignore field)
+      if (hash != null) {
+        final hashPrefs = await SharedPreferences.getInstance();
+        await hashPrefs.setString('dhash:${file.path}', hash);
+      }
 
-      if (existing == null) {
-        await isar.writeTxn(() async {
-           final screenshot = Screenshot()
-            ..filePath = file!.path
-            ..timestamp = asset.createDateTime;
-           await isar.screenshots.put(screenshot);
-        });
-        addedCount++;
+      debugPrint('Ingested: ${file.path} (${fileSize}B, hash=$hash)');
+    }
+  }
+
+  Future<bool> _findDuplicate(Isar isar, String newHash) async {
+    // We store hashes in SharedPreferences; scan them
+    final hashPrefs = await SharedPreferences.getInstance();
+    final keys = hashPrefs.getKeys().where((k) => k.startsWith('dhash:'));
+    for (final key in keys) {
+      final existing = hashPrefs.getString(key);
+      if (existing != null && DedupService.areDuplicates(newHash, existing)) {
+        return true;
       }
     }
-    debugPrint("Sync complete. Added $addedCount new screenshots.");
-
-    // Trigger processing
-    _processPendingScreenshots();
+    return false;
   }
+
+  // ── Share intent ──────────────────────────────────────────────────────────────
 
   Future<void> addFile(File file) async {
     final isar = await _ref.read(isarProvider.future);
-
-    // Check if file exists in DB
-    final existing = await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
-
-    if (existing == null) {
-      await isar.writeTxn(() async {
-         final screenshot = Screenshot()
-          ..filePath = file.path
-          ..timestamp = await file.lastModified()
-          ..isProcessed = false;
-         await isar.screenshots.put(screenshot);
-      });
-      debugPrint("Added file via Share: ${file.path}");
-      // Trigger processing for the new file
-      _processPendingScreenshots();
-    } else {
-        debugPrint("File already exists in gallery: ${file.path}");
+    final existing =
+        await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
+    if (existing != null) {
+      debugPrint('File already in gallery: ${file.path}');
+      return;
     }
+
+    await isar.writeTxn(() async {
+      final shot = Screenshot()
+        ..filePath = file.path
+        ..timestamp = await file.lastModified()
+        ..isProcessed = false;
+      await isar.screenshots.put(shot);
+    });
+    debugPrint('Shared file ingested: ${file.path}');
+    _processPendingScreenshots();
   }
+
+  // ── Processing ────────────────────────────────────────────────────────────────
 
   Future<void> _processPendingScreenshots() async {
     final isar = await _ref.read(isarProvider.future);
     final ocrService = _ref.read(ocrServiceProvider);
-    final llmService = _ref.read(llmServiceProvider);
+    final economyNotifier = _ref.read(economyServiceProvider.notifier);
+    final isPro = _ref.read(proServiceProvider);
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString('smart_indexing_mode');
 
-    // Filter pending screenshots
-    var query = isar.screenshots.filter().isProcessedEqualTo(false);
-    List<Screenshot> unprocessed;
-
-    if (mode == 'deep') {
-      // In deep scan mode, only process a small batch in foreground (e.g., 5) to give immediate feedback,
-      // let background task handle the rest.
-      unprocessed = await query.limit(5).findAll();
-    } else {
-      // Live mode (or unset): Process all pending (which should be few due to sync filtering)
-      unprocessed = await query.findAll();
-    }
+    final query = isar.screenshots.filter().isProcessedEqualTo(false);
+    final List<Screenshot> unprocessed = mode == 'deep'
+        ? await query.limit(5).findAll()
+        : await query.findAll();
 
     if (unprocessed.isEmpty) return;
 
-    debugPrint("Processing ${unprocessed.length} pending screenshots...");
+    debugPrint('Processing ${unprocessed.length} pending screenshots…');
 
-    for (final screenshot in unprocessed) {
-      // Add delay to respect rate limits (15 RPM -> 1 req / 4 sec)
-      // We do this at start of loop, effectively spacing out requests.
-      await Future.delayed(const Duration(seconds: 4));
+    final byokKey = economyNotifier.getByokKey();
+    final envKey = prefs.getString('gemini_api_key') ?? '';
+    final effectiveKey = economyNotifier.getEffectiveApiKey(envKey);
 
-      final file = File(screenshot.filePath);
-      if (!file.existsSync()) {
-          debugPrint("File not found for processing: ${screenshot.filePath}");
-          continue;
+    int processed = 0;
+
+    for (final shot in unprocessed) {
+      // Quota gate (skip for Pro or BYOK)
+      final hasEnergy = await economyNotifier.hasEnoughEnergy();
+      if (!hasEnergy && !isPro && (byokKey == null || byokKey.isEmpty)) {
+        debugPrint('No energy remaining — stopping processing.');
+        break;
       }
 
-      // 1. OCR
-      final text = await ocrService.processImage(file);
-      debugPrint("OCR Text length: ${text.length}");
+      final file = File(shot.filePath);
+      if (!file.existsSync()) {
+        debugPrint('File missing: ${shot.filePath}');
+        await isar.writeTxn(() async {
+          shot.isProcessed = true;
+          await isar.screenshots.put(shot);
+        });
+        continue;
+      }
 
-      // 2. LLM Processing
-      final Map<String, dynamic> llmResult = await llmService.processOCRText(text);
+      try {
+        // OCR
+        final text = await ocrService.processImage(file);
 
-      await isar.writeTxn(() async {
-         screenshot.ocrText = text;
+        // LLM via compute() isolate
+        Map<String, dynamic> llmResult = {};
+        if (effectiveKey != null && effectiveKey.isNotEmpty) {
+          llmResult = await compute(
+            runLlmIsolate,
+            LlmIsolateParams(
+              filePath: file.absolute.path,
+              apiKey: effectiveKey,
+            ),
+          );
+        }
 
-         if (llmResult.isNotEmpty) {
-           screenshot.cleanText = llmResult['cleanText'] as String?;
-
-           if (llmResult['tags'] != null) {
-             screenshot.tags = (llmResult['tags'] as List).map((e) => e.toString()).toList();
-           }
-           if (llmResult['urls'] != null) {
-             screenshot.urls = (llmResult['urls'] as List).map((e) => e.toString()).toList();
-           }
-           if (llmResult['emails'] != null) {
-             screenshot.emails = (llmResult['emails'] as List).map((e) => e.toString()).toList();
-           }
-           if (llmResult['phoneNumbers'] != null) {
-             screenshot.phoneNumbers = (llmResult['phoneNumbers'] as List).map((e) => e.toString()).toList();
-           }
-           if (llmResult['dates'] != null) {
-             screenshot.dates = (llmResult['dates'] as List).map((e) => e.toString()).toList();
-           }
-           if (llmResult['cryptoAddresses'] != null) {
-             screenshot.cryptoAddresses = (llmResult['cryptoAddresses'] as List).map((e) => e.toString()).toList();
-           }
-           if (llmResult['suggested_actions'] != null) {
-             final actionsList = llmResult['suggested_actions'] as List;
-             screenshot.suggestedActions = actionsList.map((actionJson) {
-                final actionMap = actionJson as Map<String, dynamic>;
+        await isar.writeTxn(() async {
+          shot.ocrText = text;
+          if (llmResult.isNotEmpty) {
+            shot.cleanText = llmResult['cleanText'] as String?;
+            shot.tags = _listFrom(llmResult['tags']);
+            shot.urls = _listFrom(llmResult['urls']);
+            shot.emails = _listFrom(llmResult['emails']);
+            shot.phoneNumbers = _listFrom(llmResult['phoneNumbers']);
+            shot.dates = _listFrom(llmResult['dates']);
+            shot.cryptoAddresses = _listFrom(llmResult['cryptoAddresses']);
+            if (llmResult['suggested_actions'] != null) {
+              final raw = llmResult['suggested_actions'] as List;
+              shot.suggestedActions = raw.map((a) {
+                final m = a as Map<String, dynamic>;
                 return SuggestedAction()
-                  ..label = actionMap['label'] as String?
-                  ..payload = actionMap['payload'] as String?
-                  ..intentType = actionMap['intent_type'] as String?;
-             }).toList();
-           }
-         }
+                  ..label = m['label'] as String?
+                  ..payload = m['payload'] as String?
+                  ..intentType = m['intent_type'] as String?;
+              }).toList();
+            }
+          }
+          shot.isProcessed = true;
+          await isar.screenshots.put(shot);
+        });
 
-         screenshot.isProcessed = true;
-         await isar.screenshots.put(screenshot);
-      });
+        if (effectiveKey != null && effectiveKey.isNotEmpty) {
+          await economyNotifier.consumeEnergy(1);
+        }
+
+        processed++;
+
+        // Background deep scan chunk: pause after 50, prompt re-engagement
+        if (mode == 'deep' && processed >= 50) {
+          debugPrint('Deep scan: processed 50 — pausing for ad engagement.');
+          break;
+        }
+
+        // Yield
+        await Future.delayed(const Duration(milliseconds: 100));
+      } catch (e) {
+        debugPrint('Error processing ${shot.id}: $e');
+      }
     }
-    debugPrint("Processing complete.");
+
+    debugPrint('Processing complete. Handled $processed screenshots.');
   }
 
+  /// Manually triggered batch scan — respects free/Pro cap.
+  Future<void> runManualBatchScan({required bool isPro}) async {
+    final isar = await _ref.read(isarProvider.future);
+    final economyNotifier = _ref.read(economyServiceProvider.notifier);
+    final ocrService = _ref.read(ocrServiceProvider);
+    final prefs = await SharedPreferences.getInstance();
+    final envKey = prefs.getString('gemini_api_key') ?? '';
+    final effectiveKey = economyNotifier.getEffectiveApiKey(envKey);
+
+    final batchLimit = isPro ? kProBatchLimit : kFreeBatchLimit;
+    final unprocessed = await isar.screenshots
+        .filter()
+        .isProcessedEqualTo(false)
+        .limit(batchLimit)
+        .findAll();
+
+    if (unprocessed.isEmpty) {
+      debugPrint('No unprocessed screenshots for batch scan.');
+      return;
+    }
+
+    debugPrint('Manual batch scan: ${unprocessed.length} screenshots (cap=$batchLimit)');
+
+    for (final shot in unprocessed) {
+      final hasEnergy = await economyNotifier.hasEnoughEnergy();
+      if (!hasEnergy && !isPro &&
+          (economyNotifier.getByokKey() == null ||
+              economyNotifier.getByokKey()!.isEmpty)) {
+        debugPrint('Quota exhausted during batch scan.');
+        break;
+      }
+
+      final file = File(shot.filePath);
+      if (!file.existsSync()) continue;
+
+      try {
+        final text = await ocrService.processImage(file);
+        Map<String, dynamic> llmResult = {};
+        if (effectiveKey != null && effectiveKey.isNotEmpty) {
+          llmResult = await compute(
+            runLlmIsolate,
+            LlmIsolateParams(
+              filePath: file.absolute.path,
+              apiKey: effectiveKey,
+            ),
+          );
+        }
+
+        await isar.writeTxn(() async {
+          shot.ocrText = text;
+          if (llmResult.isNotEmpty) {
+            shot.cleanText = llmResult['cleanText'] as String?;
+            shot.tags = _listFrom(llmResult['tags']);
+            shot.urls = _listFrom(llmResult['urls']);
+            shot.emails = _listFrom(llmResult['emails']);
+            shot.phoneNumbers = _listFrom(llmResult['phoneNumbers']);
+            shot.dates = _listFrom(llmResult['dates']);
+            shot.cryptoAddresses = _listFrom(llmResult['cryptoAddresses']);
+            if (llmResult['suggested_actions'] != null) {
+              final raw = llmResult['suggested_actions'] as List;
+              shot.suggestedActions = raw.map((a) {
+                final m = a as Map<String, dynamic>;
+                return SuggestedAction()
+                  ..label = m['label'] as String?
+                  ..payload = m['payload'] as String?
+                  ..intentType = m['intent_type'] as String?;
+              }).toList();
+            }
+          }
+          shot.isProcessed = true;
+          await isar.screenshots.put(shot);
+        });
+
+        if (effectiveKey != null && effectiveKey.isNotEmpty) {
+          await economyNotifier.consumeEnergy(1);
+        }
+
+        await Future.delayed(Duration.zero);
+      } catch (e) {
+        debugPrint('Batch scan error for ${shot.id}: $e');
+      }
+    }
+  }
+
+  // ── Watch ──────────────────────────────────────────────────────────────────────
+
   Stream<List<Screenshot>> watchScreenshots({String? tag}) async* {
-     final isar = await _ref.read(isarProvider.future);
-     if (tag != null && tag.isNotEmpty) {
-       yield* isar.screenshots.filter().tagsElementEqualTo(tag, caseSensitive: false).sortByTimestampDesc().watch(fireImmediately: true);
-     } else {
-       yield* isar.screenshots.where().sortByTimestampDesc().watch(fireImmediately: true);
-     }
+    final isar = await _ref.read(isarProvider.future);
+    if (tag != null && tag.isNotEmpty) {
+      yield* isar.screenshots
+          .filter()
+          .tagsElementEqualTo(tag, caseSensitive: false)
+          .sortByTimestampDesc()
+          .watch(fireImmediately: true);
+    } else {
+      yield* isar.screenshots
+          .where()
+          .sortByTimestampDesc()
+          .watch(fireImmediately: true);
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────────
+
+  List<String>? _listFrom(dynamic raw) {
+    if (raw == null) return null;
+    return (raw as List).map((e) => e.toString()).toList();
   }
 }
