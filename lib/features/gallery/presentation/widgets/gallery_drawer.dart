@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smart_shot/features/gallery/presentation/gallery_provider.dart';
+import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 
 class GalleryDrawer extends ConsumerWidget {
   const GalleryDrawer({super.key});

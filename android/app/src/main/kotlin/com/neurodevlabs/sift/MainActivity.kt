@@ -1,4 +1,4 @@
-package com.smartshot.smart_shot
+package com.neurodevlabs.sift
 
 import io.flutter.embedding.android.FlutterActivity
 
