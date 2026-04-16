@@ -93,7 +93,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                   ref.read(economyServiceProvider.notifier).showRewardedAd(onBlockCompleted: () {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Energy Refilled by +5!')));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('+10 AI scans unlocked!')));
                     }
                   });
                 },

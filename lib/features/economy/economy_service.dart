@@ -6,8 +6,8 @@ import 'package:sift/features/pro/pro_service.dart';
 
 part 'economy_service.g.dart';
 
-const int kDailyFreeExtractions = 5;
-const int kAdRewardExtractions = 3;
+const int kDailyFreeExtractions = 30;
+const int kAdRewardExtractions = 10;
 const int kFreeBatchLimit = 3;
 const int kProBatchLimit = 50;
 const int kBackgroundDeepScanChunkSize = 50;
