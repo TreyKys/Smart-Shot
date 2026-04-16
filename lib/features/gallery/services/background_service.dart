@@ -36,12 +36,12 @@ Future<bool> _processDeepScanBatch() async {
       directory: dir.path,
     );
 
-    // 3. Fetch Batch (25 images)
-    // We only process unprocessed images.
+    // 3. Fetch batch of 50 unprocessed images
     final screenshots = await isar.screenshots
         .filter()
         .isProcessedEqualTo(false)
-        .limit(25)
+        .sortByTimestamp()
+        .limit(50)
         .findAll();
 
     if (screenshots.isEmpty) {

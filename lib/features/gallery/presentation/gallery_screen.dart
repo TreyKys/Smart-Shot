@@ -9,12 +9,10 @@ import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
-import 'package:sift/features/gallery/presentation/widgets/sift_bottom_sheet.dart';
+import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
 import 'package:sift/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/monetization/quota_bar.dart';
-import 'package:sift/features/pro/presentation/paywall_sheet.dart';
-import 'package:sift/features/pro/pro_service.dart';
 import 'package:sift/features/purge/presentation/purge_banner.dart';
 import 'package:sift/features/search/search_provider.dart';
 
@@ -71,62 +69,41 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     final searchQuery = ref.watch(searchQueryProvider);
     final isSearching = searchQuery.isNotEmpty;
     final selectedTag = ref.watch(selectedTagProvider);
-    final isPro = ref.watch(proServiceProvider);
-    final energyState = ref.watch(economyServiceProvider);
 
     final AsyncValue<List<Screenshot>> content = isSearching
         ? ref.watch(searchResultsProvider)
         : ref.watch(galleryStreamProvider);
 
-    final costBadge = energyState.when(
-      data: (_) {
-        final cost = ref.read(economyServiceProvider.notifier).getTotalCostUsd();
-        return '\$${cost.toStringAsFixed(4)}';
-      },
-      loading: () => '\$0.0000',
-      error: (_, __) => '\$0.0000',
-    );
-
     return Scaffold(
       backgroundColor: SiftColors.background,
+      // ── Restored side drawer ──────────────────────────────────────────────
+      drawer: const GalleryDrawer(),
       appBar: AppBar(
         backgroundColor: SiftColors.background,
-        title: Text(
-          selectedTag != null ? selectedTag : 'sift',
-          style: TextStyle(
-            color: selectedTag != null ? SiftColors.accent : SiftColors.textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
+        // Minimalist Sift icon — replaces text
+        title: selectedTag != null
+            ? Text(
+                selectedTag,
+                style: const TextStyle(
+                  color: SiftColors.accent,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              )
+            : _SiftIcon(),
+        // Remove the default drawer hamburger so we can control its colour
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu, color: SiftColors.textSecondary),
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
         actions: [
-          // Cost transparency badge
-          if (!isPro)
-            GestureDetector(
-              onTap: () {},
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: SiftColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: SiftColors.border, width: 0.5),
-                ),
-                child: Text(
-                  costBadge,
-                  style: const TextStyle(
-                    color: SiftColors.textTertiary,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
           IconButton(
-            icon: const Icon(Icons.menu, color: SiftColors.textSecondary),
-            onPressed: () => showSiftBottomSheet(context),
+            icon: const Icon(Icons.sync, color: SiftColors.textSecondary),
+            tooltip: 'Sync gallery',
+            onPressed: () =>
+                ref.read(galleryRepositoryProvider).syncGallery(),
           ),
         ],
         bottom: PreferredSize(
@@ -137,7 +114,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
               hintText: 'Search screenshots…',
               onChanged: (v) =>
                   ref.read(searchQueryProvider.notifier).setQuery(v),
-              leading: const Icon(Icons.search, color: SiftColors.textTertiary, size: 18),
+              leading: const Icon(Icons.search,
+                  color: SiftColors.textTertiary, size: 18),
               trailing: searchQuery.isNotEmpty
                   ? [
                       IconButton(
@@ -154,11 +132,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       ),
       body: Column(
         children: [
-          // Purge banner
+          // Purge banner (only shows when purgeable items exist)
           const PurgeBanner(),
 
-          // Quota bar (hidden for Pro)
-          if (!isPro) const QuotaBar(),
+          // Quota bar (always shown — free tier has 5 scans/day)
+          const QuotaBar(),
 
           const SizedBox(height: 4),
 
@@ -169,7 +147,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                 if (screenshots.isEmpty) {
                   return Center(
                     child: Text(
-                      isSearching ? 'No results found.' : 'No screenshots yet.',
+                      isSearching
+                          ? 'No results found.'
+                          : 'No screenshots yet.',
                       style: const TextStyle(
                           color: SiftColors.textSecondary, fontSize: 15),
                     ),
@@ -179,7 +159,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                   crossAxisCount: 2,
                   mainAxisSpacing: 6,
                   crossAxisSpacing: 6,
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                   itemCount: screenshots.length,
                   itemBuilder: (context, index) =>
                       _ScreenshotCard(screenshot: screenshots[index]),
@@ -190,48 +170,53 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                     style: const TextStyle(color: SiftColors.danger)),
               ),
               loading: () => const Center(
-                  child: CircularProgressIndicator(color: SiftColors.accent)),
+                  child:
+                      CircularProgressIndicator(color: SiftColors.accent)),
             ),
           ),
         ],
       ),
-
-      // Batch scan FAB
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: isPro ? SiftColors.proGold : SiftColors.accent,
-        foregroundColor: Colors.black,
-        onPressed: () => _triggerBatchScan(context, isPro),
-        icon: const Icon(Icons.bolt, size: 20),
-        label: Text(
-          isPro ? 'Batch Scan' : 'Batch Scan (${kFreeBatchLimit})',
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-        ),
-      ),
     );
-  }
-
-  Future<void> _triggerBatchScan(BuildContext context, bool isPro) async {
-    if (!isPro) {
-      final energy = await ref.read(economyServiceProvider.future);
-      final byok = ref.read(economyServiceProvider.notifier).getByokKey();
-      if (energy <= 0 && (byok == null || byok.isEmpty)) {
-        showPaywallSheet(context, triggerFeature: 'Batch Scan');
-        return;
-      }
-    }
-    ref.read(galleryRepositoryProvider).runManualBatchScan(isPro: isPro);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              isPro ? 'Pro batch scan started…' : 'Scanning ${kFreeBatchLimit} screenshots…'),
-        ),
-      );
-    }
   }
 }
 
-// ── Screenshot card ────────────────────────────────────────────────────────────
+// ── Minimalist Sift icon ──────────────────────────────────────────────────────
+
+class _SiftIcon extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: SiftColors.accent.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: SiftColors.accent.withValues(alpha: 0.5), width: 1),
+          ),
+          child: const Center(
+            child: Icon(Icons.filter_alt, color: SiftColors.accent, size: 18),
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          'sift',
+          style: TextStyle(
+            color: SiftColors.accent,
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Screenshot card ───────────────────────────────────────────────────────────
 
 class _ScreenshotCard extends StatelessWidget {
   final Screenshot screenshot;
@@ -268,7 +253,7 @@ class _ScreenshotCard extends StatelessWidget {
                 ),
               ),
 
-              // Processing indicator (cyan bar at bottom)
+              // Cyan scanning bar (unprocessed)
               if (!screenshot.isProcessed)
                 Positioned(
                   bottom: 0,
@@ -277,13 +262,13 @@ class _ScreenshotCard extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: null,
                     backgroundColor: SiftColors.border,
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(SiftColors.accent),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                        SiftColors.accent),
                     minHeight: 2,
                   ),
                 ),
 
-              // Processed checkmark
+              // Processed dot
               if (screenshot.isProcessed)
                 const Positioned(
                   top: 6,
