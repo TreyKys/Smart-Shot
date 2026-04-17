@@ -169,7 +169,7 @@ class SiftBottomSheetContent extends ConsumerWidget {
               ),
             ],
 
-            SizedBox(bottom: MediaQuery.of(context).padding.bottom + 12),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 12),
           ],
         ),
       ),
