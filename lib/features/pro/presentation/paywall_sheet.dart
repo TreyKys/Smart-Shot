@@ -214,7 +214,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
               ),
             ),
 
-            SizedBox(bottom: MediaQuery.of(context).padding.bottom + 8),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
           ],
         ),
       ),
