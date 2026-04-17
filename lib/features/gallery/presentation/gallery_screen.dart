@@ -192,10 +192,10 @@ class _SiftIcon extends StatelessWidget {
           width: 30,
           height: 30,
           decoration: BoxDecoration(
-            color: SiftColors.accent.withValues(alpha: 0.15),
+            color: SiftColors.accent.withOpacity(0.15),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: SiftColors.accent.withValues(alpha: 0.5), width: 1),
+                color: SiftColors.accent.withOpacity(0.5), width: 1),
           ),
           child: const Center(
             child: Icon(Icons.filter_alt, color: SiftColors.accent, size: 18),
@@ -291,7 +291,7 @@ class _ScreenshotCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.85),
+                          color: color.withOpacity(0.85),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -329,7 +329,7 @@ class _StatusDot extends StatelessWidget {
         color: color,
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 4),
+          BoxShadow(color: color.withOpacity(0.6), blurRadius: 4),
         ],
       ),
     );

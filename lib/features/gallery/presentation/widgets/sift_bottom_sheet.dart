@@ -31,7 +31,7 @@ class SiftBottomSheetContent extends ConsumerWidget {
           maxHeight: MediaQuery.of(context).size.height * 0.75,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF0E0E0E).withValues(alpha: 0.97),
+          color: const Color(0xFF0E0E0E).withOpacity(0.97),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(color: SiftColors.border, width: 0.5),
         ),
@@ -199,7 +199,7 @@ class _MenuItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         color: isSelected
-            ? SiftColors.accent.withValues(alpha: 0.05)
+            ? SiftColors.accent.withOpacity(0.05)
             : Colors.transparent,
         child: Row(
           children: [

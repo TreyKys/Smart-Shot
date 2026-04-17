@@ -160,10 +160,10 @@ class ImageDetailScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.15),
+                        color: color.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: color.withValues(alpha: 0.4), width: 0.8),
+                            color: color.withOpacity(0.4), width: 0.8),
                       ),
                       child: Text(
                         tag,

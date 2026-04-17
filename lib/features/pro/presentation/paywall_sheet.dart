@@ -60,7 +60,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
           maxHeight: MediaQuery.of(context).size.height * 0.88,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF0E0E0E).withValues(alpha: 0.97),
+          color: const Color(0xFF0E0E0E).withOpacity(0.97),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           border: Border.all(color: SiftColors.border, width: 0.5),
         ),
@@ -239,7 +239,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isSelected ? SiftColors.accent.withValues(alpha: 0.1) : SiftColors.surfaceElevated,
+              color: isSelected ? SiftColors.accent.withOpacity(0.1) : SiftColors.surfaceElevated,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isSelected ? SiftColors.accent : SiftColors.border,
@@ -257,7 +257,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                           margin: const EdgeInsets.only(bottom: 4),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: SiftColors.proGold.withValues(alpha: 0.15),
+                            color: SiftColors.proGold.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -359,7 +359,7 @@ class _PackageTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? SiftColors.accent.withValues(alpha: 0.1) : SiftColors.surfaceElevated,
+          color: isSelected ? SiftColors.accent.withOpacity(0.1) : SiftColors.surfaceElevated,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? SiftColors.accent : SiftColors.border,
@@ -377,7 +377,7 @@ class _PackageTile extends StatelessWidget {
                       margin: const EdgeInsets.only(bottom: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: SiftColors.proGold.withValues(alpha: 0.15),
+                        color: SiftColors.proGold.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

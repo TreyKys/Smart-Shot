@@ -38,10 +38,10 @@ class GalleryDrawer extends ConsumerWidget {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: SiftColors.accent.withValues(alpha: 0.15),
+                    color: SiftColors.accent.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: SiftColors.accent.withValues(alpha: 0.4),
+                        color: SiftColors.accent.withOpacity(0.4),
                         width: 1),
                   ),
                   child: const Center(
@@ -212,12 +212,12 @@ class _DrawerTile extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      splashColor: SiftColors.accent.withValues(alpha: 0.05),
+      splashColor: SiftColors.accent.withOpacity(0.05),
       child: Container(
         padding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         color: isSelected
-            ? SiftColors.accent.withValues(alpha: 0.06)
+            ? SiftColors.accent.withOpacity(0.06)
             : Colors.transparent,
         child: Row(
           children: [

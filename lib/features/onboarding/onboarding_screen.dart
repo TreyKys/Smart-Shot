@@ -37,9 +37,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _OnboardingPage(
       gradient: [Color(0xFF0A120A), Color(0xFF0A1A0D)],
       icon: Icons.bolt,
-      title: '5 Free AI Scans\nEvery Day',
+      title: '30 Free AI Scans\nEvery Day',
       subtitle:
-          'Free tier gives you 5 daily AI scans. Watch 2 short ads to earn +3 more. Go Pro for unlimited.',
+          'Free tier gives you 30 daily AI scans. Watch 2 short ads to earn +10 more. Go Pro for unlimited.',
     ),
   ];
 
@@ -188,10 +188,10 @@ class _PageContent extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: SiftColors.accent.withValues(alpha: 0.1),
+                color: SiftColors.accent.withOpacity(0.1),
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: SiftColors.accent.withValues(alpha: 0.3), width: 1),
+                    color: SiftColors.accent.withOpacity(0.3), width: 1),
               ),
               child: Icon(page.icon, color: SiftColors.accent, size: 40),
             )
@@ -330,7 +330,7 @@ class _ModeCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1),
+                color: iconColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: iconColor, size: 26),
@@ -355,7 +355,7 @@ class _ModeCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: badgeColor.withValues(alpha: 0.15),
+                          color: badgeColor.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
