@@ -33,6 +33,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkSmartIndexingConsent();
       ref.read(economyServiceProvider.notifier).loadRewardedAd();
+      ref.read(galleryRepositoryProvider).reprocessGarbageTags();
     });
   }
 
@@ -300,7 +301,7 @@ class _ScreenshotCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          tag,
+                          tag.startsWith('#') ? tag.substring(1) : tag,
                           style: const TextStyle(
                             fontSize: 9,
                             color: Colors.white,

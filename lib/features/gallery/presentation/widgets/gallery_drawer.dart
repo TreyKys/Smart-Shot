@@ -10,8 +10,12 @@ class GalleryDrawer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tagsAsync = ref.watch(uniqueTagsProvider);
+    final tagsAsync = ref.watch(tagCountsProvider);
     final selectedTag = ref.watch(selectedTagProvider);
+    final totalScreenshots = ref.watch(galleryStreamProvider).maybeWhen(
+          data: (list) => list.length,
+          orElse: () => null,
+        );
 
     return Drawer(
       backgroundColor: SiftColors.surface,
@@ -50,15 +54,23 @@ class GalleryDrawer extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Text(
-                  'Categories',
-                  style: TextStyle(
-                    color: SiftColors.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
+                Expanded(
+                  child: Text(
+                    'Categories',
+                    style: const TextStyle(
+                      color: SiftColors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                 ),
+                if (totalScreenshots != null)
+                  Text(
+                    '$totalScreenshots shot${totalScreenshots == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                        color: SiftColors.textTertiary, fontSize: 12),
+                  ),
               ],
             ),
           ),
@@ -95,11 +107,14 @@ class GalleryDrawer extends ConsumerWidget {
                   padding: EdgeInsets.zero,
                   itemCount: tags.length,
                   itemBuilder: (context, index) {
-                    final tag = tags[index];
+                    final entry = tags[index];
+                    final tag = entry.tag;
+                    final count = entry.count;
                     return _DrawerTile(
                       icon: _getIconForTag(tag),
                       iconColor: SiftColors.forTag(tag),
-                      label: tag,
+                      label: tag.startsWith('#') ? tag.substring(1) : tag,
+                      count: count,
                       isSelected: selectedTag == tag,
                       onTap: () {
                         ref.read(selectedTagProvider.notifier).select(tag);
@@ -193,6 +208,7 @@ class _DrawerTile extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
   final String label;
+  final int? count;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -201,6 +217,7 @@ class _DrawerTile extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.iconColor,
+    this.count,
     this.isSelected = false,
   });
 
@@ -237,6 +254,21 @@ class _DrawerTile extends StatelessWidget {
                 ),
               ),
             ),
+            if (count != null)
+              Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: SiftColors.border,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                      color: SiftColors.textTertiary, fontSize: 11),
+                ),
+              ),
             if (isSelected)
               Container(
                 width: 6,

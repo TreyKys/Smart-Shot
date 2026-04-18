@@ -15,7 +15,7 @@ LLMService llmService(LlmServiceRef ref) {
 }
 
 const String _kGeminiModel = 'gemini-2.5-flash';
-const int _kMaxCompressedBytes = 400 * 1024; // 400 KB
+const int _kMaxCompressedBytes = 1200 * 1024; // 1.2 MB
 
 class LLMService {
   final String _envApiKey;
@@ -37,28 +37,16 @@ class LLMService {
     );
   }
 
-  /// Compress an image file to at most ~400 KB for Gemini inline data.
+  /// Compress an image file for Gemini inline data while keeping it readable.
   Future<Uint8List> compressImage(File file) async {
-    // First pass: quality 25, max width 768
     var result = await FlutterImageCompress.compressWithFile(
       file.absolute.path,
-      quality: 25,
-      minWidth: 1,
-      minHeight: 1,
+      quality: 75,
+      minWidth: 800,
+      minHeight: 800,
       keepExif: false,
     );
     result ??= await file.readAsBytes();
-
-    // Second pass if still too large
-    if (result.length > _kMaxCompressedBytes) {
-      final second = await FlutterImageCompress.compressWithList(
-        result,
-        quality: 10,
-        minWidth: 1,
-        minHeight: 1,
-      );
-      if (second.isNotEmpty) result = second;
-    }
 
     debugPrint('LLMService: compressed ${file.path} → ${result.length} bytes');
     return result;
@@ -166,7 +154,10 @@ You are an intelligent assistant that processes OCR text from screenshots.
 Analyze the following raw OCR text and output a valid JSON object with these fields:
 
 1. "cleanText": Cleaned-up version of the text — fix typos, join broken lines, make it readable.
-2. "tags": List of 1-3 tags. Use: #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories. Create a precise custom tag if none fit (e.g. #DeveloperCredentials).
+2. "tags": List of 1–3 tags. You MUST choose ONLY from this fixed list:
+   #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories, #Education, #Health, #News, #Shopping, #Entertainment, #Food.
+   If the image is blank, dark, blurry, or has no recognisable content → use #Junk.
+   Do NOT invent tags. Do NOT use #BlankImage, #Empty, #NoContent, #Unknown.
 3. "urls": List of URLs found.
 4. "emails": List of email addresses.
 5. "phoneNumbers": List of phone numbers.
@@ -186,7 +177,10 @@ You are an intelligent assistant that analyses screenshots.
 Examine this image and output a valid JSON object with these fields:
 
 1. "cleanText": All text visible in the image, cleaned and readable.
-2. "tags": List of 1-3 tags. Use: #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories. Create a precise custom tag if none fit.
+2. "tags": List of 1–3 tags. You MUST choose ONLY from this fixed list:
+   #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories, #Education, #Health, #News, #Shopping, #Entertainment, #Food.
+   If the image is blank, dark, blurry, or has no recognisable content → use #Junk.
+   Do NOT invent tags. Do NOT use #BlankImage, #Empty, #NoContent, #Unknown.
 3. "urls": List of URLs visible.
 4. "emails": List of email addresses visible.
 5. "phoneNumbers": List of phone numbers visible.

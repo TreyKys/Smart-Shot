@@ -9,6 +9,8 @@ import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+String _cleanTag(String tag) => tag.startsWith('#') ? tag.substring(1) : tag;
+
 class ImageDetailScreen extends ConsumerWidget {
   final Screenshot screenshot;
   const ImageDetailScreen({super.key, required this.screenshot});
@@ -31,7 +33,7 @@ class ImageDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: SiftColors.background,
         title: Text(
-          screenshot.tags?.firstOrNull ?? 'Detail',
+          _cleanTag(screenshot.tags?.firstOrNull ?? 'Detail'),
           style: const TextStyle(
             color: SiftColors.textPrimary,
             fontSize: 17,
@@ -150,7 +152,7 @@ class ImageDetailScreen extends ConsumerWidget {
                             color: color.withOpacity(0.4), width: 0.8),
                       ),
                       child: Text(
-                        tag,
+                        _cleanTag(tag),
                         style: TextStyle(
                           color: color,
                           fontSize: 12,

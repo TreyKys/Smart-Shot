@@ -286,6 +286,27 @@ class GalleryRepository {
     debugPrint('Auto-processing complete. $processed of ${unprocessed.length} handled.');
   }
 
+  /// Resets only screenshots that have garbage/invented tags so they get re-tagged.
+  Future<void> reprocessGarbageTags() async {
+    final isar = await _ref.read(isarProvider.future);
+    const badTags = {
+      '#BlankImage', '#Empty', '#NoContent', '#Unknown', '#Blank',
+      'BlankImage', 'Empty', 'NoContent', 'Unknown', 'Blank',
+    };
+    await isar.writeTxn(() async {
+      final all = await isar.screenshots.where().findAll();
+      final toReset = all.where((s) =>
+          s.tags != null && s.tags!.any((t) => badTags.contains(t)));
+      for (final s in toReset) {
+        s.isProcessed = false;
+        s.tags = null;
+      }
+      await isar.screenshots.putAll(toReset.toList());
+    });
+    debugPrint('reprocessGarbageTags: reset screenshots with bad tags.');
+    _processAllPending();
+  }
+
   /// Marks every screenshot as unprocessed so the pipeline re-runs on next sync.
   Future<void> reprocessAll() async {
     final isar = await _ref.read(isarProvider.future);

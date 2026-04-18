@@ -22,7 +22,6 @@ Stream<List<Screenshot>> galleryStream(GalleryStreamRef ref) async* {
 @riverpod
 Stream<List<String>> uniqueTags(UniqueTagsRef ref) async* {
   final repository = ref.watch(galleryRepositoryProvider);
-  // Watch all screenshots (no filter)
   final stream = repository.watchScreenshots();
 
   await for (final screenshots in stream) {
@@ -38,3 +37,20 @@ Stream<List<String>> uniqueTags(UniqueTagsRef ref) async* {
       yield sorted;
   }
 }
+
+/// Stream of (tag, count) pairs sorted by count descending, for the drawer.
+final tagCountsProvider = StreamProvider<List<({String tag, int count})>>((ref) {
+  final repository = ref.watch(galleryRepositoryProvider);
+  return repository.watchScreenshots().map((screenshots) {
+    final map = <String, int>{};
+    for (final s in screenshots) {
+      for (final t in s.tags ?? []) {
+        map[t] = (map[t] ?? 0) + 1;
+      }
+    }
+    return (map.entries
+        .map((e) => (tag: e.key, count: e.value))
+        .toList()
+      ..sort((a, b) => b.count.compareTo(a.count)));
+  });
+});
