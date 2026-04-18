@@ -14,7 +14,7 @@ LLMService llmService(LlmServiceRef ref) {
   return LLMService();
 }
 
-const String _kGeminiModel = 'gemini-2.5-flash-preview-05-20';
+const String _kGeminiModel = 'gemini-2.5-flash';
 const int _kMaxCompressedBytes = 400 * 1024; // 400 KB
 
 class LLMService {
@@ -68,16 +68,18 @@ class LLMService {
   Future<Map<String, dynamic>> processFile(File file, {String? apiKey}) async {
     final key = apiKey ?? _envApiKey;
     if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
-      debugPrint('LLMService: skipping — no API key');
+      debugPrint('LLMService: skipping — no API key. Set GEMINI_API_KEY in .env or use BYOK in Settings.');
       return {};
     }
 
     try {
       final bytes = await compressImage(file);
-      return _callGemini(bytes, key);
-    } catch (e) {
-      debugPrint('LLMService.processFile error: $e');
-      return {};
+      final result = await _callGemini(bytes, key);
+      debugPrint('LLMService: got ${result.keys.length} fields for ${file.path}');
+      return result;
+    } catch (e, st) {
+      debugPrint('LLMService.processFile error: $e\n$st');
+      rethrow; // let caller decide whether to retry or skip
     }
   }
 
@@ -112,7 +114,9 @@ class LLMService {
       ])
     ];
 
+    debugPrint('LLMService: calling $_kGeminiModel with ${imageBytes.length} bytes…');
     final response = await model.generateContent(content);
+    debugPrint('LLMService: raw response length = ${response.text?.length ?? 0}');
     return _parseResponse(response.text);
   }
 

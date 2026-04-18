@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,12 +10,14 @@ import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
+import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
 import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
 import 'package:sift/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/monetization/quota_bar.dart';
 import 'package:sift/features/purge/presentation/purge_banner.dart';
 import 'package:sift/features/search/search_provider.dart';
+import 'package:sift/features/settings/settings_screen.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
@@ -104,6 +107,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
             tooltip: 'Sync gallery',
             onPressed: () =>
                 ref.read(galleryRepositoryProvider).syncGallery(),
+            onLongPress: () {
+              ref.read(galleryRepositoryProvider).reprocessAll();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Re-scanning all screenshots…')),
+              );
+            },
           ),
         ],
         bottom: PreferredSize(
@@ -132,10 +141,16 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       ),
       body: Column(
         children: [
+          // API key missing warning
+          _ApiKeyWarningBanner(),
+
           // Purge banner (only shows when purgeable items exist)
           const PurgeBanner(),
 
-          // Quota bar (always shown — free tier has 5 scans/day)
+          // Processing progress banner
+          _ProcessingBanner(),
+
+          // Quota bar (always shown — free tier has scans/day)
           const QuotaBar(),
 
           const SizedBox(height: 4),
@@ -321,6 +336,103 @@ class _StatusDot extends StatelessWidget {
         boxShadow: [
           BoxShadow(color: color.withOpacity(0.6), blurRadius: 4),
         ],
+      ),
+    );
+  }
+}
+
+// ── Processing progress banner ────────────────────────────────────────────────
+
+class _ProcessingBanner extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(processingProgressProvider);
+    if (!p.active) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: SiftColors.surfaceElevated,
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: SiftColors.accent,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Sifting ${p.current} of ${p.total} screenshots…',
+              style: const TextStyle(
+                  color: SiftColors.textSecondary, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 80,
+            child: LinearProgressIndicator(
+              value: p.fraction,
+              backgroundColor: SiftColors.border,
+              color: SiftColors.accent,
+              minHeight: 3,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── API key warning banner ─────────────────────────────────────────────────────
+
+class _ApiKeyWarningBanner extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_ApiKeyWarningBanner> createState() =>
+      _ApiKeyWarningBannerState();
+}
+
+class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
+  bool _dismissed = false;
+
+  bool _noKey() {
+    final envKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    final byokKey =
+        ref.read(economyServiceProvider.notifier).getByokKey() ?? '';
+    return envKey.isEmpty && byokKey.isEmpty;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_dismissed || !_noKey()) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: SiftColors.warning.withOpacity(0.12),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: SiftColors.warning, size: 16),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'No Gemini API key — AI tagging disabled. Tap to add one in Settings.',
+                style: TextStyle(color: SiftColors.warning, fontSize: 12),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() => _dismissed = true),
+              child: const Icon(Icons.close,
+                  color: SiftColors.textTertiary, size: 16),
+            ),
+          ],
+        ),
       ),
     );
   }

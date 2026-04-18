@@ -72,45 +72,32 @@ Future<bool> _processDeepScanBatch() async {
       }
 
       try {
-        final text = await ocrService.processImage(file);
-        final llmResult = await llmService.processOCRText(text);
+        // Use vision API (same as foreground) — start OCR + LLM in parallel
+        final ocrFuture = ocrService.processImage(file);
+        final llmFuture = llmService.processFile(file);
+
+        final text = await ocrFuture;
+
+        Map<String, dynamic> llmResult;
+        try {
+          llmResult = await llmFuture;
+        } catch (llmErr) {
+          debugPrint("LLM error for ${screenshot.id}: $llmErr — saving OCR only");
+          llmResult = {};
+        }
 
         await isar.writeTxn(() async {
           screenshot.ocrText = text;
-
           if (llmResult.isNotEmpty) {
             screenshot.cleanText = llmResult['cleanText'] as String?;
-
-            if (llmResult['tags'] != null) {
-              screenshot.tags = (llmResult['tags'] as List).map((e) => e.toString()).toList();
-            }
-            if (llmResult['urls'] != null) {
-              screenshot.urls = (llmResult['urls'] as List).map((e) => e.toString()).toList();
-            }
-            if (llmResult['emails'] != null) {
-              screenshot.emails = (llmResult['emails'] as List).map((e) => e.toString()).toList();
-            }
-            if (llmResult['phoneNumbers'] != null) {
-              screenshot.phoneNumbers = (llmResult['phoneNumbers'] as List).map((e) => e.toString()).toList();
-            }
-            if (llmResult['dates'] != null) {
-              screenshot.dates = (llmResult['dates'] as List).map((e) => e.toString()).toList();
-            }
-            if (llmResult['cryptoAddresses'] != null) {
-              screenshot.cryptoAddresses = (llmResult['cryptoAddresses'] as List).map((e) => e.toString()).toList();
-            }
-            if (llmResult['suggested_actions'] != null) {
-             final actionsList = llmResult['suggested_actions'] as List;
-             screenshot.suggestedActions = actionsList.map((actionJson) {
-                final actionMap = actionJson as Map<String, dynamic>;
-                return SuggestedAction()
-                  ..label = actionMap['label'] as String?
-                  ..payload = actionMap['payload'] as String?
-                  ..intentType = actionMap['intent_type'] as String?;
-             }).toList();
-           }
+            screenshot.tags = _toList(llmResult['tags']);
+            screenshot.urls = _toList(llmResult['urls']);
+            screenshot.emails = _toList(llmResult['emails']);
+            screenshot.phoneNumbers = _toList(llmResult['phoneNumbers']);
+            screenshot.dates = _toList(llmResult['dates']);
+            screenshot.cryptoAddresses = _toList(llmResult['cryptoAddresses']);
+            screenshot.suggestedActions = _buildActions(llmResult);
           }
-
           screenshot.isProcessed = true;
           await isar.screenshots.put(screenshot);
         });
@@ -130,6 +117,39 @@ Future<bool> _processDeepScanBatch() async {
     debugPrint("Background task failed: $e");
     return false;
   }
+}
+
+List<String>? _toList(dynamic raw) {
+  if (raw == null) return null;
+  return (raw as List).map((e) => e.toString()).toList();
+}
+
+List<SuggestedAction> _buildActions(Map<String, dynamic> llmResult) {
+  final actions = <SuggestedAction>[];
+  if (llmResult['suggested_actions'] != null) {
+    final raw = llmResult['suggested_actions'] as List;
+    actions.addAll(raw.map((a) {
+      final m = a as Map<String, dynamic>;
+      return SuggestedAction()
+        ..label = m['label'] as String?
+        ..payload = m['payload'] as String?
+        ..intentType = m['intent_type'] as String?;
+    }));
+  }
+  final appId = llmResult['suggested_app'];
+  if (appId is String && appId.isNotEmpty && appId != 'null') {
+    final names = {'pulse': 'Pulse', 'context': 'Context Dictionary', 'magnum_opus': 'Magnum Opus'};
+    final urls = {
+      'pulse': 'https://neurodevlabs.com/pulse',
+      'context': 'https://neurodevlabs.com/context',
+      'magnum_opus': 'https://neurodevlabs.com/magnum-opus',
+    };
+    actions.add(SuggestedAction()
+      ..label = names[appId] ?? appId
+      ..payload = urls[appId] ?? 'https://neurodevlabs.com'
+      ..intentType = 'app_recommendation');
+  }
+  return actions;
 }
 
 void scheduleDeepScan() {

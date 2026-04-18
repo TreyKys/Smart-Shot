@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/database/isar_service.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
 import 'package:sift/features/gallery/services/dedup_service.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
@@ -177,25 +178,25 @@ class GalleryRepository {
     _processAllPending();
   }
 
-  // ── Automatic AI processing (no button needed) ────────────────────────────
-  //
-  // Called automatically after sync and after share-intent ingestion.
-  // Processes up to the daily quota limit without any manual trigger.
-  // Free users: 5 scans/day (refillable via ads).
-  // BYOK users: unlimited.
+  // ── Automatic AI processing ───────────────────────────────────────────────
 
   Future<void> _processAllPending() async {
     final isar = await _ref.read(isarProvider.future);
     final ocrService = _ref.read(ocrServiceProvider);
     final llmService = _ref.read(llmServiceProvider);
     final economyNotifier = _ref.read(economyServiceProvider.notifier);
+    final progress = _ref.read(processingProgressProvider.notifier);
 
     // Resolve effective API key: BYOK > .env
     final byokKey = economyNotifier.getByokKey() ?? '';
     final envKey = dotenv.env['GEMINI_API_KEY'] ?? '';
     final apiKey = byokKey.isNotEmpty ? byokKey : envKey;
+    final hasKey = apiKey.isNotEmpty && apiKey != 'INSERT_API_KEY_HERE';
 
-    // Fetch ALL unprocessed — we process up to quota then stop
+    if (!hasKey) {
+      debugPrint('⚠ No Gemini API key — OCR only. Set GEMINI_API_KEY in .env or BYOK in Settings.');
+    }
+
     final unprocessed = await isar.screenshots
         .filter()
         .isProcessedEqualTo(false)
@@ -207,42 +208,49 @@ class GalleryRepository {
       return;
     }
 
-    debugPrint(
-        'Auto-processing ${unprocessed.length} screenshots…');
+    debugPrint('Auto-processing ${unprocessed.length} screenshots…');
+    progress.start(unprocessed.length);
 
     int processed = 0;
 
     for (final shot in unprocessed) {
-      // Quota gate: stop when daily limit hit (unless BYOK)
+      // Quota gate (skip entirely for BYOK/Pro)
       if (byokKey.isEmpty) {
         final hasEnergy = await economyNotifier.hasEnoughEnergy();
         if (!hasEnergy) {
-          debugPrint(
-              'Daily AI quota reached ($processed processed). '
-              'Will resume tomorrow or after ad refill.');
+          debugPrint('Daily AI quota reached at $processed processed.');
           break;
         }
       }
 
       final file = File(shot.filePath);
       if (!file.existsSync()) {
-        // File deleted from device — mark processed to skip next time
         await isar.writeTxn(() async {
           shot.isProcessed = true;
           await isar.screenshots.put(shot);
         });
+        progress.advance();
         continue;
       }
 
       try {
-        // 1. On-device OCR (always free, always runs)
-        final text = await ocrService.processImage(file);
-        debugPrint('OCR: ${text.length} chars for ${shot.filePath}');
+        // Start OCR and LLM in parallel — both only need the file path.
+        // OCR is on-device and fast; LLM is network I/O. Running together
+        // roughly halves processing time per image.
+        final ocrFuture = ocrService.processImage(file);
+        final llmFuture = hasKey
+            ? llmService.processFile(file, apiKey: apiKey)
+            : Future.value(<String, dynamic>{});
 
-        // 2. Gemini vision LLM — only if API key is available
-        Map<String, dynamic> llmResult = {};
-        if (apiKey.isNotEmpty && apiKey != 'INSERT_API_KEY_HERE') {
-          llmResult = await llmService.processFile(file, apiKey: apiKey);
+        final text = await ocrFuture;
+        debugPrint('OCR: ${text.length} chars — ${shot.filePath}');
+
+        Map<String, dynamic> llmResult;
+        try {
+          llmResult = await llmFuture;
+        } catch (llmErr) {
+          debugPrint('LLM error for shot ${shot.id}: $llmErr — saving OCR only');
+          llmResult = {};
         }
 
         await isar.writeTxn(() async {
@@ -255,46 +263,63 @@ class GalleryRepository {
             shot.phoneNumbers = _list(llmResult['phoneNumbers']);
             shot.dates = _list(llmResult['dates']);
             shot.cryptoAddresses = _list(llmResult['cryptoAddresses']);
-            final actions = <SuggestedAction>[];
-            if (llmResult['suggested_actions'] != null) {
-              final raw = llmResult['suggested_actions'] as List;
-              actions.addAll(raw.map((a) {
-                final m = a as Map<String, dynamic>;
-                return SuggestedAction()
-                  ..label = m['label'] as String?
-                  ..payload = m['payload'] as String?
-                  ..intentType = m['intent_type'] as String?;
-              }));
-            }
-            final appId = llmResult['suggested_app'];
-            if (appId is String && appId.isNotEmpty && appId != 'null') {
-              actions.add(SuggestedAction()
-                ..label = _appName(appId)
-                ..payload = _appUrl(appId)
-                ..intentType = 'app_recommendation');
-            }
-            shot.suggestedActions = actions;
+            shot.suggestedActions = _buildActions(llmResult);
           }
           shot.isProcessed = true;
           await isar.screenshots.put(shot);
         });
 
-        // Consume one energy unit only when LLM actually ran
-        if (apiKey.isNotEmpty && byokKey.isEmpty) {
-          await economyNotifier.consumeEnergy(1);
-        }
+        if (hasKey && byokKey.isEmpty) await economyNotifier.consumeEnergy(1);
 
         processed++;
+        progress.advance();
 
-        // Small yield so the UI stays responsive
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future.delayed(const Duration(milliseconds: 100));
       } catch (e) {
-        debugPrint('Processing error for ${shot.id}: $e');
+        // Don't mark isProcessed = true — will retry on next sync
+        debugPrint('Processing error for shot ${shot.id}: $e');
+        progress.advance(); // still advance UI counter
       }
     }
 
-    debugPrint(
-        'Auto-processing complete. Handled $processed screenshots.');
+    progress.finish();
+    debugPrint('Auto-processing complete. $processed of ${unprocessed.length} handled.');
+  }
+
+  /// Marks every screenshot as unprocessed so the pipeline re-runs on next sync.
+  Future<void> reprocessAll() async {
+    final isar = await _ref.read(isarProvider.future);
+    await isar.writeTxn(() async {
+      final all = await isar.screenshots.where().findAll();
+      for (final s in all) {
+        s.isProcessed = false;
+      }
+      await isar.screenshots.putAll(all);
+    });
+    debugPrint('Re-processing all ${(await isar.screenshots.count())} screenshots.');
+    _processAllPending();
+  }
+
+  List<SuggestedAction> _buildActions(Map<String, dynamic> llmResult) {
+    final actions = <SuggestedAction>[];
+    if (llmResult['suggested_actions'] != null) {
+      final raw = llmResult['suggested_actions'] as List;
+      actions.addAll(raw.map((a) {
+        final m = a as Map<String, dynamic>;
+        return SuggestedAction()
+          ..label = m['label'] as String?
+          ..payload = m['payload'] as String?
+          ..intentType = m['intent_type'] as String?;
+      }));
+    }
+    final appId = llmResult['suggested_app'];
+    if (appId is String && appId.isNotEmpty && appId != 'null') {
+      actions.add(SuggestedAction()
+        ..label = _appName(appId)
+        ..payload = _appUrl(appId)
+        ..intentType = 'app_recommendation');
+    }
+    return actions;
   }
 
   // ── Watch stream ───────────────────────────────────────────────────────────
