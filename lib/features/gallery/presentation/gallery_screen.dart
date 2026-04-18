@@ -201,16 +201,6 @@ class _SiftIcon extends StatelessWidget {
             child: Icon(Icons.filter_alt, color: SiftColors.accent, size: 18),
           ),
         ),
-        const SizedBox(width: 8),
-        const Text(
-          'sift',
-          style: TextStyle(
-            color: SiftColors.accent,
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
-        ),
       ],
     );
   }

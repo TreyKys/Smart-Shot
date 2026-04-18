@@ -172,6 +172,7 @@ Analyze the following raw OCR text and output a valid JSON object with these fie
    - "label": Short button label (e.g. "Copy Address", "Open Link", "Dial Number")
    - "payload": The data (URL, address, phone number)
    - "intent_type": One of "url", "copy", "dial"
+9. "suggested_app": The single best companion app for the user's needs inferred from this content. Choose ONE of: "pulse" (health, wellness, vitals, fitness tracking, sleep, nutrition, habits, biometrics), "context" (dictionary, vocabulary, word definitions, language learning, reading comprehension, translations), "magnum_opus" (long-form writing, creative content, AI chat, brainstorming, essays, storytelling, document drafting). Return null if the content does not clearly match any of these.
 
 Output strictly valid JSON only.
 ''';
@@ -191,6 +192,7 @@ Examine this image and output a valid JSON object with these fields:
    - "label": Short button label
    - "payload": The data
    - "intent_type": One of "url", "copy", "dial"
+9. "suggested_app": The single best companion app for the user's needs inferred from this content. Choose ONE of: "pulse" (health, wellness, vitals, fitness tracking, sleep, nutrition, habits, biometrics), "context" (dictionary, vocabulary, word definitions, language learning, reading comprehension, translations), "magnum_opus" (long-form writing, creative content, AI chat, brainstorming, essays, storytelling, document drafting). Return null if the content does not clearly match any of these.
 
 Output strictly valid JSON only.
 ''';

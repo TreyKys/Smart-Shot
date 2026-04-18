@@ -37,7 +37,7 @@ class ProService extends _$ProService {
   }
 
   bool _checkLocalProStatus() {
-    return false;
+    return true; // TODO: revert to false before shipping
   }
 
   Future<void> _checkSubscriptionStatus() async {

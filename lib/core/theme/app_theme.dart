@@ -45,7 +45,79 @@ class SiftColors {
   }
 }
 
-// ── Theme builder ─────────────────────────────────────────────────────────────
+// ── Theme builders ────────────────────────────────────────────────────────────
+
+ThemeData buildSiftLightTheme() {
+  const colorScheme = ColorScheme(
+    brightness: Brightness.light,
+    primary: Color(0xFF00A381),
+    onPrimary: Colors.white,
+    secondary: Color(0xFF00B894),
+    onSecondary: Colors.white,
+    error: SiftColors.danger,
+    onError: Colors.white,
+    surface: Colors.white,
+    onSurface: Color(0xFF111111),
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: colorScheme,
+    scaffoldBackgroundColor: const Color(0xFFF2F2F7),
+    canvasColor: const Color(0xFFF2F2F7),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFFF2F2F7),
+      foregroundColor: Color(0xFF111111),
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: Color(0xFF111111),
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.5,
+      ),
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Color(0xFFF2F2F7),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    ),
+    cardTheme: CardThemeData(
+      color: Colors.white,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF00A381),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF00A381),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(color: Color(0xFFE0E0E0), thickness: 0.5, space: 1),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: const Color(0xFF1A1A1A),
+      contentTextStyle: const TextStyle(color: Colors.white),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+}
 
 ThemeData buildSiftTheme() {
   const colorScheme = ColorScheme(

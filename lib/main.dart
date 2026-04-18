@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/presentation/gallery_screen.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
@@ -102,13 +103,14 @@ class _SiftAppState extends ConsumerState<SiftApp> {
       );
     }
 
+    final themeMode = ref.watch(themeModeNotifierProvider);
+
     return MaterialApp(
       title: 'Sift',
       debugShowCheckedModeBanner: false,
-      theme: buildSiftTheme(),
-      // Always dark — system utility aesthetic
-      themeMode: ThemeMode.dark,
+      theme: buildSiftLightTheme(),
       darkTheme: buildSiftTheme(),
+      themeMode: themeMode,
       home: _onboardingComplete
           ? const GalleryScreen()
           : const OnboardingScreen(),

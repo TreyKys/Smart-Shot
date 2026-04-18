@@ -239,10 +239,10 @@ class GalleryRepository {
         final text = await ocrService.processImage(file);
         debugPrint('OCR: ${text.length} chars for ${shot.filePath}');
 
-        // 2. Gemini LLM — only if API key is available
+        // 2. Gemini vision LLM — only if API key is available
         Map<String, dynamic> llmResult = {};
         if (apiKey.isNotEmpty && apiKey != 'INSERT_API_KEY_HERE') {
-          llmResult = await llmService.processOCRText(text, apiKey: apiKey);
+          llmResult = await llmService.processFile(file, apiKey: apiKey);
         }
 
         await isar.writeTxn(() async {
@@ -255,16 +255,25 @@ class GalleryRepository {
             shot.phoneNumbers = _list(llmResult['phoneNumbers']);
             shot.dates = _list(llmResult['dates']);
             shot.cryptoAddresses = _list(llmResult['cryptoAddresses']);
+            final actions = <SuggestedAction>[];
             if (llmResult['suggested_actions'] != null) {
               final raw = llmResult['suggested_actions'] as List;
-              shot.suggestedActions = raw.map((a) {
+              actions.addAll(raw.map((a) {
                 final m = a as Map<String, dynamic>;
                 return SuggestedAction()
                   ..label = m['label'] as String?
                   ..payload = m['payload'] as String?
                   ..intentType = m['intent_type'] as String?;
-              }).toList();
+              }));
             }
+            final appId = llmResult['suggested_app'];
+            if (appId is String && appId.isNotEmpty && appId != 'null') {
+              actions.add(SuggestedAction()
+                ..label = _appName(appId)
+                ..payload = _appUrl(appId)
+                ..intentType = 'app_recommendation');
+            }
+            shot.suggestedActions = actions;
           }
           shot.isProcessed = true;
           await isar.screenshots.put(shot);
@@ -311,5 +320,23 @@ class GalleryRepository {
   List<String>? _list(dynamic raw) {
     if (raw == null) return null;
     return (raw as List).map((e) => e.toString()).toList();
+  }
+
+  static String _appName(String id) {
+    switch (id) {
+      case 'pulse': return 'Pulse';
+      case 'context': return 'Context Dictionary';
+      case 'magnum_opus': return 'Magnum Opus';
+      default: return id;
+    }
+  }
+
+  static String _appUrl(String id) {
+    switch (id) {
+      case 'pulse': return 'https://neurodevlabs.com/pulse';
+      case 'context': return 'https://neurodevlabs.com/context';
+      case 'magnum_opus': return 'https://neurodevlabs.com/magnum-opus';
+      default: return 'https://neurodevlabs.com';
+    }
   }
 }

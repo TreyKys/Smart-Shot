@@ -19,14 +19,10 @@ class ImageDetailScreen extends ConsumerWidget {
     final hasText =
         (screenshot.cleanText?.isNotEmpty ?? false) ||
         (screenshot.ocrText?.isNotEmpty ?? false);
-    final textLen = (screenshot.cleanText ?? screenshot.ocrText ?? '').length;
     final isTodo = screenshot.tags?.any(
             (t) => t.toLowerCase().contains('to-do') ||
                 t.toLowerCase().contains('todo') ||
                 t.toLowerCase().contains('task')) ??
-        false;
-    final hasDateActions = screenshot.suggestedActions?.any(
-            (a) => a.intentType == 'calendar') ??
         false;
     final hasDates = (screenshot.dates?.isNotEmpty ?? false) || isTodo;
 
@@ -82,15 +78,16 @@ class ImageDetailScreen extends ConsumerWidget {
 
             const SizedBox(height: 12),
 
-            // Action chips
+            // Action chips (exclude app_recommendation — shown separately)
             if (screenshot.suggestedActions != null &&
-                screenshot.suggestedActions!.isNotEmpty)
+                screenshot.suggestedActions!.any((a) => a.intentType != 'app_recommendation'))
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   children: screenshot.suggestedActions!
+                      .where((a) => a.intentType != 'app_recommendation')
                       .map((action) => ActionChip(
                             avatar: _actionIcon(action.intentType),
                             label: Text(action.label ?? 'Action'),
@@ -104,6 +101,12 @@ class ImageDetailScreen extends ConsumerWidget {
                       .toList(),
                 ),
               ),
+
+            // Dynamic cross-app recommendation card
+            if (screenshot.suggestedActions != null)
+              ...screenshot.suggestedActions!
+                  .where((a) => a.intentType == 'app_recommendation')
+                  .map((rec) => _AppRecommendationCard(action: rec)),
 
             // Calendar export button
             if (hasDates)
@@ -125,25 +128,6 @@ class ImageDetailScreen extends ConsumerWidget {
                 ),
               ),
 
-            // Magnum Opus cross-pollination
-            if (textLen > 500)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFAE6EFD),
-                    side: const BorderSide(
-                        color: Color(0xFFAE6EFD), width: 0.8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('Chat in Magnum Opus',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  onPressed: () => _openMagnumOpus(context),
-                ),
-              ),
 
             const SizedBox(height: 16),
 
@@ -315,21 +299,101 @@ class ImageDetailScreen extends ConsumerWidget {
     Share.share(sb.toString(), subject: 'Sift Export');
   }
 
-  Future<void> _openMagnumOpus(BuildContext context) async {
-    final text =
-        Uri.encodeComponent(screenshot.cleanText ?? screenshot.ocrText ?? '');
-    final uri = Uri.parse(
-        'intent://magnumopus#Intent;scheme=magnumopus;package=com.neurodevlabs.magnumopus;S.text=$text;end');
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Magnum Opus not installed.')),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Magnum Opus launch error: $e');
-    }
+}
+
+// ── Cross-app recommendation card ─────────────────────────────────────────────
+
+class _AppRecommendationCard extends StatelessWidget {
+  final SuggestedAction action;
+  const _AppRecommendationCard({required this.action});
+
+  static const _appIcons = <String, IconData>{
+    'Pulse': Icons.favorite_outline,
+    'Context Dictionary': Icons.menu_book_outlined,
+    'Magnum Opus': Icons.auto_awesome_outlined,
+  };
+
+  static const _appDescriptions = <String, String>{
+    'Pulse': 'Track health vitals, habits and biometrics.',
+    'Context Dictionary': 'Look up words, meanings and translations.',
+    'Magnum Opus': 'Write, brainstorm and chat with AI.',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final name = action.label ?? 'NeuroDevLabs App';
+    final icon = _appIcons[name] ?? Icons.apps_outlined;
+    final description = _appDescriptions[name] ?? 'Coming soon from NeuroDevLabs.';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFAE6EFD).withOpacity(0.12),
+              const Color(0xFF6E8EFD).withOpacity(0.08),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFAE6EFD).withOpacity(0.35), width: 0.8),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFAE6EFD).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: const Color(0xFFAE6EFD), size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Try $name',
+                    style: const TextStyle(
+                      color: Color(0xFFAE6EFD),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: const TextStyle(color: SiftColors.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFAE6EFD).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFAE6EFD).withOpacity(0.4), width: 0.5),
+              ),
+              child: const Text(
+                'Coming Soon',
+                style: TextStyle(
+                  color: Color(0xFFAE6EFD),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
