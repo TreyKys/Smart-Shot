@@ -13,6 +13,7 @@ import 'package:sift/features/gallery/presentation/providers/processing_progress
 import 'package:sift/features/gallery/services/dedup_service.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
+import 'package:sift/features/ingestion/services/tag_engine.dart';
 
 part 'gallery_repository.g.dart';
 
@@ -234,30 +235,37 @@ class GalleryRepository {
       }
 
       try {
-        // Start OCR and LLM in parallel — both only need the file path.
-        // OCR is on-device and fast; LLM is network I/O. Running together
-        // roughly halves processing time per image.
-        final ocrFuture = ocrService.processImage(file);
-        final llmFuture = hasKey
-            ? llmService.processFile(file, apiKey: apiKey)
-            : Future.value(<String, dynamic>{});
+        // Phase 1: run OCR on-device
+        final ocrText = await ocrService.processImage(file);
+        debugPrint('OCR: ${ocrText.length} chars — ${shot.filePath}');
 
-        final text = await ocrFuture;
-        debugPrint('OCR: ${text.length} chars — ${shot.filePath}');
-
-        Map<String, dynamic> llmResult;
-        try {
-          llmResult = await llmFuture;
-        } catch (llmErr) {
-          debugPrint('LLM error for shot ${shot.id}: $llmErr — saving OCR only');
-          llmResult = {};
+        // Phase 2: send image + OCR text together to Gemini (dual-signal)
+        Map<String, dynamic> llmResult = {};
+        if (hasKey) {
+          try {
+            llmResult = await llmService.processFile(
+              file,
+              apiKey: apiKey,
+              ocrText: ocrText,
+            );
+          } catch (llmErr) {
+            debugPrint('LLM error for shot ${shot.id}: $llmErr — using OCR + local tags only');
+          }
         }
 
+        // Phase 3: merge AI tags with local keyword-scoring engine
+        final aiTags = _list(llmResult['tags']) ?? [];
+        final localTags = TagEngine.suggestFromOcr(ocrText);
+        final isJunk = TagEngine.isLikelyJunk(ocrText, file);
+        final finalTags = (isJunk && aiTags.isEmpty && localTags.isEmpty)
+            ? ['#Junk']
+            : TagEngine.merge(aiTags, localTags);
+
         await isar.writeTxn(() async {
-          shot.ocrText = text;
+          shot.ocrText = ocrText;
+          shot.tags = finalTags.isEmpty ? null : finalTags;
           if (llmResult.isNotEmpty) {
             shot.cleanText = llmResult['cleanText'] as String?;
-            shot.tags = _list(llmResult['tags']);
             shot.urls = _list(llmResult['urls']);
             shot.emails = _list(llmResult['emails']);
             shot.phoneNumbers = _list(llmResult['phoneNumbers']);
@@ -365,7 +373,23 @@ class GalleryRepository {
 
   List<String>? _list(dynamic raw) {
     if (raw == null) return null;
-    return (raw as List).map((e) => e.toString()).toList();
+    if (raw is List) {
+      return raw
+          .where((e) => e != null)
+          .map((e) => e.toString().trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    }
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+      if (trimmed.contains(',')) {
+        return trimmed.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      }
+      return [trimmed];
+    }
+    debugPrint('_list: unexpected type ${raw.runtimeType} — ignoring');
+    return [];
   }
 
   static String _appName(String id) {

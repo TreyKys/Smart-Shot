@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -15,7 +14,6 @@ LLMService llmService(LlmServiceRef ref) {
 }
 
 const String _kGeminiModel = 'gemini-2.5-flash';
-const int _kMaxCompressedBytes = 1200 * 1024; // 1.2 MB
 
 class LLMService {
   final String _envApiKey;
@@ -37,72 +35,69 @@ class LLMService {
     );
   }
 
-  /// Compress an image file for Gemini inline data while keeping it readable.
-  Future<Uint8List> compressImage(File file) async {
-    var result = await FlutterImageCompress.compressWithFile(
-      file.absolute.path,
-      quality: 75,
-      minWidth: 800,
-      minHeight: 800,
-      keepExif: false,
-    );
-    result ??= await file.readAsBytes();
-
-    debugPrint('LLMService: compressed ${file.path} → ${result.length} bytes');
-    return result;
+  static String _mimeFromPath(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'heic':
+      case 'heif':
+        return 'image/heif';
+      default:
+        return 'image/jpeg';
+    }
   }
 
-  /// Entry point usable both directly and via compute().
-  Future<Map<String, dynamic>> processFile(File file, {String? apiKey}) async {
+  /// Analyse a screenshot. Sends raw image bytes + OCR text (if available) to Gemini.
+  Future<Map<String, dynamic>> processFile(
+    File file, {
+    String? apiKey,
+    String? ocrText,
+  }) async {
     final key = apiKey ?? _envApiKey;
     if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
-      debugPrint('LLMService: skipping — no API key. Set GEMINI_API_KEY in .env or use BYOK in Settings.');
+      debugPrint('LLMService: skipping — no API key.');
       return {};
     }
 
     try {
-      final bytes = await compressImage(file);
-      final result = await _callGemini(bytes, key);
+      final bytes = await file.readAsBytes();
+      debugPrint('LLMService: sending ${bytes.length} bytes for ${file.path}');
+      final mime = _mimeFromPath(file.path);
+      final result = await _callGemini(bytes, key, mime, ocrText: ocrText);
       debugPrint('LLMService: got ${result.keys.length} fields for ${file.path}');
       return result;
     } catch (e, st) {
       debugPrint('LLMService.processFile error: $e\n$st');
-      rethrow; // let caller decide whether to retry or skip
-    }
-  }
-
-  Future<Map<String, dynamic>> processOCRText(String rawText,
-      {String? apiKey}) async {
-    final key = apiKey ?? _envApiKey;
-    if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
-      debugPrint('LLMService: skipping — no API key');
-      return {};
-    }
-    if (rawText.trim().isEmpty) return {};
-
-    try {
-      final model = _buildModel(key);
-      final content = [Content.text('$_kPrompt\n\nRAW TEXT:\n$rawText')];
-      final response = await model.generateContent(content);
-      return _parseResponse(response.text);
-    } catch (e) {
-      debugPrint('LLMService.processOCRText error: $e');
-      return {};
+      rethrow;
     }
   }
 
   Future<Map<String, dynamic>> _callGemini(
-      Uint8List imageBytes, String apiKey) async {
+    Uint8List imageBytes,
+    String apiKey,
+    String mimeType, {
+    String? ocrText,
+  }) async {
     final model = _buildModel(apiKey);
+
+    final promptText =
+        (ocrText != null && ocrText.trim().isNotEmpty)
+            ? '$_kPromptVision\n\nOCR TEXT EXTRACTED FROM IMAGE:\n${ocrText.trim()}'
+            : _kPromptVision;
 
     final content = [
       Content.multi([
-        TextPart(_kPromptVision),
-        DataPart('image/jpeg', imageBytes),
+        TextPart(promptText),
+        DataPart(mimeType, imageBytes),
       ])
     ];
 
-    debugPrint('LLMService: calling $_kGeminiModel with ${imageBytes.length} bytes…');
+    debugPrint('LLMService: calling $_kGeminiModel (${imageBytes.length} bytes, mime=$mimeType)…');
     final response = await model.generateContent(content);
     debugPrint('LLMService: raw response length = ${response.text?.length ?? 0}');
     return _parseResponse(response.text);
@@ -135,62 +130,59 @@ class LLMService {
 
 // ── Isolate entry point ────────────────────────────────────────────────────────
 
-/// Params bundle for compute() isolate.
 class LlmIsolateParams {
   final String filePath;
   final String apiKey;
-  const LlmIsolateParams({required this.filePath, required this.apiKey});
+  final String? ocrText;
+  const LlmIsolateParams({
+    required this.filePath,
+    required this.apiKey,
+    this.ocrText,
+  });
 }
 
 Future<Map<String, dynamic>> runLlmIsolate(LlmIsolateParams params) async {
   final service = LLMService(apiKey: params.apiKey);
-  return service.processFile(File(params.filePath), apiKey: params.apiKey);
+  return service.processFile(
+    File(params.filePath),
+    apiKey: params.apiKey,
+    ocrText: params.ocrText,
+  );
 }
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
 
-const String _kPrompt = '''
-You are an intelligent assistant that processes OCR text from screenshots.
-Analyze the following raw OCR text and output a valid JSON object with these fields:
-
-1. "cleanText": Cleaned-up version of the text — fix typos, join broken lines, make it readable.
-2. "tags": List of 1–3 tags. You MUST choose ONLY from this fixed list:
-   #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories, #Education, #Health, #News, #Shopping, #Entertainment, #Food.
-   If the image is blank, dark, blurry, or has no recognisable content → use #Junk.
-   Do NOT invent tags. Do NOT use #BlankImage, #Empty, #NoContent, #Unknown.
-3. "urls": List of URLs found.
-4. "emails": List of email addresses.
-5. "phoneNumbers": List of phone numbers.
-6. "dates": List of dates or deadlines.
-7. "cryptoAddresses": List of crypto wallet addresses.
-8. "suggested_actions": Array of action objects, each with:
-   - "label": Short button label (e.g. "Copy Address", "Open Link", "Dial Number")
-   - "payload": The data (URL, address, phone number)
-   - "intent_type": One of "url", "copy", "dial"
-9. "suggested_app": The single best companion app for the user's needs inferred from this content. Choose ONE of: "pulse" (health, wellness, vitals, fitness tracking, sleep, nutrition, habits, biometrics), "context" (dictionary, vocabulary, word definitions, language learning, reading comprehension, translations), "magnum_opus" (long-form writing, creative content, AI chat, brainstorming, essays, storytelling, document drafting). Return null if the content does not clearly match any of these.
-
-Output strictly valid JSON only.
-''';
-
 const String _kPromptVision = '''
 You are an intelligent assistant that analyses screenshots.
-Examine this image and output a valid JSON object with these fields:
+Examine this image carefully, along with any OCR text provided, and output a valid JSON object.
 
-1. "cleanText": All text visible in the image, cleaned and readable.
-2. "tags": List of 1–3 tags. You MUST choose ONLY from this fixed list:
-   #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories, #Education, #Health, #News, #Shopping, #Entertainment, #Food.
-   If the image is blank, dark, blurry, or has no recognisable content → use #Junk.
-   Do NOT invent tags. Do NOT use #BlankImage, #Empty, #NoContent, #Unknown.
-3. "urls": List of URLs visible.
+Fields:
+1. "cleanText": All readable text visible in the image, cleaned up and properly formatted.
+2. "tags": List of 1–5 descriptive tags that best describe the screenshot content.
+   - Every tag MUST start with '#'
+   - Be specific and accurate to the actual content
+   - Use these as guidance (or invent precise variants when content demands it):
+     #Finance, #Receipts, #Invoice, #SocialMedia, #Memes, #Travel, #TradingCharts,
+     #Web3, #Crypto, #NFT, #DeFi, #Code, #Junk, #To-Do, #Memories, #Education,
+     #Health, #Fitness, #Medical, #News, #Shopping, #Entertainment, #Food, #Gaming,
+     #Legal, #Productivity, #Portfolio, #PersonalFinance, #Receipt, #Screenshot
+   - Use #Junk ONLY if the image is blank, dark, blurry, or has no recognisable content
+   - Do NOT use #BlankImage, #Empty, #NoContent, #Unknown — use #Junk instead
+   - Do NOT return empty string tags
+3. "urls": List of URLs visible in the image.
 4. "emails": List of email addresses visible.
 5. "phoneNumbers": List of phone numbers visible.
 6. "dates": List of dates or deadlines visible.
 7. "cryptoAddresses": List of crypto wallet addresses visible.
 8. "suggested_actions": Array of action objects, each with:
-   - "label": Short button label
-   - "payload": The data
+   - "label": Short button label (e.g. "Open Link", "Copy Address", "Dial Number")
+   - "payload": The data (URL, address, phone number)
    - "intent_type": One of "url", "copy", "dial"
-9. "suggested_app": The single best companion app for the user's needs inferred from this content. Choose ONE of: "pulse" (health, wellness, vitals, fitness tracking, sleep, nutrition, habits, biometrics), "context" (dictionary, vocabulary, word definitions, language learning, reading comprehension, translations), "magnum_opus" (long-form writing, creative content, AI chat, brainstorming, essays, storytelling, document drafting). Return null if the content does not clearly match any of these.
+9. "suggested_app": The single best companion app for the user's needs inferred from this content.
+   Choose ONE of: "pulse" (health/wellness/vitals/fitness/sleep/nutrition/habits/biometrics),
+   "context" (dictionary/vocabulary/word definitions/language learning/reading/translations),
+   "magnum_opus" (long-form writing/creative content/AI chat/brainstorming/essays/documents).
+   Return null if no clear match.
 
-Output strictly valid JSON only.
+Output strictly valid JSON only. No markdown, no explanation.
 ''';
