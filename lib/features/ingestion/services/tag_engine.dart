@@ -157,15 +157,28 @@ class TagEngine {
   }
 
   /// Merge AI tags and local tags, deduplicating case-insensitively.
-  /// AI tags take precedence and appear first. Total capped at 5.
+  /// AI tags take precedence and appear first.
+  /// Local tags are only appended when AI returned fewer than 2 tags —
+  /// avoids false positives when AI already has high-confidence results.
+  /// Total capped at 5.
   static List<String> merge(List<String> aiTags, List<String> localTags) {
     final seen = <String>{};
     final result = <String>[];
-    for (final tag in [...aiTags, ...localTags]) {
+
+    for (final tag in aiTags) {
       final norm = normalize(tag);
       if (norm.isEmpty) continue;
       if (seen.add(norm.toLowerCase())) result.add(norm);
     }
+
+    if (aiTags.length < 2) {
+      for (final tag in localTags) {
+        final norm = normalize(tag);
+        if (norm.isEmpty) continue;
+        if (seen.add(norm.toLowerCase())) result.add(norm);
+      }
+    }
+
     return result.take(5).toList();
   }
 

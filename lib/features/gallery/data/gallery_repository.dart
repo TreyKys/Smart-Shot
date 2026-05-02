@@ -14,6 +14,7 @@ import 'package:sift/features/gallery/services/dedup_service.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
+import 'package:sift/services/notification_service.dart';
 
 part 'gallery_repository.g.dart';
 
@@ -179,6 +180,40 @@ class GalleryRepository {
     _processAllPending();
   }
 
+  // ── Mutation helpers ───────────────────────────────────────────────────────
+
+  /// Deletes a screenshot record from Isar and the file from disk.
+  Future<void> deleteScreenshot(int id) async {
+    final isar = await _ref.read(isarProvider.future);
+    final shot = await isar.screenshots.get(id);
+    final filePath = shot?.filePath;
+    await isar.writeTxn(() async {
+      await isar.screenshots.delete(id);
+    });
+    if (filePath != null) {
+      try {
+        final file = File(filePath);
+        if (await file.exists()) await file.delete();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('dhash:$filePath');
+      } catch (e) {
+        debugPrint('deleteScreenshot: file delete failed — $e');
+      }
+    }
+  }
+
+  /// Overwrites the tags list for a given screenshot.
+  Future<void> updateTags(int id, List<String> tags) async {
+    final isar = await _ref.read(isarProvider.future);
+    await isar.writeTxn(() async {
+      final shot = await isar.screenshots.get(id);
+      if (shot == null) return;
+      shot.tags = tags.isEmpty ? null : tags;
+      await isar.screenshots.put(shot);
+    });
+  }
+
+
   // ── Automatic AI processing ───────────────────────────────────────────────
 
   Future<void> _processAllPending() async {
@@ -257,9 +292,15 @@ class GalleryRepository {
         final aiTags = _list(llmResult['tags']) ?? [];
         final localTags = TagEngine.suggestFromOcr(ocrText);
         final isJunk = TagEngine.isLikelyJunk(ocrText, file);
-        final finalTags = (isJunk && aiTags.isEmpty && localTags.isEmpty)
-            ? ['#Junk']
-            : TagEngine.merge(aiTags, localTags);
+
+        final List<String> finalTags;
+        if (isJunk) {
+          // Junk always wins — prepend #Junk, keep any other AI context
+          final others = TagEngine.merge(aiTags, []).where((t) => t != '#Junk').toList();
+          finalTags = ['#Junk', ...others];
+        } else {
+          finalTags = TagEngine.merge(aiTags, localTags);
+        }
 
         await isar.writeTxn(() async {
           shot.ocrText = ocrText;
@@ -291,6 +332,9 @@ class GalleryRepository {
     }
 
     progress.finish();
+    if (processed > 0) {
+      await NotificationService.instance.notifyProcessingComplete(processed);
+    }
     debugPrint('Auto-processing complete. $processed of ${unprocessed.length} handled.');
   }
 

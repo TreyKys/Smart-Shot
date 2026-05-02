@@ -38,6 +38,9 @@ Stream<List<String>> uniqueTags(UniqueTagsRef ref) async* {
   }
 }
 
+/// Persisted set of pinned screenshot IDs. Populated from SharedPreferences on app start.
+final pinnedIdsProvider = StateProvider<Set<int>>((ref) => {});
+
 /// Stream of (tag, count) pairs sorted by count descending, for the drawer.
 final tagCountsProvider = StreamProvider<List<({String tag, int count})>>((ref) {
   final repository = ref.watch(galleryRepositoryProvider);

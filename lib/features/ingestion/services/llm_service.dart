@@ -172,7 +172,7 @@ Fields:
 3. "urls": List of URLs visible in the image.
 4. "emails": List of email addresses visible.
 5. "phoneNumbers": List of phone numbers visible.
-6. "dates": List of dates or deadlines visible.
+6. "dates": List of dates or deadlines visible. Return each in ISO 8601 format (YYYY-MM-DD) where possible (e.g. "2024-03-15").
 7. "cryptoAddresses": List of crypto wallet addresses visible.
 8. "suggested_actions": Array of action objects, each with:
    - "label": Short button label (e.g. "Open Link", "Copy Address", "Dial Number")
