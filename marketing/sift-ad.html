@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sift — Ad Creative</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200;12..96,300;12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --cyan:   #00FFD1;
+  --green:  #BFFF00;
+  --black:  #000000;
+  --coal:   #0A0A0A;
+  --white:  #FFFFFF;
+  --dim:    #888888;
+  --border: #1A1A1A;
+  --ease:   cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --font:   'Bricolage Grotesque', sans-serif;
+}
+
+html, body {
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  font-family: var(--font);
+}
+
+/* ── Stage: 9:16 container ───────────────────────────────── */
+.stage {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  overflow: hidden;
+  background: var(--black);
+  border-radius: 40px;
+  box-shadow: 0 0 80px rgba(0,255,209,0.08), 0 40px 120px rgba(0,0,0,0.9);
+}
+
+/* Scale to fit viewport on small screens */
+@media (max-height: 900px) {
+  .stage { transform: scale(0.9); transform-origin: center center; }
+}
+@media (max-height: 800px) {
+  .stage { transform: scale(0.8); transform-origin: center center; }
+}
+@media (max-height: 700px) {
+  .stage { transform: scale(0.7); transform-origin: center center; }
+}
+
+/* ── Progress bar ────────────────────────────────────────── */
+.progress-rail {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 100;
+}
+.progress-dot {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.2);
+  transition: background 0.3s var(--ease), width 0.3s var(--ease);
+}
+.progress-dot.active {
+  background: var(--cyan);
+  width: 40px;
+}
+
+/* ── Shared screen base ──────────────────────────────────── */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 36px;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.screen.active { pointer-events: all; }
+
+/* ── Replay button ───────────────────────────────────────── */
+.replay-btn {
+  position: absolute;
+  bottom: 56px;
+  right: 28px;
+  z-index: 200;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 14px;
+  transition: border-color 0.2s, color 0.2s;
+  opacity: 0;
+  pointer-events: none;
+}
+.replay-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.replay-btn.visible { opacity: 1; pointer-events: all; }
+
+/* ══════════════════════════════════════════════════════════
+   SCREEN 1 — YOUR CAMERA ROLL IS A GRAVEYARD
+══════════════════════════════════════════════════════════ */
+#s1 {
+  background: var(--white);
+  justify-content: flex-end;
+  padding-bottom: 72px;
+}
+
+.s1-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--black);
+  opacity: 0;
+}
+
+.s1-grid {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 520px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 3px;
+  opacity: 0;
+  transform: scale(1.05);
+  will-change: transform, opacity;
+}
+.s1-thumb {
+  background: #ccc;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.s1-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+}
+.s1-thumb.junk { background: #e74c3c; opacity: 0.7; }
+.s1-thumb.junk::before {
+  content: '✕';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  color: rgba(255,255,255,0.6);
+  font-size: 10px;
+  font-weight: 700;
+  z-index: 1;
+}
+.s1-thumb.dup { background: #e67e22; opacity: 0.6; }
+.s1-thumb.blur {
+  background: linear-gradient(135deg, #bbb 0%, #999 50%, #bbb 100%);
+  filter: blur(1px);
+}
+.s1-thumb.ok { background: linear-gradient(135deg, #8fa, #4a8); }
+.s1-thumb.ok2 { background: linear-gradient(135deg, #8af, #4a8a); }
+.s1-thumb.ok3 { background: linear-gradient(135deg, #fa8, #a44); }
+
+/* scan-line effect over grid */
+.s1-scan {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 520px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0,255,209,0.06) 48%,
+    rgba(0,255,209,0.12) 50%,
+    rgba(0,255,209,0.06) 52%,
+    transparent 100%
+  );
+  opacity: 0;
+  will-change: transform;
+}
+
+/* Vignette over grid so text reads */
+.s1-vignette {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 520px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0) 0%,
+    rgba(0,0,0,0.6) 100%
+  );
+  pointer-events: none;
+}
+
+.s1-headline {
+  position: relative;
+  z-index: 10;
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -1.5px;
+  color: var(--white);
+  opacity: 0;
+  transform: translateY(30px);
+  will-change: transform, opacity;
+}
+.s1-sub {
+  position: relative;
+  z-index: 10;
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  opacity: 0;
+  transform: translateY(20px);
+  will-change: transform, opacity;
+}
+
+/* Smart Purge overlay (matches into Screen 2) */
+.s1-purge-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--black);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  opacity: 0;
+  pointer-events: none;
+}
+.s1-purge-title {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--white);
+  opacity: 0;
+  transform: translateY(24px);
+}
+.s1-purge-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 280px;
+  margin-top: 8px;
+  opacity: 0;
+}
+.s1-purge-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.s1-purge-bar-fill {
+  height: 100%;
+  background: var(--cyan);
+  width: 0%;
+  border-radius: 2px;
+  box-shadow: 0 0 8px var(--cyan);
+}
+
+/* ══════════════════════════════════════════════════════════
+   SCREEN 2 — NOT JUST DELETED. BUT DIGESTED.
+══════════════════════════════════════════════════════════ */
+#s2 {
+  background: var(--black);
+  justify-content: center;
+  gap: 0;
+}
+
+.s2-bg-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--cyan) 0%, var(--green) 100%);
+  opacity: 0;
+  will-change: opacity;
+}
+.s2-wave {
+  position: absolute;
+  bottom: 0; left: -10%; right: -10%;
+  height: 70%;
+  background: var(--black);
+  border-radius: 50% 50% 0 0 / 20% 20% 0 0;
+  opacity: 0;
+  transform: translateY(100%);
+  will-change: transform, opacity;
+}
+
+/* Word cycle */
+.s2-word-wrap {
+  position: relative;
+  height: 72px;
+  overflow: hidden;
+  margin-bottom: 4px;
+  opacity: 0;
+}
+.s2-word {
+  position: absolute;
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 72px;
+  color: var(--cyan);
+  transform: translateY(72px);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.s2-not {
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--dim);
+  opacity: 0;
+  transform: translateY(20px);
+  will-change: transform, opacity;
+  margin-top: 40px;
+}
+.s2-deleted {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1.0;
+  color: var(--white);
+  opacity: 0;
+  transform: translateY(24px);
+  will-change: transform, opacity;
+  margin-top: 6px;
+}
+.s2-digested {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1.0;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0;
+  transform: translateY(24px);
+  will-change: transform, opacity;
+  margin-top: 0px;
+}
+
+/* Process mockup */
+.s2-process {
+  position: absolute;
+  bottom: 80px;
+  left: 36px;
+  right: 36px;
+  background: #0D0D0D;
+  border: 1px solid #1E1E1E;
+  border-radius: 16px;
+  padding: 20px;
+  opacity: 0;
+  transform: translateY(30px);
+  will-change: transform, opacity;
+}
+.s2-process-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 16px;
+}
+.s2-process-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.s2-process-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--cyan);
+}
+.s2-process-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.s2-process-dot.dim { background: #333; box-shadow: none; }
+.s2-process-label { font-size: 13px; font-weight: 500; color: #aaa; flex: 1; }
+.s2-process-bar-wrap {
+  flex: 1;
+  height: 3px;
+  background: #1A1A1A;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.s2-process-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+  width: 0%;
+}
+.s2-process-bar-fill.green {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  width: 0%;
+}
+.s2-process-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+  width: 32px;
+  text-align: right;
+}
+
+.s2-cta {
+  position: absolute;
+  top: 56px;
+  left: 36px;
+  right: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(-20px);
+  will-change: transform, opacity;
+}
+.s2-cta-text {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.s2-cta-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+}
+
+/* ══════════════════════════════════════════════════════════
+   SCREEN 3 — WEAPONIZED
+══════════════════════════════════════════════════════════ */
+#s3 {
+  background: var(--black);
+  padding: 48px 36px;
+  justify-content: flex-start;
+  padding-top: 80px;
+}
+
+.s3-eyebrow {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--dim);
+  opacity: 0;
+  transform: translateY(20px);
+  will-change: transform, opacity;
+}
+.s3-screenshots {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  color: var(--white);
+  opacity: 0;
+  transform: translateY(28px);
+  will-change: transform, opacity;
+  margin-top: 8px;
+}
+.s3-weapon-wrap {
+  position: relative;
+  margin-top: 0px;
+  overflow: visible;
+}
+.s3-weapon {
+  font-size: 68px;
+  font-weight: 800;
+  letter-spacing: -3px;
+  line-height: 1.0;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--green) 60%, #fff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0;
+  transform: translateX(-40px) skewX(-3deg);
+  will-change: transform, opacity;
+  filter: blur(8px);
+}
+.s3-with {
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.5);
+  opacity: 0;
+  transform: translateY(16px);
+  will-change: transform, opacity;
+  margin-top: 12px;
+}
+.s3-with span {
+  font-weight: 700;
+  color: var(--white);
+}
+
+/* Dashboard mockup */
+.s3-dashboard {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  height: 420px;
+  background: #080808;
+  border-top: 1px solid #1A1A1A;
+  border-radius: 24px 24px 0 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(60px);
+  will-change: transform, opacity;
+}
+.s3-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #141414;
+}
+.s3-dash-title { font-size: 16px; font-weight: 700; color: #fff; }
+.s3-dash-count { font-size: 12px; color: var(--dim); }
+
+/* Tag chips row */
+.s3-tags {
+  display: flex;
+  gap: 6px;
+  padding: 12px 20px 8px;
+  overflow: hidden;
+}
+.s3-tag {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  border: 1px solid;
+}
+.s3-tag.finance  { color: #2ED573; border-color: #2ED57322; background: #2ED57308; }
+.s3-tag.code     { color: #00D2FF; border-color: #00D2FF22; background: #00D2FF08; }
+.s3-tag.travel   { color: #1E90FF; border-color: #1E90FF22; background: #1E90FF08; }
+.s3-tag.receipts { color: #FFA502; border-color: #FFA50222; background: #FFA50208; }
+.s3-tag.junk     { color: #FF4757; border-color: #FF475722; background: #FF475708; }
+.s3-tag.web3     { color: #FF6B81; border-color: #FF6B8122; background: #FF6B8108; }
+.s3-tag.active   { background: #00FFD115; border-color: #00FFD140; color: var(--cyan); }
+
+/* Clean grid */
+.s3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 0 3px 3px;
+  margin-top: 4px;
+}
+.s3-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: #1A1A1A;
+  position: relative;
+  overflow: hidden;
+}
+.s3-cell::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 28px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+}
+.s3-cell-tag {
+  position: absolute;
+  bottom: 5px;
+  left: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  z-index: 1;
+}
+.s3-cell:nth-child(1) { background: linear-gradient(135deg, #1a2a1a, #2a4a2a); }
+.s3-cell:nth-child(2) { background: linear-gradient(135deg, #1a1a2a, #1a2a4a); }
+.s3-cell:nth-child(3) { background: linear-gradient(135deg, #2a1a1a, #4a2a1a); }
+.s3-cell:nth-child(4) { background: linear-gradient(135deg, #1a2a2a, #1a3a4a); }
+.s3-cell:nth-child(5) { background: linear-gradient(135deg, #2a2a1a, #4a4a1a); }
+.s3-cell:nth-child(6) { background: linear-gradient(135deg, #1a1a2a, #3a1a3a); }
+.s3-cell:nth-child(7) { background: linear-gradient(135deg, #2a1a2a, #4a1a4a); }
+.s3-cell:nth-child(8) { background: linear-gradient(135deg, #1a2a1a, #2a4a2a); }
+.s3-cell:nth-child(9) { background: linear-gradient(135deg, #2a1a1a, #3a3a1a); }
+
+/* ══════════════════════════════════════════════════════════
+   SCREEN 4 — CTA / DOWNLOAD
+══════════════════════════════════════════════════════════ */
+#s4 {
+  background: var(--black);
+  padding: 60px 36px 56px;
+  justify-content: space-between;
+}
+
+/* Grid lines BG */
+.s4-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,255,209,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,209,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0;
+  will-change: opacity;
+}
+
+.s4-top {
+  position: relative;
+  z-index: 10;
+  opacity: 0;
+  transform: translateY(-20px);
+  will-change: transform, opacity;
+}
+.s4-wordmark {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -3px;
+  color: var(--white);
+  line-height: 1;
+}
+.s4-tagline {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 2px;
+  color: var(--dim);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* 3D Phone mockup */
+.s4-phone-scene {
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  perspective: 800px;
+  opacity: 0;
+  will-change: opacity;
+}
+.s4-phone {
+  width: 200px;
+  height: 400px;
+  transform: rotateY(-22deg) rotateX(4deg);
+  transform-style: preserve-3d;
+  background: #111;
+  border-radius: 32px;
+  border: 1px solid #2a2a2a;
+  box-shadow:
+    -20px 20px 60px rgba(0,0,0,0.8),
+    0 0 40px rgba(0,255,209,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  overflow: hidden;
+  position: relative;
+}
+/* Phone notch */
+.s4-notch {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 6px;
+  background: #000;
+  border-radius: 4px;
+  z-index: 10;
+}
+/* Phone screen content */
+.s4-phone-screen {
+  position: absolute;
+  inset: 0;
+  background: #080808;
+  display: flex;
+  flex-direction: column;
+}
+.s4-pscreen-header {
+  padding: 22px 12px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #fff;
+  border-bottom: 1px solid #1a1a1a;
+}
+.s4-pscreen-sub {
+  font-size: 7px;
+  font-weight: 400;
+  color: #555;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.s4-pscreen-body { padding: 8px 12px; flex: 1; }
+.s4-pbatch-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.s4-pbatch-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #1a2a1a, #3a5a3a);
+  flex-shrink: 0;
+}
+.s4-pbatch-info { flex: 1; }
+.s4-pbatch-name { font-size: 7px; color: #aaa; font-weight: 500; }
+.s4-pbatch-bar-wrap {
+  height: 2px;
+  background: #1a1a1a;
+  border-radius: 1px;
+  margin-top: 4px;
+}
+.s4-pbatch-bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  background: var(--cyan);
+  box-shadow: 0 0 4px var(--cyan);
+}
+.s4-pbatch-tag {
+  font-size: 6px;
+  font-weight: 700;
+  color: var(--cyan);
+  background: rgba(0,255,209,0.1);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+/* Glow rim on phone */
+.s4-phone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 32px;
+  box-shadow: inset 0 0 20px rgba(0,255,209,0.04);
+  pointer-events: none;
+}
+
+.s4-middle {
+  position: relative;
+  z-index: 10;
+  max-width: 200px;
+  opacity: 0;
+  transform: translateY(20px);
+  will-change: transform, opacity;
+}
+
+/* Google Play badge */
+.s4-play-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 18px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s;
+  margin-bottom: 16px;
+}
+.s4-play-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.s4-play-icon { width: 24px; height: 24px; flex-shrink: 0; }
+.s4-play-text { display: flex; flex-direction: column; }
+.s4-play-top {
+  font-size: 9px;
+  font-weight: 400;
+  color: #222;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+.s4-play-bottom {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.s4-qr-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--dim);
+  letter-spacing: 0.5px;
+}
+
+.s4-bottom {
+  position: relative;
+  z-index: 10;
+  opacity: 0;
+  transform: translateY(20px);
+  will-change: transform, opacity;
+}
+.s4-neuro {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+.s4-neuro span {
+  color: var(--cyan);
+}
+
+/* ── Ambient glow corners (all screens) ─────────────────── */
+.ambient-tl {
+  position: absolute;
+  top: -60px; left: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,255,209,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ambient-br {
+  position: absolute;
+  bottom: -60px; right: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(191,255,0,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+
+  <!-- ── Screen 1: GRAVEYARD ─────────────────────────────── -->
+  <div class="screen" id="s1">
+    <!-- Chaos photo grid -->
+    <div class="s1-grid" id="s1Grid">
+      <!-- Row 1 -->
+      <div class="s1-thumb junk" style="grid-row:span 2"></div>
+      <div class="s1-thumb ok" style="grid-row:span 2"></div>
+      <div class="s1-thumb blur"></div>
+      <div class="s1-thumb ok2"></div>
+      <!-- Row 2 -->
+      <div class="s1-thumb dup"></div>
+      <div class="s1-thumb ok3"></div>
+      <!-- Row 3 -->
+      <div class="s1-thumb ok2"></div>
+      <div class="s1-thumb junk"></div>
+      <div class="s1-thumb blur"></div>
+      <div class="s1-thumb dup" style="grid-row:span 2"></div>
+      <!-- Row 4 -->
+      <div class="s1-thumb ok3"></div>
+      <div class="s1-thumb junk"></div>
+      <div class="s1-thumb ok"></div>
+      <!-- Row 5 -->
+      <div class="s1-thumb blur"></div>
+      <div class="s1-thumb ok2"></div>
+      <div class="s1-thumb ok3"></div>
+      <div class="s1-thumb junk"></div>
+      <!-- Row 6 -->
+      <div class="s1-thumb dup"></div>
+      <div class="s1-thumb ok"></div>
+      <div class="s1-thumb blur"></div>
+      <div class="s1-thumb junk"></div>
+    </div>
+    <div class="s1-scan" id="s1Scan"></div>
+    <div class="s1-vignette"></div>
+
+    <div class="s1-flash" id="s1Flash"></div>
+
+    <h1 class="s1-headline" id="s1Headline">YOUR<br>CAMERA ROLL<br>IS A<br>GRAVEYARD.</h1>
+    <p class="s1-sub" id="s1Sub">↓ Batch purge the noise</p>
+
+    <!-- Smart Purge transition overlay -->
+    <div class="s1-purge-overlay" id="s1Purge">
+      <p class="s1-purge-title" id="s1PurgeTitle">SMART PURGE</p>
+      <div class="s1-purge-bars" id="s1PurgeBars">
+        <div class="s1-purge-bar"><div class="s1-purge-bar-fill" id="pb1"></div></div>
+        <div class="s1-purge-bar"><div class="s1-purge-bar-fill" id="pb2"></div></div>
+        <div class="s1-purge-bar"><div class="s1-purge-bar-fill" id="pb3"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Screen 2: DIGESTED ──────────────────────────────── -->
+  <div class="screen" id="s2">
+    <div class="s2-bg-gradient" id="s2Grad"></div>
+    <div class="s2-wave" id="s2Wave"></div>
+
+    <div class="s2-cta" id="s2Cta">
+      <span class="s2-cta-text">USE SIFT</span>
+      <div class="s2-cta-line"></div>
+    </div>
+
+    <div style="position:relative;z-index:5;">
+      <div class="s2-word-wrap" id="s2WordWrap">
+        <div class="s2-word" id="sw0">SELECT.</div>
+        <div class="s2-word" id="sw1">EXTRACT.</div>
+        <div class="s2-word" id="sw2">PURGE.</div>
+      </div>
+
+      <p class="s2-not" id="s2Not">— Not just</p>
+      <h2 class="s2-deleted" id="s2Deleted">DELETED.</h2>
+      <h2 class="s2-digested" id="s2Digested">BUT DIGESTED.</h2>
+    </div>
+
+    <!-- Processing mockup -->
+    <div class="s2-process" id="s2Process">
+      <p class="s2-process-title">Processing 247 screenshots</p>
+      <div class="s2-process-item">
+        <div class="s2-process-dot"></div>
+        <span class="s2-process-label">OCR Scan</span>
+        <div class="s2-process-bar-wrap"><div class="s2-process-bar-fill" id="pbar1" style="width:88%"></div></div>
+        <span class="s2-process-pct">88%</span>
+      </div>
+      <div class="s2-process-item">
+        <div class="s2-process-dot green"></div>
+        <span class="s2-process-label">AI Tagging</span>
+        <div class="s2-process-bar-wrap"><div class="s2-process-bar-fill green" id="pbar2" style="width:61%"></div></div>
+        <span class="s2-process-pct" style="color:var(--green)">61%</span>
+      </div>
+      <div class="s2-process-item">
+        <div class="s2-process-dot dim"></div>
+        <span class="s2-process-label">Dedup</span>
+        <div class="s2-process-bar-wrap"><div class="s2-process-bar-fill" id="pbar3" style="width:100%"></div></div>
+        <span class="s2-process-pct">✓</span>
+      </div>
+    </div>
+
+    <div class="ambient-tl"></div>
+  </div>
+
+  <!-- ── Screen 3: WEAPONIZED ────────────────────────────── -->
+  <div class="screen" id="s3">
+    <p class="s3-eyebrow" id="s3Eye">Your Screenshots —</p>
+    <h2 class="s3-screenshots" id="s3Shots" style="display:none"></h2>
+    <div class="s3-weapon-wrap">
+      <h1 class="s3-weapon" id="s3Weapon">WEAPONIZED.</h1>
+    </div>
+    <p class="s3-with" id="s3With">…with <span>Sift.</span></p>
+
+    <!-- Clean dashboard mockup -->
+    <div class="s3-dashboard" id="s3Dash">
+      <div class="s3-dash-header">
+        <span class="s3-dash-title">Gallery</span>
+        <span class="s3-dash-count">247 screenshots</span>
+      </div>
+      <div class="s3-tags">
+        <div class="s3-tag active">All</div>
+        <div class="s3-tag finance">Finance</div>
+        <div class="s3-tag code">Code</div>
+        <div class="s3-tag travel">Travel</div>
+        <div class="s3-tag receipts">Receipts</div>
+        <div class="s3-tag junk">Junk</div>
+        <div class="s3-tag web3">Web3</div>
+      </div>
+      <div class="s3-grid">
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#2ED573">Finance</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#00D2FF">Code</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#1E90FF">Travel</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#FFA502">Receipt</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#FF6B81">Web3</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#2ED573">Finance</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#00D2FF">Code</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#1E90FF">Travel</span></div>
+        <div class="s3-cell"><span class="s3-cell-tag" style="color:#AE6EFD">Memes</span></div>
+      </div>
+    </div>
+
+    <div class="ambient-br"></div>
+  </div>
+
+  <!-- ── Screen 4: CTA ───────────────────────────────────── -->
+  <div class="screen" id="s4">
+    <div class="s4-grid-bg" id="s4GridBg"></div>
+    <div class="ambient-tl"></div>
+    <div class="ambient-br"></div>
+
+    <!-- Angled 3D phone -->
+    <div class="s4-phone-scene" id="s4PhoneScene">
+      <div class="s4-phone">
+        <div class="s4-notch"></div>
+        <div class="s4-phone-screen">
+          <div class="s4-pscreen-header">
+            Smart Purge
+            <div class="s4-pscreen-sub">247 photos analyzed</div>
+          </div>
+          <div class="s4-pscreen-body">
+            <div class="s4-pbatch-item">
+              <div class="s4-pbatch-icon" style="background:linear-gradient(135deg,#1a2a1a,#3a5a3a)"></div>
+              <div class="s4-pbatch-info">
+                <div class="s4-pbatch-name">IMG_4821.jpg</div>
+                <div class="s4-pbatch-bar-wrap"><div class="s4-pbatch-bar-fill" style="width:100%"></div></div>
+              </div>
+              <div class="s4-pbatch-tag">Finance</div>
+            </div>
+            <div class="s4-pbatch-item">
+              <div class="s4-pbatch-icon" style="background:linear-gradient(135deg,#1a1a3a,#2a3a5a)"></div>
+              <div class="s4-pbatch-info">
+                <div class="s4-pbatch-name">Screenshot_2024.png</div>
+                <div class="s4-pbatch-bar-wrap"><div class="s4-pbatch-bar-fill" style="width:78%"></div></div>
+              </div>
+              <div class="s4-pbatch-tag">Code</div>
+            </div>
+            <div class="s4-pbatch-item">
+              <div class="s4-pbatch-icon" style="background:linear-gradient(135deg,#2a1a1a,#5a3a1a)"></div>
+              <div class="s4-pbatch-info">
+                <div class="s4-pbatch-name">IMG_0032.jpg</div>
+                <div class="s4-pbatch-bar-wrap"><div class="s4-pbatch-bar-fill" style="width:55%"></div></div>
+              </div>
+              <div class="s4-pbatch-tag" style="color:#FF4757;background:rgba(255,71,87,0.1)">Junk</div>
+            </div>
+            <div class="s4-pbatch-item">
+              <div class="s4-pbatch-icon" style="background:linear-gradient(135deg,#1a2a2a,#2a4a4a)"></div>
+              <div class="s4-pbatch-info">
+                <div class="s4-pbatch-name">receipt_aug.png</div>
+                <div class="s4-pbatch-bar-wrap"><div class="s4-pbatch-bar-fill" style="width:90%"></div></div>
+              </div>
+              <div class="s4-pbatch-tag" style="color:#FFA502;background:rgba(255,165,2,0.1)">Receipt</div>
+            </div>
+          </div>
+          <!-- Mini progress bar at bottom of phone -->
+          <div style="padding:8px 12px;border-top:1px solid #111;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span style="font-size:7px;color:#555;">Processing...</span>
+              <span style="font-size:7px;color:var(--cyan);font-weight:700;">73%</span>
+            </div>
+            <div style="height:2px;background:#1a1a1a;border-radius:1px;">
+              <div style="width:73%;height:100%;background:var(--cyan);border-radius:1px;box-shadow:0 0 4px var(--cyan);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s4-top" id="s4Top">
+      <div class="s4-wordmark">Sift.</div>
+      <div class="s4-tagline">AI Screenshot Organizer</div>
+    </div>
+
+    <div class="s4-middle" id="s4Middle">
+      <a class="s4-play-badge" href="#" onclick="return false;">
+        <!-- Google Play icon (inline SVG) -->
+        <svg class="s4-play-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3.18 23.75C2.62 23.44 2.25 22.84 2.25 22.12V1.88C2.25 1.16 2.62 0.56 3.18 0.25L3.27 0.3L14.3 11.33V11.67L3.27 22.7L3.18 23.75Z" fill="#EA4335"/>
+          <path d="M17.92 15L14.3 11.33V11.67L17.92 15.34L18.01 15.29L21.94 12.94C23.05 12.3 23.05 11.26 21.94 10.62L18.01 8.27L17.92 8.22L14.3 11.89V12.23L17.92 15Z" fill="#FBBC04"/>
+          <path d="M3.27 22.7L14.3 11.67L17.92 15L3.58 23.65C3.14 23.9 2.64 23.91 3.27 22.7Z" fill="#34A853"/>
+          <path d="M3.58 0.35L17.92 9L14.3 12.67L3.27 1.3C2.64 0.09 3.14 0.1 3.58 0.35Z" fill="#4285F4"/>
+        </svg>
+        <div class="s4-play-text">
+          <span class="s4-play-top">GET IT ON</span>
+          <span class="s4-play-bottom">Google Play</span>
+        </div>
+      </a>
+      <p class="s4-qr-hint">Available on Android</p>
+    </div>
+
+    <div class="s4-bottom" id="s4Bottom">
+      <p class="s4-neuro">Neuro<span>Dev</span> Labs</p>
+    </div>
+  </div>
+
+  <!-- Progress dots -->
+  <div class="progress-rail" id="progressRail">
+    <div class="progress-dot active" id="pd0"></div>
+    <div class="progress-dot" id="pd1"></div>
+    <div class="progress-dot" id="pd2"></div>
+    <div class="progress-dot" id="pd3"></div>
+  </div>
+
+  <button class="replay-btn" id="replayBtn" title="Replay">↺</button>
+
+</div><!-- /stage -->
+
+<script>
+/* ── Utility ──────────────────────────────────────────── */
+const q  = id => document.getElementById(id);
+const qs = (el, s) => el.querySelector(s);
+const E  = (ms) => new Promise(r => setTimeout(r, ms));
+
+function tween(el, props, duration, easing = 'cubic-bezier(0.25,0.1,0.25,1)', delay = 0) {
+  return new Promise(resolve => {
+    el.style.transition = `all ${duration}ms ${easing} ${delay}ms`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        for (const [k, v] of Object.entries(props)) el.style[k] = v;
+        setTimeout(resolve, duration + delay);
+      });
+    });
+  });
+}
+
+function instantSet(el, props) {
+  el.style.transition = 'none';
+  for (const [k, v] of Object.entries(props)) el.style[k] = v;
+}
+
+/* ── Progress dots ────────────────────────────────────── */
+const dots = [q('pd0'), q('pd1'), q('pd2'), q('pd3')];
+function setDot(n) {
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === n);
+  });
+}
+
+/* ── Screen helpers ───────────────────────────────────── */
+const screens = ['s1','s2','s3','s4'].map(q);
+
+function showScreen(id) {
+  screens.forEach(s => {
+    if (s.id === id) {
+      s.style.opacity = '1';
+      s.classList.add('active');
+    } else {
+      s.style.opacity = '0';
+      s.classList.remove('active');
+    }
+  });
+}
+
+function hideAllScreens() {
+  screens.forEach(s => {
+    s.style.opacity = '0';
+    s.classList.remove('active');
+  });
+}
+
+/* ── Whip-pan exit (fast blur + translate) ────────────── */
+async function whipExit(el, dir = 'left') {
+  const x = dir === 'left' ? '-120px' : '120px';
+  await tween(el, {
+    transform: `translateX(${x})`,
+    opacity: '0',
+    filter: 'blur(12px)',
+  }, 220, 'cubic-bezier(0.4,0,1,1)');
+  instantSet(el, { transform: '', filter: '', opacity: '0' });
+}
+
+async function whipEnter(el, dir = 'right') {
+  const x = dir === 'right' ? '60px' : '-60px';
+  instantSet(el, {
+    transform: `translateX(${x})`,
+    opacity: '0',
+    filter: 'blur(8px)',
+  });
+  el.style.opacity = '1';
+  el.classList.add('active');
+  await tween(el, {
+    transform: 'translateX(0)',
+    opacity: '1',
+    filter: 'blur(0px)',
+  }, 400, 'cubic-bezier(0.0,0.0,0.2,1)');
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREEN 1 ANIMATION
+══════════════════════════════════════════════════════ */
+async function playS1() {
+  const s1 = q('s1');
+  const grid = q('s1Grid');
+  const scan = q('s1Scan');
+  const hl   = q('s1Headline');
+  const sub  = q('s1Sub');
+  const purge= q('s1Purge');
+  const pt   = q('s1PurgeTitle');
+  const pb   = q('s1PurgeBars');
+
+  // Reset all
+  instantSet(s1,    { background: 'var(--white)' });
+  instantSet(grid,  { opacity: '0', transform: 'scale(1.05)' });
+  instantSet(scan,  { opacity: '0', transform: 'translateY(0)' });
+  instantSet(hl,    { opacity: '0', transform: 'translateY(30px)' });
+  instantSet(sub,   { opacity: '0', transform: 'translateY(20px)' });
+  instantSet(purge, { opacity: '0' });
+  instantSet(pt,    { opacity: '0', transform: 'translateY(24px)' });
+  instantSet(pb,    { opacity: '0' });
+  [q('pb1'),q('pb2'),q('pb3')].forEach(b => instantSet(b, { width: '0%' }));
+
+  // white → black flash (0→0.3s)
+  await tween(s1, { background: 'var(--coal)' }, 400, 'cubic-bezier(0.25,0.1,0.25,1)');
+
+  // Grid fades in (0.3→1.0s)
+  await tween(grid, { opacity: '1', transform: 'scale(1)' }, 700, 'cubic-bezier(0.0,0.0,0.2,1)');
+
+  // Scan line sweeps down
+  scan.style.transition = 'none';
+  scan.style.opacity = '0.6';
+  scan.style.transform = 'translateY(-520px)';
+  await E(50);
+  scan.style.transition = `transform 1200ms linear`;
+  scan.style.transform = 'translateY(520px)';
+  await E(300);
+
+  // Headline drifts in
+  await tween(hl, { opacity: '1', transform: 'translateY(0)' }, 700, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(200);
+  await tween(sub, { opacity: '1', transform: 'translateY(0)' }, 500, 'cubic-bezier(0.0,0.0,0.2,1)');
+
+  await E(900);
+
+  // Grid "fades out", purge overlay slides in
+  tween(grid, { opacity: '0' }, 400, 'var(--ease)');
+  tween(hl,   { opacity: '0', transform: 'translateY(-20px)' }, 300, 'var(--ease)');
+  tween(sub,  { opacity: '0' }, 200, 'var(--ease)');
+
+  await E(200);
+
+  // Purge overlay appears
+  purge.style.opacity = '1';
+  await tween(pt, { opacity: '1', transform: 'translateY(0)' }, 400, 'cubic-bezier(0.0,0.0,0.2,1)');
+  pb.style.transition = 'opacity 300ms var(--ease)';
+  pb.style.opacity = '1';
+
+  // Bars fill up
+  await E(100);
+  q('pb1').style.transition = 'width 600ms cubic-bezier(0.0,0.0,0.2,1)';
+  q('pb1').style.width = '100%';
+  await E(150);
+  q('pb2').style.transition = 'width 700ms cubic-bezier(0.0,0.0,0.2,1)';
+  q('pb2').style.width = '80%';
+  await E(200);
+  q('pb3').style.transition = 'width 500ms cubic-bezier(0.0,0.0,0.2,1)';
+  q('pb3').style.width = '60%';
+
+  await E(800);
+
+  // Whip exit
+  await whipExit(s1, 'left');
+  setDot(1);
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREEN 2 ANIMATION
+══════════════════════════════════════════════════════ */
+const WORDS = ['SELECT.', 'EXTRACT.', 'PURGE.'];
+
+async function playS2() {
+  const s2    = q('s2');
+  const grad  = q('s2Grad');
+  const wave  = q('s2Wave');
+  const wrap  = q('s2WordWrap');
+  const not_  = q('s2Not');
+  const del_  = q('s2Deleted');
+  const dig_  = q('s2Digested');
+  const proc  = q('s2Process');
+  const cta   = q('s2Cta');
+  const words = [q('sw0'), q('sw1'), q('sw2')];
+
+  // Reset
+  instantSet(grad, { opacity: '0' });
+  instantSet(wave, { opacity: '0', transform: 'translateY(100%)' });
+  instantSet(wrap, { opacity: '0' });
+  instantSet(not_, { opacity: '0', transform: 'translateY(20px)' });
+  instantSet(del_, { opacity: '0', transform: 'translateY(24px)' });
+  instantSet(dig_, { opacity: '0', transform: 'translateY(24px)' });
+  instantSet(proc, { opacity: '0', transform: 'translateY(30px)' });
+  instantSet(cta,  { opacity: '0', transform: 'translateY(-20px)' });
+  words.forEach(w => instantSet(w, { opacity: '0', transform: 'translateY(72px)' }));
+
+  await whipEnter(s2, 'right');
+
+  // Neon gradient burst
+  await tween(grad, { opacity: '1' }, 250, 'var(--ease)');
+  await E(200);
+
+  // Wave wipe
+  tween(wave, { opacity: '1', transform: 'translateY(0)' }, 700, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(400);
+
+  // Word cycling — slide up one by one
+  wrap.style.transition = 'opacity 300ms var(--ease)';
+  wrap.style.opacity = '1';
+
+  for (let i = 0; i < 3; i++) {
+    const w = words[i];
+    instantSet(w, { opacity: '0', transform: 'translateY(72px)' });
+    await tween(w, { opacity: '1', transform: 'translateY(0)' }, 340, 'cubic-bezier(0.34,1.56,0.64,1)');
+    if (i < 2) {
+      await E(380);
+      tween(w, { opacity: '0', transform: 'translateY(-72px)' }, 260, 'cubic-bezier(0.4,0,1,1)');
+      await E(100);
+    }
+  }
+
+  await E(300);
+
+  // Text reveals
+  await tween(not_, { opacity: '1', transform: 'translateY(0)' }, 400, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(100);
+  await tween(del_, { opacity: '1', transform: 'translateY(0)' }, 400, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(50);
+  await tween(dig_, { opacity: '1', transform: 'translateY(0)' }, 500, 'cubic-bezier(0.0,0.0,0.2,1)');
+
+  // Process mockup glides in
+  await E(200);
+  await tween(proc, { opacity: '1', transform: 'translateY(0)' }, 500, 'cubic-bezier(0.0,0.0,0.2,1)');
+
+  // USE SIFT cta
+  await E(100);
+  await tween(cta, { opacity: '1', transform: 'translateY(0)' }, 400, 'var(--ease)');
+
+  // Animate process bars
+  const p1 = proc.querySelector('#pbar1');
+  const p2 = proc.querySelector('#pbar2');
+  if (p1) { instantSet(p1, {width:'0%'}); p1.style.transition='width 1200ms cubic-bezier(0.0,0.0,0.2,1)'; p1.style.width='88%'; }
+  if (p2) { instantSet(p2, {width:'0%'}); p2.style.transition='width 1500ms cubic-bezier(0.0,0.0,0.2,1)'; p2.style.width='61%'; }
+
+  await E(1400);
+
+  // Whip exit
+  await whipExit(s2, 'left');
+  setDot(2);
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREEN 3 ANIMATION
+══════════════════════════════════════════════════════ */
+async function playS3() {
+  const s3    = q('s3');
+  const eye   = q('s3Eye');
+  const weap  = q('s3Weapon');
+  const with_ = q('s3With');
+  const dash  = q('s3Dash');
+
+  // Reset
+  instantSet(eye,   { opacity: '0', transform: 'translateY(20px)' });
+  instantSet(weap,  { opacity: '0', transform: 'translateX(-40px) skewX(-3deg)', filter: 'blur(8px)' });
+  instantSet(with_, { opacity: '0', transform: 'translateY(16px)' });
+  instantSet(dash,  { opacity: '0', transform: 'translateY(60px)' });
+
+  await whipEnter(s3, 'right');
+
+  await tween(eye, { opacity: '1', transform: 'translateY(0)' }, 500, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(100);
+
+  // WEAPONIZED slams in with blur clearing
+  await tween(weap, {
+    opacity: '1',
+    transform: 'translateX(0) skewX(0)',
+    filter: 'blur(0px)',
+  }, 600, 'cubic-bezier(0.34,1.56,0.64,1)');
+
+  await E(150);
+  await tween(with_, { opacity: '1', transform: 'translateY(0)' }, 400, 'var(--ease)');
+
+  // Dashboard slides up
+  await E(200);
+  await tween(dash, { opacity: '1', transform: 'translateY(0)' }, 600, 'cubic-bezier(0.0,0.0,0.2,1)');
+
+  await E(1600);
+
+  // Whip exit
+  await whipExit(s3, 'left');
+  setDot(3);
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREEN 4 ANIMATION
+══════════════════════════════════════════════════════ */
+async function playS4() {
+  const s4    = q('s4');
+  const grid  = q('s4GridBg');
+  const top   = q('s4Top');
+  const phone = q('s4PhoneScene');
+  const mid   = q('s4Middle');
+  const bot   = q('s4Bottom');
+  const replay= q('replayBtn');
+
+  // Reset
+  instantSet(grid,  { opacity: '0' });
+  instantSet(top,   { opacity: '0', transform: 'translateY(-20px)' });
+  instantSet(phone, { opacity: '0' });
+  instantSet(mid,   { opacity: '0', transform: 'translateY(20px)' });
+  instantSet(bot,   { opacity: '0', transform: 'translateY(20px)' });
+
+  await whipEnter(s4, 'right');
+
+  // Grid lines fade in subtly
+  tween(grid, { opacity: '1' }, 800, 'var(--ease)');
+
+  await tween(top, { opacity: '1', transform: 'translateY(0)' }, 500, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(100);
+
+  // Phone rotates/glides in
+  instantSet(phone, {
+    opacity: '0',
+    transform: 'translateX(60px) rotateY(-5deg)',
+  });
+  await tween(phone, {
+    opacity: '1',
+    transform: 'translateX(0)',
+  }, 700, 'cubic-bezier(0.0,0.0,0.2,1)');
+
+  await E(100);
+  await tween(mid, { opacity: '1', transform: 'translateY(0)' }, 500, 'cubic-bezier(0.0,0.0,0.2,1)');
+  await E(100);
+  await tween(bot, { opacity: '1', transform: 'translateY(0)' }, 400, 'var(--ease)');
+
+  // Show replay button
+  await E(400);
+  replay.classList.add('visible');
+}
+
+/* ══════════════════════════════════════════════════════
+   MAIN SEQUENCE
+══════════════════════════════════════════════════════ */
+async function runAd() {
+  q('replayBtn').classList.remove('visible');
+
+  // Initial state: all hidden
+  hideAllScreens();
+  setDot(0);
+
+  // S1
+  q('s1').style.opacity = '1';
+  q('s1').classList.add('active');
+  await playS1();
+
+  // S2
+  await playS2();
+
+  // S3
+  await playS3();
+
+  // S4
+  await playS4();
+}
+
+/* ── Replay ───────────────────────────────────────────── */
+q('replayBtn').addEventListener('click', () => {
+  q('replayBtn').classList.remove('visible');
+  // Small delay to let button click register
+  setTimeout(runAd, 100);
+});
+
+/* ── Auto-start ───────────────────────────────────────── */
+window.addEventListener('load', () => {
+  setTimeout(runAd, 400);
+});
+</script>
+
+<!--
+╔══════════════════════════════════════════════════════╗
+║           🎵  SOUNDTRACK RECOMMENDATIONS             ║
+╠══════════════════════════════════════════════════════╣
+║                                                      ║
+║  PRIMARY PICK (exact vibe, beat-match friendly):     ║
+║  ── "Testarossa Autodrive" — Kavinsky                ║
+║     ~105 BPM. Neon, cinematic, dark synth.           ║
+║     Beat hits every 571ms → whip-pans on bars 4/8.  ║
+║     Intro builds from 0s, drop at ~0:16. Perfect.   ║
+║                                                      ║
+║  RUNNER-UP (minimalist tech house):                  ║
+║  ── "Emerge" — Fischerspooner                        ║
+║  ── "Kong" — Bonobo (album: The North Borders)       ║
+║  ── "Pursuit" — Gesaffelstein (124 BPM, precise)     ║
+║                                                      ║
+║  FOR TIKTOK/IG ORGANIC REACH:                        ║
+║  ── Use trending audio from TikTok's Sound Library   ║
+║     Filter: "Dark Electronic" or "Minimal Synth"     ║
+║  ── Avoid copyright blocks: Artlist.io search        ║
+║     "minimal tech dark" → license once, use forever  ║
+║                                                      ║
+║  BEAT-MATCH CUE POINTS (at 120 BPM):                ║
+║  ── 0:00 → S1 starts (white flash on kick)           ║
+║  ── 0:04 → "GRAVEYARD" appears (on 1-beat of bar 2) ║
+║  ── 0:08 → Whip-pan to S2 (bar 4 kick = hard cut)   ║
+║  ── 0:08 → Gradient burst on S2 intro beat          ║
+║  ── 0:14 → "WEAPONIZED" slam on the drop             ║
+║  ── 0:20 → CTA screen on final phrase                ║
+║                                                      ║
+║  EDITING NOTES:                                      ║
+║  ── Whip-pan: 12-frame (0.2s) motion blur left       ║
+║  ── Match-cut: S1 purge bars → S2 process bars       ║
+║  ── Match-cut: S2 word "PURGE" → S3 "WEAPONIZED"    ║
+║  ── Record this page in browser at 390×844 cropped  ║
+║     Or use Loom / OBS / QuickTime screen capture     ║
+╚══════════════════════════════════════════════════════╝
+-->
+</body>
+</html>
