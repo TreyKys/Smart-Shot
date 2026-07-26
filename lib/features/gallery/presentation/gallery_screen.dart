@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sift/core/config/app_config.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
@@ -665,7 +665,7 @@ class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
   bool _dismissed = false;
 
   bool _noKey() {
-    final envKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    final envKey = AppConfig.geminiApiKey;
     final byokKey =
         ref.read(economyServiceProvider.notifier).getByokKey() ?? '';
     return envKey.isEmpty && byokKey.isEmpty;

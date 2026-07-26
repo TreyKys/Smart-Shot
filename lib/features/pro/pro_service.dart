@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sift/core/config/app_config.dart';
 
 part 'pro_service.g.dart';
 
@@ -24,20 +25,25 @@ class ProService extends _$ProService {
     }
 
     PurchasesConfiguration? configuration;
-    if (Platform.isAndroid) {
-      configuration = PurchasesConfiguration("goog_placeholder_api_key_for_sift");
-    } else if (Platform.isIOS) {
-      configuration = PurchasesConfiguration("appl_placeholder_api_key_for_sift");
+    if (Platform.isAndroid && AppConfig.revenueCatAndroidApiKey.isNotEmpty) {
+      configuration = PurchasesConfiguration(AppConfig.revenueCatAndroidApiKey);
+    } else if (Platform.isIOS && AppConfig.revenueCatIosApiKey.isNotEmpty) {
+      configuration = PurchasesConfiguration(AppConfig.revenueCatIosApiKey);
     }
 
     if (configuration != null) {
       await Purchases.configure(configuration);
       _checkSubscriptionStatus();
+    } else {
+      debugPrint(
+          'RevenueCat API key not supplied via --dart-define; purchases disabled.');
     }
   }
 
   bool _checkLocalProStatus() {
-    return true; // TODO: revert to false before shipping
+    // Fail closed: default to non-Pro until RevenueCat/cached entitlement
+    // confirms otherwise via _checkSubscriptionStatus() below.
+    return false;
   }
 
   Future<void> _checkSubscriptionStatus() async {

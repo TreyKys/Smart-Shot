@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:sift/core/config/app_config.dart';
 import 'package:sift/features/pro/pro_service.dart';
 
 part 'economy_service.g.dart';
@@ -98,7 +99,7 @@ class EconomyService extends _$EconomyService {
   // ── AdMob ────────────────────────────────────────────────────────────────
 
   void loadRewardedAd() {
-    const String adUnitId = 'ca-app-pub-3940256099942544/5224354917'; // test ID
+    final String adUnitId = AppConfig.rewardedAdUnitId;
     RewardedAd.load(
       adUnitId: adUnitId,
       request: const AdRequest(),

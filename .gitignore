@@ -44,3 +44,18 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .env
+
+# Release signing (never commit keystores or credentials)
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+*.jks
+*.keystore
+*.p12
+
+# Build outputs that shouldn't be tracked
+*.apk
+*.aab
+
+# Real build-time secrets (copy from dart_define.example.json)
+dart_define.json

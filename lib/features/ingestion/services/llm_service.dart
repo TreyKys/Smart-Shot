@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sift/core/config/app_config.dart';
 
 part 'llm_service.g.dart';
 
@@ -19,9 +19,9 @@ class LLMService {
   final String _envApiKey;
 
   LLMService({String? apiKey})
-      : _envApiKey = apiKey ?? (dotenv.env['GEMINI_API_KEY'] ?? '') {
-    if (_envApiKey.isEmpty || _envApiKey == 'INSERT_API_KEY_HERE') {
-      debugPrint('Warning: GEMINI_API_KEY is not set or is default in .env');
+      : _envApiKey = apiKey ?? AppConfig.geminiApiKey {
+    if (_envApiKey.isEmpty) {
+      debugPrint('Warning: GEMINI_API_KEY was not supplied via --dart-define');
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,30 +7,40 @@ import 'package:flutter/services.dart';
 class SiftColors {
   SiftColors._();
 
-  static const background = Color(0xFF090909);
-  static const surface = Color(0xFF111111);
-  static const surfaceElevated = Color(0xFF1A1A1A);
-  static const border = Color(0xFF242424);
-  static const accent = Color(0xFF00FFD1); // neon cyan
-  static const accentDim = Color(0xFF00B894);
-  static const textPrimary = Color(0xFFFFFFFF);
-  static const textSecondary = Color(0xFF8A8A8A);
-  static const textTertiary = Color(0xFF4A4A4A);
+  // Dark theme — deep navy, not pure black, so the blue accent has room to breathe.
+  static const background = Color(0xFF0A0F1E);
+  static const surface = Color(0xFF111827);
+  static const surfaceElevated = Color(0xFF1A2436);
+  static const border = Color(0xFF243044);
+  static const accent = Color(0xFF4C8DFF); // electric blue
+  static const accentDim = Color(0xFF2F6FED);
+  static const textPrimary = Color(0xFFF5F7FC);
+  static const textSecondary = Color(0xFF8C9BB5);
+  static const textTertiary = Color(0xFF4E5C74);
   static const danger = Color(0xFFFF4757);
   static const warning = Color(0xFFFFA502);
   static const success = Color(0xFF2ED573);
   static const proGold = Color(0xFFFFD700);
+
+  // Light theme — soft, cool blue-tinted surfaces rather than stark white.
+  static const lightBackground = Color(0xFFEFF4FC);
+  static const lightSurface = Color(0xFFFFFFFF);
+  static const lightBorder = Color(0xFFD9E3F5);
+  static const lightPrimary = Color(0xFF2563EB);
+  static const lightSecondary = Color(0xFF3B82F6);
+  static const lightTextPrimary = Color(0xFF0F172A);
+  static const lightTextSecondary = Color(0xFF5B6B85);
 
   // Tag palette
   static const tagFinance = Color(0xFF2ED573);
   static const tagMemes = Color(0xFFAE6EFD);
   static const tagJunk = Color(0xFFFF4757);
   static const tagToDo = Color(0xFFFFA502);
-  static const tagTravel = Color(0xFF1E90FF);
+  static const tagTravel = Color(0xFF4C8DFF);
   static const tagWeb3 = Color(0xFFFF6B81);
-  static const tagCode = Color(0xFF00D2FF);
+  static const tagCode = Color(0xFF38BDF8);
   static const tagSocial = Color(0xFFFC5C7D);
-  static const tagDefault = Color(0xFF8A8A8A);
+  static const tagDefault = Color(0xFF8C9BB5);
 
   static Color forTag(String tag) {
     final t = tag.toLowerCase().replaceAll('#', '');
@@ -45,34 +56,46 @@ class SiftColors {
   }
 }
 
+// ── Shared motion ─────────────────────────────────────────────────────────────
+
+/// Smoother, more "fluid" cross-screen transitions than the Android default
+/// (which snaps between screens). Used by both the light and dark themes.
+final _fluidPageTransitions = PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: const FadeForwardsPageTransitionsBuilder(),
+    TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+  },
+);
+
 // ── Theme builders ────────────────────────────────────────────────────────────
 
 ThemeData buildSiftLightTheme() {
   const colorScheme = ColorScheme(
     brightness: Brightness.light,
-    primary: Color(0xFF00A381),
+    primary: SiftColors.lightPrimary,
     onPrimary: Colors.white,
-    secondary: Color(0xFF00B894),
+    secondary: SiftColors.lightSecondary,
     onSecondary: Colors.white,
     error: SiftColors.danger,
     onError: Colors.white,
-    surface: Colors.white,
-    onSurface: Color(0xFF111111),
+    surface: SiftColors.lightSurface,
+    onSurface: SiftColors.lightTextPrimary,
   );
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor: const Color(0xFFF2F2F7),
-    canvasColor: const Color(0xFFF2F2F7),
+    scaffoldBackgroundColor: SiftColors.lightBackground,
+    canvasColor: SiftColors.lightBackground,
+    pageTransitionsTheme: _fluidPageTransitions,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFFF2F2F7),
-      foregroundColor: Color(0xFF111111),
+      backgroundColor: SiftColors.lightBackground,
+      foregroundColor: SiftColors.lightTextPrimary,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
-        color: Color(0xFF111111),
+        color: SiftColors.lightTextPrimary,
         fontSize: 20,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.5,
@@ -80,22 +103,22 @@ ThemeData buildSiftLightTheme() {
       systemOverlayStyle: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: Color(0xFFF2F2F7),
+        systemNavigationBarColor: SiftColors.lightBackground,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     ),
     cardTheme: CardThemeData(
-      color: Colors.white,
+      color: SiftColors.lightSurface,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
+        side: const BorderSide(color: SiftColors.lightBorder, width: 0.5),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF00A381),
+        backgroundColor: SiftColors.lightPrimary,
         foregroundColor: Colors.white,
         elevation: 0,
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.5),
@@ -105,13 +128,13 @@ ThemeData buildSiftLightTheme() {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: const Color(0xFF00A381),
+        foregroundColor: SiftColors.lightPrimary,
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     ),
-    dividerTheme: const DividerThemeData(color: Color(0xFFE0E0E0), thickness: 0.5, space: 1),
+    dividerTheme: const DividerThemeData(color: SiftColors.lightBorder, thickness: 0.5, space: 1),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: SiftColors.lightTextPrimary,
       contentTextStyle: const TextStyle(color: Colors.white),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       behavior: SnackBarBehavior.floating,
@@ -137,6 +160,7 @@ ThemeData buildSiftTheme() {
     colorScheme: colorScheme,
     scaffoldBackgroundColor: SiftColors.background,
     canvasColor: SiftColors.background,
+    pageTransitionsTheme: _fluidPageTransitions,
 
     // AppBar
     appBarTheme: const AppBarTheme(

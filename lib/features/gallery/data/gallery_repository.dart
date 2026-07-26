@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:isar/isar.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sift/core/config/app_config.dart';
 import 'package:sift/core/database/isar_service.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
@@ -223,11 +223,11 @@ class GalleryRepository {
     final economyNotifier = _ref.read(economyServiceProvider.notifier);
     final progress = _ref.read(processingProgressProvider.notifier);
 
-    // Resolve effective API key: BYOK > .env
+    // Resolve effective API key: BYOK > build-time config
     final byokKey = economyNotifier.getByokKey() ?? '';
-    final envKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    final envKey = AppConfig.geminiApiKey;
     final apiKey = byokKey.isNotEmpty ? byokKey : envKey;
-    final hasKey = apiKey.isNotEmpty && apiKey != 'INSERT_API_KEY_HERE';
+    final hasKey = apiKey.isNotEmpty;
 
     if (!hasKey) {
       debugPrint('⚠ No Gemini API key — OCR only. Set GEMINI_API_KEY in .env or BYOK in Settings.');

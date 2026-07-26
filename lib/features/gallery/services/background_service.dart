@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:sift/core/config/app_config.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
@@ -27,8 +27,6 @@ void callbackDispatcher() {
 
 Future<bool> _processDeepScanBatch() async {
   try {
-    await dotenv.load(fileName: ".env");
-
     final dir = await getApplicationDocumentsDirectory();
     final isar = await Isar.open(
       [ScreenshotSchema],
@@ -51,7 +49,7 @@ Future<bool> _processDeepScanBatch() async {
     debugPrint("Processing batch of ${screenshots.length} screenshots...");
 
     final ocrService = OcrService();
-    final llmService = LLMService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? '');
+    final llmService = LLMService(apiKey: AppConfig.geminiApiKey);
 
     for (final screenshot in screenshots) {
       final file = File(screenshot.filePath);

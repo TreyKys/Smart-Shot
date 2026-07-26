@@ -2,36 +2,52 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/presentation/gallery_screen.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
+import 'package:sift/features/monetization/consent_service.dart';
 import 'package:sift/features/onboarding/onboarding_screen.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/services/notification_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      debugPrint('FlutterError: ${details.exceptionAsString()}');
+    };
 
-  // Load env first (API keys needed by everything)
-  await dotenv.load(fileName: '.env');
+    // Each startup step is isolated: a single SDK failing to initialize
+    // (ads, notifications, background tasks) must not blank the whole app.
+    try {
+      // Runs the GDPR/UK consent flow (where applicable) before ads init.
+      await ConsentService.instance.requestConsentAndInitAds();
+    } catch (e, st) {
+      debugPrint('Ads/consent init failed: $e\n$st');
+    }
 
-  // AdMob
-  await MobileAds.instance.initialize();
+    try {
+      Workmanager().initialize(callbackDispatcher);
+    } catch (e, st) {
+      debugPrint('Workmanager init failed: $e\n$st');
+    }
 
-  // Background tasks
-  Workmanager().initialize(callbackDispatcher);
+    try {
+      await NotificationService.instance.init();
+    } catch (e, st) {
+      debugPrint('NotificationService init failed: $e\n$st');
+    }
 
-  // Notifications
-  await NotificationService.instance.init();
-
-  runApp(const ProviderScope(child: SiftApp()));
+    runApp(const ProviderScope(child: SiftApp()));
+  }, (error, stack) {
+    debugPrint('Uncaught error: $error\n$stack');
+  });
 }
 
 class SiftApp extends ConsumerStatefulWidget {
