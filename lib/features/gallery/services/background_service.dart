@@ -9,7 +9,7 @@ import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
 import 'package:workmanager/workmanager.dart';
 
-const String kDeepScanTask = "com.smartshot.deepscan";
+const String kDeepScanTask = "com.neurodevlabs.sift.deepscan";
 const String kPrefsIndexingMode = "smart_indexing_mode";
 const String kPrefsLiveModeTimestamp = "live_mode_timestamp";
 const String kPrefsLastProcessedIndex = "last_processed_index";
