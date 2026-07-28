@@ -9,6 +9,14 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # Generated sources aren't ours to fix — the Isar and Riverpod builders emit
+  # calls to experimental/deprecated members, which otherwise fail `flutter
+  # analyze` in CI. Regenerate with build_runner instead of editing.
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

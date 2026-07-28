@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 
 /// Local keyword-scoring tag engine.
 /// Runs entirely on-device with no network calls.
@@ -136,7 +135,6 @@ class TagEngine {
     final sorted = scores.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    final topScore = sorted.first.value;
     return sorted
         .where((e) => e.value >= 2 || (e.value >= 1 && e.key == sorted.first.key))
         .take(3)

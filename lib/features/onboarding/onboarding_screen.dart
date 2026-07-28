@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/gallery/presentation/gallery_screen.dart';
-import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 

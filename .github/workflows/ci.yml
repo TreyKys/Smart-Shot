@@ -22,7 +22,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze
+      # Warnings and errors fail the build; the ~90 outstanding info-level lints
+      # (withOpacity deprecations, prefer_const) are reported but non-blocking
+      # so they don't mask real regressions. Drop the flag once they're cleared.
+      - run: flutter analyze --no-fatal-infos
       - run: flutter test --reporter expanded
 
   integration-test:
