@@ -4,12 +4,16 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.0.0
+  # Floor is set by patrol_finders (Dart 3.8 / Flutter 3.32); firebase_* needs 3.6+.
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  firebase_core: ^4.12.1
+  firebase_crashlytics: ^5.2.6
   flutter_riverpod: ^2.4.0
   riverpod_annotation: ^2.1.1
   isar: ^3.1.0+1

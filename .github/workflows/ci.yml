@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    name: Analyze + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --reporter expanded
+
+  integration-test:
+    name: Integration tests (emulator)
+    runs-on: ubuntu-latest
+    needs: analyze-and-test
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # The emulator needs hardware acceleration; GitHub's runner exposes
+      # /dev/kvm but not with permissions the runner user can use.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+
+      - name: Run integration tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb wait-for-device
+            flutter test integration_test/app_test.dart --reporter expanded
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: |
+            build/app/outputs/**
+            **/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Robo crawls the app on real Google-hosted devices and records video —
+  # no test code involved. Costs Test Lab quota, so it's manual-trigger only
+  # rather than running on every push.
+  robo-test:
+    name: Firebase Test Lab (Robo)
+    runs-on: ubuntu-latest
+    needs: analyze-and-test
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run Robo test
+        run: |
+          gcloud firebase test android run \
+            --type robo \
+            --project com-neurodevlabs-sift \
+            --app build/app/outputs/flutter-apk/app-debug.apk \
+            --device model=MediumPhone.arm,version=33,locale=en,orientation=portrait \
+            --timeout 5m

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -15,12 +18,45 @@ import 'package:sift/features/onboarding/onboarding_screen.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/services/notification_service.dart';
 
+// Set once Firebase is up. Guards every reporting call, so a failed init
+// degrades to debugPrint instead of throwing from inside an error handler.
+var _crashlyticsReady = false;
+
 Future<void> main() async {
   await runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // No explicit options: on Android the google-services Gradle plugin bakes
+    // android/app/google-services.json into the native config, which
+    // initializeApp() reads. Run `flutterfire configure` to generate
+    // firebase_options.dart if/when iOS is added to the Firebase project.
+    try {
+      await Firebase.initializeApp();
+      // Debug-run crashes are noise in the dashboard — only report from
+      // release/profile builds.
+      await FirebaseCrashlytics.instance
+          .setCrashlyticsCollectionEnabled(!kDebugMode);
+      _crashlyticsReady = true;
+    } catch (e, st) {
+      debugPrint('Firebase init failed: $e\n$st');
+    }
+
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       debugPrint('FlutterError: ${details.exceptionAsString()}');
+      if (_crashlyticsReady) {
+        FirebaseCrashlytics.instance.recordFlutterError(details);
+      }
+    };
+
+    // Errors thrown outside the Flutter framework (platform channels, async
+    // gaps the zone below doesn't cover).
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('PlatformDispatcher error: $error\n$stack');
+      if (_crashlyticsReady) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      }
+      return true;
     };
 
     // Each startup step is isolated: a single SDK failing to initialize
@@ -47,6 +83,9 @@ Future<void> main() async {
     runApp(const ProviderScope(child: SiftApp()));
   }, (error, stack) {
     debugPrint('Uncaught error: $error\n$stack');
+    if (_crashlyticsReady) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
   });
 }
 

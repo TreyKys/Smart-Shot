@@ -31,6 +31,9 @@
 # WorkManager
 -keep class androidx.work.** { *; }
 
+# Crashlytics needs these to map obfuscated release traces back to source lines
+-keepattributes SourceFile,LineNumberTable
+
 # Gson/JSON models used across the above SDKs commonly need this
 -keepattributes Signature
 -keepattributes *Annotation*
