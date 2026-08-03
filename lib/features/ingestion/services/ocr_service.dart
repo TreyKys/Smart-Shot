@@ -12,19 +12,102 @@ OcrService ocrService(OcrServiceRef ref) {
   return service;
 }
 
-class OcrService {
-  final TextRecognizer _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+/// How a screenshot should be sent to the model.
+///
+/// The cost of a Gemini call is dominated by image tokens — a 1568px image is
+/// roughly 1,600 tokens, while a screenshot's OCR text is usually 100–500.
+/// So the useful question is not "AI or not" but "does this image carry signal
+/// the text doesn't". Text-dominant screenshots (receipts, chats, articles,
+/// code) lose nothing by being sent as text. Image-dominant ones — memes,
+/// photos, charts, which are exactly the cases OCR handles badly — need the
+/// pixels.
+enum AnalysisRoute {
+  /// OCR text alone, no image. Cheap, fast, and batchable.
+  textOnly,
 
-  Future<String> processImage(File imageFile) async {
+  /// Image only — OCR found too little to be worth sending.
+  vision,
+
+  /// Image plus OCR text. The safe default when the signal is ambiguous.
+  dual,
+}
+
+/// OCR output plus the structural signal ML Kit already computes.
+///
+/// The previous implementation returned only [text] and discarded the block
+/// and line geometry, which is the cheapest available evidence for whether a
+/// screenshot is a document or a picture with a caption.
+@immutable
+class OcrResult {
+  final String text;
+
+  /// Number of distinct text blocks ML Kit found.
+  final int blockCount;
+
+  /// Total lines across all blocks.
+  final int lineCount;
+
+  const OcrResult({
+    required this.text,
+    required this.blockCount,
+    required this.lineCount,
+  });
+
+  static const empty = OcrResult(text: '', blockCount: 0, lineCount: 0);
+
+  int get charCount => text.trim().length;
+
+  /// Below this, OCR effectively found nothing — send the image.
+  static const int _kMinChars = 40;
+
+  /// Above these, the screenshot is confidently document-like.
+  static const int _kStrongChars = 220;
+  static const int _kStrongBlocks = 5;
+
+  /// Chooses how this screenshot should be analysed.
+  ///
+  /// Deliberately conservative: [AnalysisRoute.textOnly] requires *both* a lot
+  /// of text and many separate blocks, because a meme with a long caption has
+  /// the former but not the latter, and dropping its image would misclassify
+  /// it. Everything that isn't clearly one case or the other falls through to
+  /// [AnalysisRoute.dual], which is exactly the behaviour that shipped before
+  /// routing existed — so the accuracy floor is unchanged.
+  AnalysisRoute get route {
+    if (charCount < _kMinChars) return AnalysisRoute.vision;
+    if (charCount >= _kStrongChars && blockCount >= _kStrongBlocks) {
+      return AnalysisRoute.textOnly;
+    }
+    return AnalysisRoute.dual;
+  }
+}
+
+class OcrService {
+  final TextRecognizer _textRecognizer =
+      TextRecognizer(script: TextRecognitionScript.latin);
+
+  Future<OcrResult> processImage(File imageFile) async {
     final InputImage inputImage = InputImage.fromFile(imageFile);
     try {
-      debugPrint("Processing image for OCR: ${imageFile.path}");
-      final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
-      debugPrint("OCR completed. Text length: ${recognizedText.text.length}");
-      return recognizedText.text;
+      final RecognizedText recognized =
+          await _textRecognizer.processImage(inputImage);
+
+      var lines = 0;
+      for (final block in recognized.blocks) {
+        lines += block.lines.length;
+      }
+
+      final result = OcrResult(
+        text: recognized.text,
+        blockCount: recognized.blocks.length,
+        lineCount: lines,
+      );
+      debugPrint(
+          'OCR: ${result.charCount} chars, ${result.blockCount} blocks, '
+          'route=${result.route.name} — ${imageFile.path}');
+      return result;
     } catch (e) {
-      debugPrint("Error processing image: $e");
-      return "";
+      debugPrint('OCR error for ${imageFile.path}: $e');
+      return OcrResult.empty;
     }
   }
 

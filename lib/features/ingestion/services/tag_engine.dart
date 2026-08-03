@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 
 /// Local keyword-scoring tag engine.
 /// Runs entirely on-device with no network calls.
@@ -180,10 +181,10 @@ class TagEngine {
     return result.take(5).toList();
   }
 
-  /// Ensures a tag has a '#' prefix and is non-empty after trimming.
-  static String normalize(String tag) {
-    final t = tag.trim();
-    if (t.isEmpty) return '';
-    return t.startsWith('#') ? t : '#$t';
-  }
+  /// Maps a tag onto the closed vocabulary, or '' if it has no valid mapping.
+  ///
+  /// Delegates to [TagVocabulary] so local tags, model tags and historical
+  /// stored tags all land in the same namespace — otherwise the gallery ends
+  /// up with #Receipt and #Receipts as separate filters.
+  static String normalize(String tag) => TagVocabulary.canonical(tag);
 }

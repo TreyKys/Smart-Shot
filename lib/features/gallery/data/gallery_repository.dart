@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -14,6 +15,7 @@ import 'package:sift/features/gallery/presentation/providers/processing_progress
 import 'package:sift/features/gallery/services/dedup_service.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
+import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
 import 'package:sift/services/notification_service.dart';
 
@@ -26,6 +28,14 @@ GalleryRepository galleryRepository(GalleryRepositoryRef ref) {
 
 /// Upper bound on how many assets a single sync will ingest.
 const int _kMaxIngestCount = 500;
+
+/// Upper bound on pending rows pulled into memory for one processing run.
+/// The remainder is picked up by the next run rather than loaded up front.
+const int _kMaxPerRun = 300;
+
+/// Concurrent in-flight Gemini calls. These are network-bound, so a handful in
+/// parallel is a near-linear speedup; the cap keeps memory and rate limits sane.
+const int _kVisionConcurrency = 4;
 
 class GalleryRepository {
   final GalleryRepositoryRef _ref;
@@ -83,6 +93,15 @@ class GalleryRepository {
 
     // Then ingest the rest lazily in the background
     final total = count > _kMaxIngestCount ? _kMaxIngestCount : count;
+
+    // A library larger than the cap used to be truncated with no trace, so a
+    // user with 3,000 screenshots simply never saw 2,500 of them. Record the
+    // remainder so the UI can say so.
+    await prefs.setInt('ingest_deferred_count', count - total);
+    if (count > total) {
+      debugPrint('Ingest cap: ${count - total} assets deferred to a later run.');
+    }
+
     if (total > 10) {
       Future.microtask(() async {
         for (int offset = 10; offset < total; offset += 20) {
@@ -244,155 +263,316 @@ class GalleryRepository {
     final isar = await _ref.read(isarProvider.future);
     final ocrService = _ref.read(ocrServiceProvider);
     final llmService = _ref.read(llmServiceProvider);
-    final economyNotifier = _ref.read(economyServiceProvider.notifier);
+    final economy = _ref.read(economyServiceProvider.notifier);
     final progress = _ref.read(processingProgressProvider.notifier);
 
     // Resolve effective API key: BYOK > build-time config
-    final byokKey = economyNotifier.getByokKey() ?? '';
-    final envKey = AppConfig.geminiApiKey;
-    final apiKey = byokKey.isNotEmpty ? byokKey : envKey;
+    final byokKey = economy.getByokKey() ?? '';
+    final apiKey = byokKey.isNotEmpty ? byokKey : AppConfig.geminiApiKey;
     final hasKey = apiKey.isNotEmpty;
 
     if (!hasKey) {
-      debugPrint('⚠ No Gemini API key — OCR only. Set GEMINI_API_KEY in .env or BYOK in Settings.');
+      debugPrint('No Gemini API key - OCR and local tags only. '
+          'Set GEMINI_API_KEY in .env or BYOK in Settings.');
     }
 
-    final unprocessed = await isar.screenshots
+    // Newest first: the user is looking at recent screenshots, so those are the
+    // ones whose tags need to appear. Bounded so a large library can't pull
+    // every pending row into memory at once.
+    final pending = await isar.screenshots
         .filter()
         .isProcessedEqualTo(false)
-        .sortByTimestamp()
+        .sortByTimestampDesc()
+        .limit(_kMaxPerRun)
         .findAll();
 
-    if (unprocessed.isEmpty) {
+    if (pending.isEmpty) {
       debugPrint('No unprocessed screenshots.');
       return;
     }
 
-    debugPrint('Auto-processing ${unprocessed.length} screenshots…');
-    progress.start(unprocessed.length);
+    debugPrint('Auto-processing ${pending.length} screenshots...');
+    progress.start(pending.length);
 
-    int processed = 0;
-
-    for (final shot in unprocessed) {
-      // Quota gate (skip entirely for BYOK/Pro)
-      if (byokKey.isEmpty) {
-        final hasEnergy = await economyNotifier.hasEnoughEnergy();
-        if (!hasEnergy) {
-          debugPrint('Daily AI quota reached at $processed processed.');
-          break;
-        }
-      }
-
-      final file = File(shot.filePath);
-      if (!file.existsSync()) {
-        await isar.writeTxn(() async {
-          shot.isProcessed = true;
-          await isar.screenshots.put(shot);
-        });
-        progress.advance();
-        continue;
-      }
-
-      try {
-        // Phase 1: run OCR on-device
-        final ocrText = await ocrService.processImage(file);
-        debugPrint('OCR: ${ocrText.length} chars — ${shot.filePath}');
-
-        // Phase 2: send image + OCR text together to Gemini (dual-signal)
-        Map<String, dynamic> llmResult = {};
-        if (hasKey) {
-          try {
-            llmResult = await llmService.processFile(
-              file,
-              apiKey: apiKey,
-              ocrText: ocrText,
-            );
-          } catch (llmErr) {
-            debugPrint('LLM error for shot ${shot.id}: $llmErr — using OCR + local tags only');
-          }
-        }
-
-        // Phase 3: merge AI tags with local keyword-scoring engine
-        final aiTags = _list(llmResult['tags']) ?? [];
-        final localTags = TagEngine.suggestFromOcr(ocrText);
-        final isJunk = TagEngine.isLikelyJunk(ocrText, file);
-
-        final List<String> finalTags;
-        if (isJunk) {
-          // Junk always wins — prepend #Junk, keep any other AI context
-          final others = TagEngine.merge(aiTags, []).where((t) => t != '#Junk').toList();
-          finalTags = ['#Junk', ...others];
-        } else {
-          finalTags = TagEngine.merge(aiTags, localTags);
-        }
-
-        await isar.writeTxn(() async {
-          shot.ocrText = ocrText;
-          shot.tags = finalTags.isEmpty ? null : finalTags;
-          if (llmResult.isNotEmpty) {
-            shot.cleanText = llmResult['cleanText'] as String?;
-            shot.urls = _list(llmResult['urls']);
-            shot.emails = _list(llmResult['emails']);
-            shot.phoneNumbers = _list(llmResult['phoneNumbers']);
-            shot.dates = _list(llmResult['dates']);
-            shot.cryptoAddresses = _list(llmResult['cryptoAddresses']);
-            shot.suggestedActions = _buildActions(llmResult);
-          }
-          shot.isProcessed = true;
-          await isar.screenshots.put(shot);
-        });
-
-        if (hasKey && byokKey.isEmpty) await economyNotifier.consumeEnergy(1);
-
-        processed++;
-        progress.advance();
-      } catch (e) {
-        // Don't mark isProcessed = true — will retry on next sync
-        debugPrint('Processing error for shot ${shot.id}: $e');
-        progress.advance(); // still advance UI counter
-      }
+    var processed = 0;
+    for (var i = 0; i < pending.length; i += kBackgroundDeepScanChunkSize) {
+      final end = math.min(i + kBackgroundDeepScanChunkSize, pending.length);
+      final handled = await _processChunk(
+        pending.sublist(i, end),
+        isar: isar,
+        ocrService: ocrService,
+        llmService: llmService,
+        economy: economy,
+        progress: progress,
+        apiKey: hasKey ? apiKey : null,
+      );
+      processed += handled;
+      // A chunk handling nothing means the quota ran out; stop rather than
+      // spinning through the remainder to no effect.
+      if (handled == 0) break;
     }
 
     progress.finish();
     if (processed > 0) {
       await NotificationService.instance.notifyProcessingComplete(processed);
     }
-    debugPrint('Auto-processing complete. $processed of ${unprocessed.length} handled.');
+    debugPrint('Auto-processing complete. $processed of ${pending.length} handled.');
   }
 
-  /// Resets only screenshots that have garbage/invented tags so they get re-tagged.
+  /// Runs one chunk end to end. Returns how many screenshots were written.
+  ///
+  /// Ordering matters here: OCR runs first for the whole chunk because it is
+  /// on-device and free, and its output decides how each screenshot reaches the
+  /// model. Text-dominant ones go out in batched text-only requests; the rest
+  /// are sent as images with bounded concurrency.
+  Future<int> _processChunk(
+    List<Screenshot> chunk, {
+    required Isar isar,
+    required OcrService ocrService,
+    required LLMService llmService,
+    required EconomyService economy,
+    required ProcessingProgressNotifier progress,
+    required String? apiKey,
+  }) async {
+    final ocrByShot = <int, OcrResult>{};
+    final alive = <Screenshot>[];
+    final missing = <Screenshot>[];
+
+    for (final shot in chunk) {
+      final file = File(shot.filePath);
+      if (!file.existsSync()) {
+        shot.isProcessed = true;
+        missing.add(shot);
+        progress.advance();
+        continue;
+      }
+      ocrByShot[shot.id] = await ocrService.processImage(file);
+      alive.add(shot);
+    }
+
+    if (missing.isNotEmpty) {
+      await isar.writeTxn(() async => isar.screenshots.putAll(missing));
+    }
+    if (alive.isEmpty) return missing.length;
+
+    // Without a key there is nothing to spend, so skip the quota entirely and
+    // fall back to local tagging.
+    if (apiKey == null) {
+      await _writeResults(
+          alive, const <int, Map<String, dynamic>>{}, ocrByShot, isar);
+      for (var i = 0; i < alive.length; i++) {
+        progress.advance();
+      }
+      return alive.length + missing.length;
+    }
+
+    // Claim the whole chunk up front. Reserving before any work starts is what
+    // makes the concurrent calls below safe to run.
+    final granted = await economy.reserveEnergy(alive.length);
+    if (granted == 0) {
+      debugPrint('Daily AI quota exhausted - deferring ${alive.length}.');
+      return 0;
+    }
+    final toAnalyze = alive.take(granted).toList();
+
+    // Partition by what each screenshot actually needs sent.
+    final textItems = <TextAnalysisItem>[];
+    final visionShots = <Screenshot>[];
+    for (final shot in toAnalyze) {
+      final ocr = ocrByShot[shot.id]!;
+      if (ocr.route == AnalysisRoute.textOnly) {
+        textItems.add(TextAnalysisItem(id: shot.id, ocrText: ocr.text));
+      } else {
+        visionShots.add(shot);
+      }
+    }
+    debugPrint('Chunk: ${textItems.length} text-only, '
+        '${visionShots.length} vision of ${toAnalyze.length}.');
+
+    final results = <int, Map<String, dynamic>>{};
+    final byId = {for (final s in toAnalyze) s.id: s};
+
+    // Text-only screenshots, batched.
+    for (var i = 0; i < textItems.length; i += kTextBatchSize) {
+      final slice =
+          textItems.sublist(i, math.min(i + kTextBatchSize, textItems.length));
+      Map<int, Map<String, dynamic>> batch = {};
+      try {
+        batch = await llmService.analyzeTextBatch(slice, apiKey: apiKey);
+      } catch (e) {
+        debugPrint('Text batch failed ($e) - retrying individually.');
+      }
+      results.addAll(batch);
+
+      // Anything the batch dropped is retried alone, so one malformed item
+      // can't take the rest of the batch down with it.
+      final dropped =
+          slice.where((it) => !batch.containsKey(it.id)).toList();
+      await _runBounded(dropped, _kVisionConcurrency, (item) async {
+        final shot = byId[item.id];
+        if (shot == null) return;
+        try {
+          results[item.id] = await llmService.analyze(
+            File(shot.filePath),
+            apiKey: apiKey,
+            ocr: ocrByShot[item.id]!,
+          );
+        } catch (e) {
+          debugPrint('Single retry failed for ${item.id}: $e');
+        }
+      });
+    }
+
+    // Image-bearing screenshots, run concurrently since these are
+    // network-bound rather than CPU-bound.
+    await _runBounded(visionShots, _kVisionConcurrency, (shot) async {
+      try {
+        results[shot.id] = await llmService.analyze(
+          File(shot.filePath),
+          apiKey: apiKey,
+          ocr: ocrByShot[shot.id]!,
+        );
+      } catch (e) {
+        debugPrint('Vision analysis failed for ${shot.id}: $e');
+      }
+    });
+
+    await _writeResults(toAnalyze, results, ocrByShot, isar);
+    for (var i = 0; i < toAnalyze.length; i++) {
+      progress.advance();
+    }
+
+    // Hand back quota for anything the model never answered on, so a network
+    // blip doesn't cost the user their daily allowance.
+    final unanswered = toAnalyze.length - results.length;
+    if (unanswered > 0) await economy.releaseEnergy(unanswered);
+    await economy.recordUsage(results.length);
+
+    return toAnalyze.length + missing.length;
+  }
+
+  /// Persists a chunk's analysis in a single transaction.
+  Future<void> _writeResults(
+    List<Screenshot> shots,
+    Map<int, Map<String, dynamic>> results,
+    Map<int, OcrResult> ocrByShot,
+    Isar isar,
+  ) async {
+    for (final shot in shots) {
+      final ocr = ocrByShot[shot.id] ?? OcrResult.empty;
+      final llm = results[shot.id] ?? const <String, dynamic>{};
+
+      final aiTags = TagVocabulary.canonicalize(_list(llm['tags']) ?? const []);
+      final localTags = TagEngine.suggestFromOcr(ocr.text);
+      final isJunk = TagEngine.isLikelyJunk(ocr.text, File(shot.filePath));
+
+      final List<String> finalTags;
+      if (isJunk) {
+        final others =
+            TagEngine.merge(aiTags, const []).where((t) => t != '#Junk');
+        finalTags = ['#Junk', ...others];
+      } else {
+        finalTags = TagEngine.merge(aiTags, localTags);
+      }
+
+      shot.ocrText = ocr.text;
+      shot.tags = finalTags.isEmpty ? null : finalTags;
+      if (llm.isNotEmpty) {
+        shot.topic = llm['topic'] as String?;
+        shot.cleanText = llm['cleanText'] as String?;
+        shot.urls = _list(llm['urls']);
+        shot.emails = _list(llm['emails']);
+        shot.phoneNumbers = _list(llm['phoneNumbers']);
+        shot.dates = _list(llm['dates']);
+        shot.cryptoAddresses = _list(llm['cryptoAddresses']);
+        shot.suggestedActions = _buildActions(llm);
+      }
+      shot.isProcessed = true;
+    }
+
+    await isar.writeTxn(() async => isar.screenshots.putAll(shots));
+  }
+
+  /// Runs [fn] over [items] with at most [limit] in flight at once.
+  static Future<void> _runBounded<T>(
+    List<T> items,
+    int limit,
+    Future<void> Function(T) fn,
+  ) async {
+    if (items.isEmpty) return;
+    var next = 0;
+    Future<void> worker() async {
+      while (true) {
+        final index = next++;
+        if (index >= items.length) return;
+        await fn(items[index]);
+      }
+    }
+
+    final workers = math.min(limit, items.length);
+    await Future.wait([for (var i = 0; i < workers; i++) worker()]);
+  }
+
+  /// Resets screenshots whose tags fall outside the closed vocabulary.
+  ///
+  /// Previously this matched a hardcoded list of tags the model was known to
+  /// invent, which meant every newly invented tag needed a code change. Now
+  /// anything [TagVocabulary] can't map is garbage by definition.
   Future<void> reprocessGarbageTags() async {
     final isar = await _ref.read(isarProvider.future);
-    const badTags = {
-      '#BlankImage', '#Empty', '#NoContent', '#Unknown', '#Blank',
-      'BlankImage', 'Empty', 'NoContent', 'Unknown', 'Blank',
-    };
-    await isar.writeTxn(() async {
-      final all = await isar.screenshots.where().findAll();
-      final toReset = all.where((s) =>
-          s.tags != null && s.tags!.any((t) => badTags.contains(t)));
+    var reset = 0;
+    await _forEachPage(isar, (page) async {
+      final toReset = page.where((s) {
+        final tags = s.tags;
+        if (tags == null || tags.isEmpty) return false;
+        return TagVocabulary.canonicalize(tags).length != tags.length;
+      }).toList();
+      if (toReset.isEmpty) return;
       for (final s in toReset) {
         s.isProcessed = false;
         s.tags = null;
       }
-      await isar.screenshots.putAll(toReset.toList());
+      await isar.writeTxn(() async => isar.screenshots.putAll(toReset));
+      reset += toReset.length;
     });
-    debugPrint('reprocessGarbageTags: reset screenshots with bad tags.');
+    debugPrint('reprocessGarbageTags: reset $reset screenshots.');
     _processAllPending();
   }
 
   /// Marks every screenshot as unprocessed so the pipeline re-runs on next sync.
   Future<void> reprocessAll() async {
     final isar = await _ref.read(isarProvider.future);
-    await isar.writeTxn(() async {
-      final all = await isar.screenshots.where().findAll();
-      for (final s in all) {
+    var count = 0;
+    await _forEachPage(isar, (page) async {
+      for (final s in page) {
         s.isProcessed = false;
       }
-      await isar.screenshots.putAll(all);
+      await isar.writeTxn(() async => isar.screenshots.putAll(page));
+      count += page.length;
     });
-    debugPrint('Re-processing all ${(await isar.screenshots.count())} screenshots.');
+    debugPrint('Re-processing all $count screenshots.');
     _processAllPending();
+  }
+
+  /// Walks the collection a page at a time so a large library never lands in
+  /// memory all at once.
+  Future<void> _forEachPage(
+    Isar isar,
+    Future<void> Function(List<Screenshot>) visit, {
+    int pageSize = 200,
+  }) async {
+    var offset = 0;
+    while (true) {
+      final page = await isar.screenshots
+          .where()
+          .offset(offset)
+          .limit(pageSize)
+          .findAll();
+      if (page.isEmpty) break;
+      await visit(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
   }
 
   List<SuggestedAction> _buildActions(Map<String, dynamic> llmResult) {
