@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
@@ -23,8 +24,17 @@ GalleryRepository galleryRepository(GalleryRepositoryRef ref) {
   return GalleryRepository(ref);
 }
 
+/// Upper bound on how many assets a single sync will ingest.
+const int _kMaxIngestCount = 500;
+
 class GalleryRepository {
   final GalleryRepositoryRef _ref;
+
+  /// syncGallery() is reachable from app resume, pull-to-refresh and several
+  /// buttons, and _processAllPending() from five call sites. Without this
+  /// guard two overlapping runs process the same rows twice — burning double
+  /// the AI quota and double-billing the user's daily energy.
+  bool _isProcessing = false;
 
   GalleryRepository(this._ref);
 
@@ -63,12 +73,16 @@ class GalleryRepository {
     final mode = prefs.getString('smart_indexing_mode');
     final liveTs = prefs.getInt('live_mode_timestamp') ?? 0;
 
+    // Loaded once for the whole run rather than per image.
+    final dedup = await _DedupIndex.load();
+
     // Fetch first 10 immediately for fast UI paint
     final firstBatch = await album.getAssetListRange(start: 0, end: 10);
-    await _ingestAssets(firstBatch, isar, mode, liveTs, startIndex: 0);
+    await _ingestAssets(firstBatch, isar, mode, liveTs,
+        startIndex: 0, dedup: dedup);
 
     // Then ingest the rest lazily in the background
-    final total = count > 500 ? 500 : count;
+    final total = count > _kMaxIngestCount ? _kMaxIngestCount : count;
     if (total > 10) {
       Future.microtask(() async {
         for (int offset = 10; offset < total; offset += 20) {
@@ -76,13 +90,15 @@ class GalleryRepository {
           final batch =
               await album.getAssetListRange(start: offset, end: end);
           await _ingestAssets(batch, isar, mode, liveTs,
-              startIndex: offset);
+              startIndex: offset, dedup: dedup);
           await Future.delayed(Duration.zero); // yield to event loop
         }
+        await dedup.flush();
         // Once all ingested, kick off automatic AI processing
         _processAllPending();
       });
     } else {
+      await dedup.flush();
       _processAllPending();
     }
   }
@@ -93,7 +109,12 @@ class GalleryRepository {
     String? mode,
     int liveTs, {
     required int startIndex,
+    required _DedupIndex dedup,
   }) async {
+    // Collected across the batch so the whole batch lands in one transaction
+    // instead of one transaction per image.
+    final newShots = <Screenshot>[];
+
     for (int i = 0; i < assets.length; i++) {
       final asset = assets[i];
       final idx = startIndex + i;
@@ -129,34 +150,25 @@ class GalleryRepository {
       // Perceptual dedup — run in compute isolate
       final hash = await compute(
           DedupService.hashIsolateEntry, file.absolute.path);
-      if (hash != null && await _isDuplicate(hash)) {
+      if (hash != null && dedup.isDuplicate(hash)) {
         debugPrint('Dedup: skipping ${file.path}');
         continue;
       }
 
+      newShots.add(Screenshot()
+        ..filePath = file.path
+        ..timestamp = asset.createDateTime
+        ..isProcessed = false);
+
+      // Buffered — persisted by dedup.flush() once the run completes.
+      if (hash != null) dedup.add(file.path, hash);
+    }
+
+    if (newShots.isNotEmpty) {
       await isar.writeTxn(() async {
-        final shot = Screenshot()
-          ..filePath = file!.path
-          ..timestamp = asset.createDateTime
-          ..isProcessed = false;
-        await isar.screenshots.put(shot);
+        await isar.screenshots.putAll(newShots);
       });
-
-      // Persist hash for future dedup checks
-      if (hash != null) {
-        final p = await SharedPreferences.getInstance();
-        await p.setString('dhash:${file.path}', hash);
-      }
     }
-  }
-
-  Future<bool> _isDuplicate(String newHash) async {
-    final p = await SharedPreferences.getInstance();
-    for (final key in p.getKeys().where((k) => k.startsWith('dhash:'))) {
-      final h = p.getString(key);
-      if (h != null && DedupService.areDuplicates(newHash, h)) return true;
-    }
-    return false;
   }
 
   // ── Share intent ───────────────────────────────────────────────────────────
@@ -194,8 +206,7 @@ class GalleryRepository {
       try {
         final file = File(filePath);
         if (await file.exists()) await file.delete();
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('dhash:$filePath');
+        await _DedupIndex.forget(filePath);
       } catch (e) {
         debugPrint('deleteScreenshot: file delete failed — $e');
       }
@@ -217,6 +228,19 @@ class GalleryRepository {
   // ── Automatic AI processing ───────────────────────────────────────────────
 
   Future<void> _processAllPending() async {
+    if (_isProcessing) {
+      debugPrint('_processAllPending: already running — skipping.');
+      return;
+    }
+    _isProcessing = true;
+    try {
+      await _processAllPendingInner();
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  Future<void> _processAllPendingInner() async {
     final isar = await _ref.read(isarProvider.future);
     final ocrService = _ref.read(ocrServiceProvider);
     final llmService = _ref.read(llmServiceProvider);
@@ -322,8 +346,6 @@ class GalleryRepository {
 
         processed++;
         progress.advance();
-
-        await Future.delayed(const Duration(milliseconds: 100));
       } catch (e) {
         // Don't mark isProcessed = true — will retry on next sync
         debugPrint('Processing error for shot ${shot.id}: $e');
@@ -451,6 +473,108 @@ class GalleryRepository {
       case 'context': return 'https://neurodevlabs.com/context';
       case 'magnum_opus': return 'https://neurodevlabs.com/magnum-opus';
       default: return 'https://neurodevlabs.com';
+    }
+  }
+}
+
+/// In-memory perceptual-hash index for the duration of one sync run.
+///
+/// Replaces the previous approach, which per image opened SharedPreferences,
+/// enumerated every key, and re-parsed each stored hex hash into a 64-char bit
+/// string to compare. That is O(n²) hash comparisons with a very large
+/// constant, plus a full XML rewrite per stored hash. Here the index loads
+/// once, compares packed ints, and persists in a single write.
+class _DedupIndex {
+  static const _kIndexKey = 'dhash_index_v2';
+  static const _kLegacyPrefix = 'dhash:';
+
+  final SharedPreferences _prefs;
+  final Map<String, String> _byPath;
+  final List<List<int>> _packed;
+  bool _dirty = false;
+
+  _DedupIndex._(this._prefs, this._byPath, this._packed);
+
+  static Future<_DedupIndex> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final byPath = <String, String>{};
+
+    final raw = prefs.getString(_kIndexKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          decoded.forEach((k, v) {
+            if (v is String) byPath['$k'] = v;
+          });
+        }
+      } catch (e) {
+        debugPrint('_DedupIndex: corrupt index, rebuilding — $e');
+      }
+    }
+
+    // Absorb hashes written by the old per-path key scheme.
+    final legacyKeys =
+        prefs.getKeys().where((k) => k.startsWith(_kLegacyPrefix)).toList();
+    for (final key in legacyKeys) {
+      final h = prefs.getString(key);
+      if (h != null) byPath[key.substring(_kLegacyPrefix.length)] = h;
+    }
+
+    final packed = <List<int>>[];
+    for (final h in byPath.values) {
+      final p = DedupService.pack(h);
+      if (p != null) packed.add(p);
+    }
+
+    final index = _DedupIndex._(prefs, byPath, packed);
+    if (legacyKeys.isNotEmpty) {
+      // Migrate: fold the old keys into the blob and drop them.
+      for (final key in legacyKeys) {
+        await prefs.remove(key);
+      }
+      index._dirty = true;
+      debugPrint('_DedupIndex: migrated ${legacyKeys.length} legacy entries.');
+    }
+    return index;
+  }
+
+  bool isDuplicate(String hash) {
+    final p = DedupService.pack(hash);
+    if (p == null) return false;
+    for (final other in _packed) {
+      if (DedupService.areDuplicatesPacked(p, other)) return true;
+    }
+    return false;
+  }
+
+  void add(String filePath, String hash) {
+    final p = DedupService.pack(hash);
+    if (p == null) return;
+    _packed.add(p);
+    _byPath[filePath] = hash;
+    _dirty = true;
+  }
+
+  Future<void> flush() async {
+    if (!_dirty) return;
+    await _prefs.setString(_kIndexKey, jsonEncode(_byPath));
+    _dirty = false;
+  }
+
+  /// Drops a single path's hash — used when a screenshot is deleted.
+  static Future<void> forget(String filePath) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_kLegacyPrefix$filePath');
+    final raw = prefs.getString(_kIndexKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map || !decoded.containsKey(filePath)) return;
+      decoded.remove(filePath);
+      await prefs.setString(_kIndexKey, jsonEncode(decoded));
+    } catch (e) {
+      debugPrint('_DedupIndex.forget: $e');
     }
   }
 }

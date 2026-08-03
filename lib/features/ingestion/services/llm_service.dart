@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sift/core/config/app_config.dart';
@@ -14,6 +15,9 @@ LLMService llmService(LlmServiceRef ref) {
 }
 
 const String _kGeminiModel = 'gemini-2.5-flash';
+
+/// Long-edge cap for uploaded images — beyond this Gemini gains no detail.
+const int _kMaxUploadEdge = 1568;
 
 class LLMService {
   final String _envApiKey;
@@ -65,9 +69,8 @@ class LLMService {
     }
 
     try {
-      final bytes = await file.readAsBytes();
+      final (bytes, mime) = await _prepareImage(file);
       debugPrint('LLMService: sending ${bytes.length} bytes for ${file.path}');
-      final mime = _mimeFromPath(file.path);
       final result = await _callGemini(bytes, key, mime, ocrText: ocrText);
       debugPrint('LLMService: got ${result.keys.length} fields for ${file.path}');
       return result;
@@ -75,6 +78,32 @@ class LLMService {
       debugPrint('LLMService.processFile error: $e\n$st');
       rethrow;
     }
+  }
+
+  /// Downscales and re-encodes before upload.
+  ///
+  /// Gemini tiles vision input at 768px, so anything beyond ~1568px on the long
+  /// edge costs upload time and tokens for pixels the model discards. A phone
+  /// screenshot is typically a 2–4 MB PNG; this usually lands under 300 KB.
+  /// Falls back to the original bytes if compression fails for any reason.
+  Future<(Uint8List, String)> _prepareImage(File file) async {
+    final originalMime = _mimeFromPath(file.path);
+    try {
+      final compressed = await FlutterImageCompress.compressWithFile(
+        file.absolute.path,
+        minWidth: _kMaxUploadEdge,
+        minHeight: _kMaxUploadEdge,
+        quality: 80,
+        format: CompressFormat.jpeg,
+      );
+      if (compressed != null && compressed.isNotEmpty) {
+        return (compressed, 'image/jpeg');
+      }
+      debugPrint('LLMService: compression returned empty — using original.');
+    } catch (e) {
+      debugPrint('LLMService: compression failed ($e) — using original.');
+    }
+    return (await file.readAsBytes(), originalMime);
   }
 
   Future<Map<String, dynamic>> _callGemini(
@@ -126,28 +155,6 @@ class LLMService {
       return {};
     }
   }
-}
-
-// ── Isolate entry point ────────────────────────────────────────────────────────
-
-class LlmIsolateParams {
-  final String filePath;
-  final String apiKey;
-  final String? ocrText;
-  const LlmIsolateParams({
-    required this.filePath,
-    required this.apiKey,
-    this.ocrText,
-  });
-}
-
-Future<Map<String, dynamic>> runLlmIsolate(LlmIsolateParams params) async {
-  final service = LLMService(apiKey: params.apiKey);
-  return service.processFile(
-    File(params.filePath),
-    apiKey: params.apiKey,
-    ocrText: params.ocrText,
-  );
 }
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
