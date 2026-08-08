@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/economy/economy_service.dart';
+import 'package:sift/features/pro/presentation/paywall_sheet.dart';
 import 'package:sift/features/pro/pro_service.dart';
 
 class QuotaBar extends ConsumerWidget {
@@ -71,9 +72,9 @@ class _QuotaBarContent extends ConsumerWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: SiftColors.accent.withValues(alpha: 0.15),
+                      color: SiftColors.accent.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: SiftColors.accent.withValues(alpha: 0.5)),
+                      border: Border.all(color: SiftColors.accent.withOpacity(0.5)),
                     ),
                     child: const Text(
                       'Watch Ad',
@@ -104,6 +105,38 @@ class _QuotaBarContent extends ConsumerWidget {
               ),
             ),
           ),
+          if (isDepleted) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => showPaywallSheet(context, triggerFeature: 'quota_depleted'),
+              child: Row(
+                children: [
+                  const Icon(Icons.workspace_premium_outlined,
+                      color: SiftColors.proGold, size: 14),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'You\'ve used all 30 scans today — Pro users never stop.',
+                      style: TextStyle(
+                        color: SiftColors.textTertiary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Go Pro →',
+                    style: TextStyle(
+                      color: SiftColors.proGold,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -111,13 +144,13 @@ class _QuotaBarContent extends ConsumerWidget {
 
   void _watchAd(BuildContext context, WidgetRef ref) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Loading ad... Watch 2 ads to earn +3 scans.')),
+      const SnackBar(content: Text('Loading ad... Watch 2 ads to earn +10 scans.')),
     );
     ref.read(economyServiceProvider.notifier).showRewardedAd(
       onBlockCompleted: () {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('+3 AI scans unlocked!')),
+            const SnackBar(content: Text('+10 AI scans unlocked!')),
           );
         }
       },

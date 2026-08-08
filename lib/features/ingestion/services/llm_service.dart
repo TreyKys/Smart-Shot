@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sift/core/config/app_config.dart';
+import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
+import 'package:sift/features/ingestion/services/ocr_service.dart';
 
 part 'llm_service.g.dart';
 
@@ -14,183 +15,297 @@ LLMService llmService(LlmServiceRef ref) {
   return LLMService();
 }
 
-const String _kGeminiModel = 'gemini-2.5-flash-preview-05-20';
-const int _kMaxCompressedBytes = 400 * 1024; // 400 KB
+const String _kGeminiModel = 'gemini-2.5-flash';
+
+/// Long-edge cap for uploaded images — beyond this Gemini gains no detail.
+const int _kMaxUploadEdge = 1568;
+
+/// How many text-only screenshots to classify in a single request.
+///
+/// Text-only items are ~100–500 tokens each, so a dozen fits comfortably.
+/// Images cannot be batched this way — a dozen of those is ~20k tokens.
+const int kTextBatchSize = 12;
+
+/// One screenshot queued for text-only classification.
+@immutable
+class TextAnalysisItem {
+  /// Caller-assigned id, echoed back by the model so results can be matched up.
+  final int id;
+  final String ocrText;
+  const TextAnalysisItem({required this.id, required this.ocrText});
+}
 
 class LLMService {
   final String _envApiKey;
 
-  LLMService({String? apiKey})
-      : _envApiKey = apiKey ?? (dotenv.env['GEMINI_API_KEY'] ?? '') {
-    if (_envApiKey.isEmpty || _envApiKey == 'INSERT_API_KEY_HERE') {
-      debugPrint('Warning: GEMINI_API_KEY is not set or is default in .env');
+  LLMService({String? apiKey}) : _envApiKey = apiKey ?? AppConfig.geminiApiKey {
+    if (_envApiKey.isEmpty) {
+      debugPrint('Warning: GEMINI_API_KEY was not supplied via --dart-define');
     }
   }
 
-  GenerativeModel _buildModel(String apiKey) {
+  // ── Schema ──────────────────────────────────────────────────────────────────
+
+  /// Shape of one screenshot's analysis.
+  ///
+  /// Enforced server-side, which is what lets the prompt drop its "output
+  /// strictly valid JSON, no markdown" pleading and lets the parser drop its
+  /// fence-stripping and String-vs-List coercion. Tags are an enum over the
+  /// closed vocabulary, so the model cannot invent a tag the gallery has no
+  /// filter for.
+  static Schema _analysisSchema({bool withId = false}) => Schema.object(
+        properties: {
+          if (withId)
+            'id': Schema.integer(
+                description: 'Echo back the id of the screenshot analysed.'),
+          'tags': Schema.array(
+            items: Schema.enumString(enumValues: TagVocabulary.bareNames),
+            description: '1-3 categories that best describe the content.',
+          ),
+          'topic': Schema.string(
+            description:
+                'A short specific subject line, e.g. "Uber receipt, 12 Mar" '
+                'or "Solana staking rewards". Free text, not a category.',
+            nullable: true,
+          ),
+          'cleanText': Schema.string(
+              description: 'Readable text from the screenshot, tidied up.',
+              nullable: true),
+          'urls': Schema.array(items: Schema.string(), nullable: true),
+          'emails': Schema.array(items: Schema.string(), nullable: true),
+          'phoneNumbers': Schema.array(items: Schema.string(), nullable: true),
+          'dates': Schema.array(
+            items: Schema.string(description: 'ISO 8601, YYYY-MM-DD.'),
+            nullable: true,
+          ),
+          'cryptoAddresses':
+              Schema.array(items: Schema.string(), nullable: true),
+          'suggested_actions': Schema.array(
+            nullable: true,
+            items: Schema.object(
+              properties: {
+                'label': Schema.string(description: 'Short button label.'),
+                'payload': Schema.string(
+                    description: 'URL, address or number to act on.'),
+                'intent_type':
+                    Schema.enumString(enumValues: ['url', 'copy', 'dial']),
+              },
+              requiredProperties: ['label', 'payload', 'intent_type'],
+            ),
+          ),
+          'suggested_app': Schema.enumString(
+            enumValues: ['pulse', 'context', 'magnum_opus', 'none'],
+            description: 'Best companion app, or "none".',
+            nullable: true,
+          ),
+        },
+        requiredProperties: ['tags'],
+      );
+
+  GenerativeModel _model(String apiKey, {required Schema schema}) {
     return GenerativeModel(
       model: _kGeminiModel,
       apiKey: apiKey,
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',
+        responseSchema: schema,
       ),
     );
   }
 
-  /// Compress an image file to at most ~400 KB for Gemini inline data.
-  Future<Uint8List> compressImage(File file) async {
-    // First pass: quality 25, max width 768
-    var result = await FlutterImageCompress.compressWithFile(
-      file.absolute.path,
-      quality: 25,
-      minWidth: 1,
-      minHeight: 1,
-      keepExif: false,
+  // ── Single-screenshot analysis ──────────────────────────────────────────────
+
+  /// Analyses one screenshot, sending only what the [route] calls for.
+  Future<Map<String, dynamic>> analyze(
+    File file, {
+    required String apiKey,
+    required OcrResult ocr,
+    AnalysisRoute? route,
+  }) async {
+    if (!_usableKey(apiKey)) return {};
+    final effective = route ?? ocr.route;
+
+    final parts = <Part>[TextPart(_promptFor(effective, ocr.text))];
+    if (effective != AnalysisRoute.textOnly) {
+      final (bytes, mime) = await _prepareImage(file);
+      parts.add(DataPart(mime, bytes));
+      debugPrint(
+          'LLM: ${effective.name} route, ${bytes.length} image bytes — ${file.path}');
+    } else {
+      debugPrint('LLM: textOnly route, no image — ${file.path}');
+    }
+
+    final model = _model(apiKey, schema: _analysisSchema());
+    final response = await model.generateContent([Content.multi(parts)]);
+    return _decodeObject(response.text);
+  }
+
+  // ── Batched text-only analysis ──────────────────────────────────────────────
+
+  /// Classifies several text-only screenshots in a single request.
+  ///
+  /// Returns results keyed by [TextAnalysisItem.id]. Ids missing from the map
+  /// were not returned by the model and should be retried individually rather
+  /// than silently dropped — one malformed item must not discard the batch.
+  Future<Map<int, Map<String, dynamic>>> analyzeTextBatch(
+    List<TextAnalysisItem> items, {
+    required String apiKey,
+  }) async {
+    if (items.isEmpty || !_usableKey(apiKey)) return {};
+
+    final buffer = StringBuffer(_kPromptBatch);
+    for (final item in items) {
+      buffer
+        ..writeln()
+        ..writeln('--- SCREENSHOT id=${item.id} ---')
+        ..writeln(item.ocrText.trim());
+    }
+
+    final schema = Schema.object(
+      properties: {
+        'results': Schema.array(items: _analysisSchema(withId: true)),
+      },
+      requiredProperties: ['results'],
     );
-    result ??= await file.readAsBytes();
 
-    // Second pass if still too large
-    if (result.length > _kMaxCompressedBytes) {
-      final second = await FlutterImageCompress.compressWithList(
-        result,
-        quality: 10,
-        minWidth: 1,
-        minHeight: 1,
+    final model = _model(apiKey, schema: schema);
+    final response =
+        await model.generateContent([Content.text(buffer.toString())]);
+
+    final decoded = _decodeObject(response.text);
+    final raw = decoded['results'];
+    if (raw is! List) {
+      debugPrint('LLM batch: no results array — falling back to singles.');
+      return {};
+    }
+
+    final out = <int, Map<String, dynamic>>{};
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final map = Map<String, dynamic>.from(entry);
+      final id = map['id'];
+      if (id is int) out[id] = map;
+    }
+    debugPrint('LLM batch: ${out.length}/${items.length} returned.');
+    return out;
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  bool _usableKey(String key) {
+    if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
+      debugPrint('LLMService: skipping — no API key.');
+      return false;
+    }
+    return true;
+  }
+
+  String _promptFor(AnalysisRoute route, String ocrText) {
+    final trimmed = ocrText.trim();
+    switch (route) {
+      case AnalysisRoute.textOnly:
+        return '$_kPromptBase\n\nTEXT EXTRACTED FROM THE SCREENSHOT:\n$trimmed';
+      case AnalysisRoute.vision:
+        return '$_kPromptBase\n\n'
+            'Little or no text could be extracted from this image, so judge it '
+            'primarily from what you see.';
+      case AnalysisRoute.dual:
+        return trimmed.isEmpty
+            ? _kPromptBase
+            : '$_kPromptBase\n\nTEXT EXTRACTED FROM THE IMAGE:\n$trimmed';
+    }
+  }
+
+  /// Downscales and re-encodes before upload.
+  ///
+  /// Gemini tiles vision input at 768px, so anything beyond ~1568px on the long
+  /// edge costs upload time and tokens for pixels the model discards. A phone
+  /// screenshot is typically a 2–4 MB PNG; this usually lands under 300 KB.
+  /// Falls back to the original bytes if compression fails for any reason.
+  Future<(Uint8List, String)> _prepareImage(File file) async {
+    try {
+      final compressed = await FlutterImageCompress.compressWithFile(
+        file.absolute.path,
+        minWidth: _kMaxUploadEdge,
+        minHeight: _kMaxUploadEdge,
+        quality: 80,
+        format: CompressFormat.jpeg,
       );
-      if (second.isNotEmpty) result = second;
-    }
-
-    debugPrint('LLMService: compressed ${file.path} → ${result.length} bytes');
-    return result;
-  }
-
-  /// Entry point usable both directly and via compute().
-  Future<Map<String, dynamic>> processFile(File file, {String? apiKey}) async {
-    final key = apiKey ?? _envApiKey;
-    if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
-      debugPrint('LLMService: skipping — no API key');
-      return {};
-    }
-
-    try {
-      final bytes = await compressImage(file);
-      return _callGemini(bytes, key);
+      if (compressed != null && compressed.isNotEmpty) {
+        return (compressed, 'image/jpeg');
+      }
+      debugPrint('LLMService: compression returned empty — using original.');
     } catch (e) {
-      debugPrint('LLMService.processFile error: $e');
-      return {};
+      debugPrint('LLMService: compression failed ($e) — using original.');
+    }
+    return (await file.readAsBytes(), _mimeFromPath(file.path));
+  }
+
+  static String _mimeFromPath(String path) {
+    switch (path.split('.').last.toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'heic':
+      case 'heif':
+        return 'image/heif';
+      default:
+        return 'image/jpeg';
     }
   }
 
-  Future<Map<String, dynamic>> processOCRText(String rawText,
-      {String? apiKey}) async {
-    final key = apiKey ?? _envApiKey;
-    if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
-      debugPrint('LLMService: skipping — no API key');
-      return {};
-    }
-    if (rawText.trim().isEmpty) return {};
-
+  /// The schema makes well-formed JSON the norm, but a truncated or
+  /// safety-blocked response still has to fail softly rather than throw.
+  Map<String, dynamic> _decodeObject(String? responseText) {
+    if (responseText == null || responseText.trim().isEmpty) return {};
     try {
-      final model = _buildModel(key);
-      final content = [Content.text('$_kPrompt\n\nRAW TEXT:\n$rawText')];
-      final response = await model.generateContent(content);
-      return _parseResponse(response.text);
-    } catch (e) {
-      debugPrint('LLMService.processOCRText error: $e');
-      return {};
-    }
-  }
-
-  Future<Map<String, dynamic>> _callGemini(
-      Uint8List imageBytes, String apiKey) async {
-    final model = _buildModel(apiKey);
-
-    final content = [
-      Content.multi([
-        TextPart(_kPromptVision),
-        DataPart('image/jpeg', imageBytes),
-      ])
-    ];
-
-    final response = await model.generateContent(content);
-    return _parseResponse(response.text);
-  }
-
-  Map<String, dynamic> _parseResponse(String? responseText) {
-    if (responseText == null) return {};
-    var json = responseText.trim();
-    if (json.startsWith('```json')) {
-      json = json.replaceFirst(RegExp(r'^```json\s*'), '');
-    } else if (json.startsWith('```')) {
-      json = json.replaceFirst(RegExp(r'^```\s*'), '');
-    }
-    if (json.endsWith('```')) {
-      json = json.replaceFirst(RegExp(r'\s*```$'), '');
-    }
-    json = json.trim();
-
-    try {
-      final decoded = jsonDecode(json);
+      final decoded = jsonDecode(responseText.trim());
       if (decoded is Map<String, dynamic>) return decoded;
-      debugPrint('LLMService: JSON is not a Map: $decoded');
-      return {};
+      debugPrint('LLMService: response was not an object: $decoded');
     } catch (e) {
       debugPrint('LLMService: JSON parse error: $e\nRaw: $responseText');
-      return {};
     }
+    return {};
   }
-}
-
-// ── Isolate entry point ────────────────────────────────────────────────────────
-
-/// Params bundle for compute() isolate.
-class LlmIsolateParams {
-  final String filePath;
-  final String apiKey;
-  const LlmIsolateParams({required this.filePath, required this.apiKey});
-}
-
-Future<Map<String, dynamic>> runLlmIsolate(LlmIsolateParams params) async {
-  final service = LLMService(apiKey: params.apiKey);
-  return service.processFile(File(params.filePath), apiKey: params.apiKey);
 }
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
 
-const String _kPrompt = '''
-You are an intelligent assistant that processes OCR text from screenshots.
-Analyze the following raw OCR text and output a valid JSON object with these fields:
+// The output shape is enforced by responseSchema, so the prompt only has to
+// describe judgement — not formatting, not the tag list, not "return valid
+// JSON". Tags are constrained to the closed vocabulary by the schema enum.
+const String _kPromptBase = '''
+You are analysing a screenshot from a user's phone to help them find it later.
 
-1. "cleanText": Cleaned-up version of the text — fix typos, join broken lines, make it readable.
-2. "tags": List of 1-3 tags. Use: #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories. Create a precise custom tag if none fit (e.g. #DeveloperCredentials).
-3. "urls": List of URLs found.
-4. "emails": List of email addresses.
-5. "phoneNumbers": List of phone numbers.
-6. "dates": List of dates or deadlines.
-7. "cryptoAddresses": List of crypto wallet addresses.
-8. "suggested_actions": Array of action objects, each with:
-   - "label": Short button label (e.g. "Copy Address", "Open Link", "Dial Number")
-   - "payload": The data (URL, address, phone number)
-   - "intent_type": One of "url", "copy", "dial"
+Choose 1-3 tags that describe what the screenshot actually is. Prefer fewer,
+accurate tags over many loose ones. Use Junk only when the image is blank,
+corrupted, or has no recognisable content — not merely because it is low
+quality.
 
-Output strictly valid JSON only.
+Set "topic" to a short specific description a person would recognise months
+later, for example "Uber receipt, 12 Mar" rather than "a receipt".
+
+Extract URLs, emails, phone numbers, dates and crypto addresses only when they
+are genuinely present. Do not guess or invent them.
 ''';
 
-const String _kPromptVision = '''
-You are an intelligent assistant that analyses screenshots.
-Examine this image and output a valid JSON object with these fields:
+const String _kPromptBatch = '''
+You are analysing several screenshots from a user's phone. Each is delimited by
+a "--- SCREENSHOT id=N ---" marker, and only its extracted text is given.
 
-1. "cleanText": All text visible in the image, cleaned and readable.
-2. "tags": List of 1-3 tags. Use: #Finance, #Receipts, #SocialMedia, #Memes, #Travel, #TradingCharts, #Web3, #Code, #Junk, #To-Do, #Memories. Create a precise custom tag if none fit.
-3. "urls": List of URLs visible.
-4. "emails": List of email addresses visible.
-5. "phoneNumbers": List of phone numbers visible.
-6. "dates": List of dates or deadlines visible.
-7. "cryptoAddresses": List of crypto wallet addresses visible.
-8. "suggested_actions": Array of action objects, each with:
-   - "label": Short button label
-   - "payload": The data
-   - "intent_type": One of "url", "copy", "dial"
+Return one result per screenshot, echoing that screenshot's id. Analyse each
+independently — do not let one screenshot's subject influence another's.
 
-Output strictly valid JSON only.
+Choose 1-3 tags that describe what each screenshot actually is. Prefer fewer,
+accurate tags over many loose ones. Use Junk only when the text indicates no
+recognisable content.
+
+Set "topic" to a short specific description a person would recognise months
+later, for example "Uber receipt, 12 Mar" rather than "a receipt".
+
+Extract URLs, emails, phone numbers, dates and crypto addresses only when they
+are genuinely present. Do not guess or invent them.
 ''';

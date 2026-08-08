@@ -25,6 +25,14 @@ class Screenshot {
   @Index(type: IndexType.value, caseSensitive: false)
   String? cleanText;
 
+  /// Short specific subject line, e.g. "Uber receipt, 12 Mar".
+  ///
+  /// Deliberately separate from [tags]: tags are a closed vocabulary so the
+  /// gallery can offer stable filters, while this is free text the model may
+  /// phrase however it likes. Searchable, never a filter facet.
+  @Index(type: IndexType.value, caseSensitive: false)
+  String? topic;
+
   List<String>? tags;
   List<String>? urls;
   List<String>? emails;

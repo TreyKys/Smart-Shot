@@ -36,9 +36,9 @@ class _BannerContent extends ConsumerWidget {
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: SiftColors.danger.withValues(alpha: 0.1),
+        color: SiftColors.danger.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: SiftColors.danger.withValues(alpha: 0.4), width: 0.8),
+        border: Border.all(color: SiftColors.danger.withOpacity(0.4), width: 0.8),
       ),
       child: Row(
         children: [

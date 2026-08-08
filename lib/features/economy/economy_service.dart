@@ -2,12 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:sift/core/config/app_config.dart';
 import 'package:sift/features/pro/pro_service.dart';
 
 part 'economy_service.g.dart';
 
-const int kDailyFreeExtractions = 5;
-const int kAdRewardExtractions = 3;
+const int kDailyFreeExtractions = 30;
+const int kAdRewardExtractions = 10;
 const int kFreeBatchLimit = 3;
 const int kProBatchLimit = 50;
 const int kBackgroundDeepScanChunkSize = 50;
@@ -70,6 +71,57 @@ class EconomyService extends _$EconomyService {
     state = AsyncValue.data(newEnergy);
   }
 
+  /// True when the user's tier doesn't draw down the daily pool.
+  Future<bool> _isUnlimited() async {
+    if (ref.read(proServiceProvider)) return true;
+    _prefs = await SharedPreferences.getInstance();
+    return (_prefs.getString('byok_key') ?? '').isNotEmpty;
+  }
+
+  /// Atomically claims up to [wanted] units, returning how many were granted.
+  ///
+  /// Callers that run work concurrently must reserve before starting, not
+  /// check-then-consume per item: `hasEnoughEnergy()` followed by
+  /// `consumeEnergy(1)` has an await between the read and the write, so N
+  /// parallel workers can all observe the same balance and overspend it.
+  /// Anything unused must be handed back via [releaseEnergy].
+  ///
+  /// Returns [wanted] unchanged for Pro and BYOK users.
+  Future<int> reserveEnergy(int wanted) async {
+    if (wanted <= 0) return 0;
+    if (await _isUnlimited()) return wanted;
+
+    await _checkMidnightReset();
+
+    // No await between the read and the write — shared_preferences updates its
+    // in-memory cache synchronously, so a concurrent reserve sees the debit.
+    final current = _getCurrentEnergy();
+    final granted = current < wanted ? current : wanted;
+    if (granted <= 0) return 0;
+    final remaining = current - granted;
+    final write = _prefs.setInt('ai_energy', remaining);
+    state = AsyncValue.data(remaining);
+    await write;
+    debugPrint('Reserved $granted of $wanted energy ($remaining left).');
+    return granted;
+  }
+
+  /// Returns unspent reservations to the pool.
+  Future<void> releaseEnergy(int amount) async {
+    if (amount <= 0) return;
+    if (await _isUnlimited()) return;
+    _prefs = await SharedPreferences.getInstance();
+    final restored = _getCurrentEnergy() + amount;
+    final write = _prefs.setInt('ai_energy', restored);
+    state = AsyncValue.data(restored);
+    await write;
+    debugPrint('Released $amount unused energy ($restored left).');
+  }
+
+  /// Records spend for units actually consumed. Balance is already debited by
+  /// [reserveEnergy], so this only updates the cost counters.
+  Future<void> recordUsage(int units) => _trackCost(units);
+
   Future<void> _trackCost(int units) async {
     _prefs = await SharedPreferences.getInstance();
     final totalCalls = (_prefs.getInt('total_extractions') ?? 0) + units;
@@ -98,7 +150,7 @@ class EconomyService extends _$EconomyService {
   // ── AdMob ────────────────────────────────────────────────────────────────
 
   void loadRewardedAd() {
-    const String adUnitId = 'ca-app-pub-3940256099942544/5224354917'; // test ID
+    final String adUnitId = AppConfig.rewardedAdUnitId;
     RewardedAd.load(
       adUnitId: adUnitId,
       request: const AdRequest(),

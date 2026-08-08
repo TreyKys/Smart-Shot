@@ -6,7 +6,7 @@ part of 'purge_service.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$purgeServiceHash() => r'b3c14f20ad4b8e3e6a7f5c9d2e1a0b4f8c6d3e2a';
+String _$purgeServiceHash() => r'ba1b8e0e7957a2c2daeea41df78676795adf277b';
 
 /// See also [PurgeService].
 @ProviderFor(PurgeService)

@@ -1,36 +1,92 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/presentation/gallery_screen.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
+import 'package:sift/features/monetization/consent_service.dart';
 import 'package:sift/features/onboarding/onboarding_screen.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/services/notification_service.dart';
 
+// Set once Firebase is up. Guards every reporting call, so a failed init
+// degrades to debugPrint instead of throwing from inside an error handler.
+var _crashlyticsReady = false;
+
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Load env first (API keys needed by everything)
-  await dotenv.load(fileName: '.env');
+    // No explicit options: on Android the google-services Gradle plugin bakes
+    // android/app/google-services.json into the native config, which
+    // initializeApp() reads. Run `flutterfire configure` to generate
+    // firebase_options.dart if/when iOS is added to the Firebase project.
+    try {
+      await Firebase.initializeApp();
+      // Debug-run crashes are noise in the dashboard — only report from
+      // release/profile builds.
+      await FirebaseCrashlytics.instance
+          .setCrashlyticsCollectionEnabled(!kDebugMode);
+      _crashlyticsReady = true;
+    } catch (e, st) {
+      debugPrint('Firebase init failed: $e\n$st');
+    }
 
-  // AdMob
-  await MobileAds.instance.initialize();
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      debugPrint('FlutterError: ${details.exceptionAsString()}');
+      if (_crashlyticsReady) {
+        FirebaseCrashlytics.instance.recordFlutterError(details);
+      }
+    };
 
-  // Background tasks
-  Workmanager().initialize(callbackDispatcher);
+    // Errors thrown outside the Flutter framework (platform channels, async
+    // gaps the zone below doesn't cover).
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('PlatformDispatcher error: $error\n$stack');
+      if (_crashlyticsReady) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      }
+      return true;
+    };
 
-  // Notifications
-  await NotificationService.instance.init();
+    // Each startup step is isolated: a single SDK failing to initialize
+    // (ads, notifications, background tasks) must not blank the whole app.
+    try {
+      // Runs the GDPR/UK consent flow (where applicable) before ads init.
+      await ConsentService.instance.requestConsentAndInitAds();
+    } catch (e, st) {
+      debugPrint('Ads/consent init failed: $e\n$st');
+    }
 
-  runApp(const ProviderScope(child: SiftApp()));
+    try {
+      Workmanager().initialize(callbackDispatcher);
+    } catch (e, st) {
+      debugPrint('Workmanager init failed: $e\n$st');
+    }
+
+    try {
+      await NotificationService.instance.init();
+    } catch (e, st) {
+      debugPrint('NotificationService init failed: $e\n$st');
+    }
+
+    runApp(const ProviderScope(child: SiftApp()));
+  }, (error, stack) {
+    debugPrint('Uncaught error: $error\n$stack');
+    if (_crashlyticsReady) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
+  });
 }
 
 class SiftApp extends ConsumerStatefulWidget {
@@ -102,13 +158,14 @@ class _SiftAppState extends ConsumerState<SiftApp> {
       );
     }
 
+    final themeMode = ref.watch(themeModeNotifierProvider);
+
     return MaterialApp(
       title: 'Sift',
       debugShowCheckedModeBanner: false,
-      theme: buildSiftTheme(),
-      // Always dark — system utility aesthetic
-      themeMode: ThemeMode.dark,
+      theme: buildSiftLightTheme(),
       darkTheme: buildSiftTheme(),
+      themeMode: themeMode,
       home: _onboardingComplete
           ? const GalleryScreen()
           : const OnboardingScreen(),

@@ -1,6 +1,6 @@
 {
-    "name": "smart_shot",
-    "short_name": "smart_shot",
+    "name": "Sift",
+    "short_name": "Sift",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

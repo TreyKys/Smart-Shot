@@ -6,7 +6,7 @@ part of 'pro_service.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$proServiceHash() => r'975f2aa48d97e072500ca76b06b4df7a75885f2e';
+String _$proServiceHash() => r'578a7c9d4fe72a8d093ff2c4e5800ec37872fba4';
 
 /// See also [ProService].
 @ProviderFor(ProService)

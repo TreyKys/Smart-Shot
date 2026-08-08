@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = smart_shot
+PRODUCT_NAME = Sift
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.smartshot.smartShot
+PRODUCT_BUNDLE_IDENTIFIER = com.neurodevlabs.sift
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.smartshot. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.neurodevlabs. All rights reserved.

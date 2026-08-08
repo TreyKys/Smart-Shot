@@ -6,7 +6,7 @@ part of 'economy_service.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$economyServiceHash() => r'c037bb7b85b5274a264a131c9aac7042e1f8f079';
+String _$economyServiceHash() => r'19ea53853a701b9fb5be36f0b008283d9f5a53db';
 
 /// See also [EconomyService].
 @ProviderFor(EconomyService)

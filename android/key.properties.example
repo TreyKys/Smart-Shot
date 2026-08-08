@@ -1,0 +1,12 @@
+# Copy this file to android/key.properties (gitignored) and fill in real
+# values. Never commit the real file or the keystore it points to.
+
+storePassword=REPLACE_ME
+keyPassword=REPLACE_ME
+keyAlias=sift-upload
+storeFile=upload-keystore.jks
+
+# Real AdMob App ID (from admob.google.com), used only for release builds.
+# Debug/profile builds always use Google's shared test App ID regardless of
+# this value. Falls back to the ADMOB_APP_ID environment variable if unset.
+admobAppId=

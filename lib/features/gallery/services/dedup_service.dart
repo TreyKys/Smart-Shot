@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
@@ -51,26 +50,44 @@ class DedupService {
     return buffer.toString(); // 16 hex chars = 64 bits
   }
 
+  /// Packs a 16-char hex dHash into two 32-bit ints.
+  ///
+  /// Comparisons happen O(n) times per ingested image, so hashes are parsed
+  /// once here rather than re-parsed inside every distance check. Split into
+  /// two halves because a full 64-bit hash doesn't fit in a positive Dart int.
+  /// Returns null for malformed input.
+  static List<int>? pack(String hex) {
+    if (hex.length != 16) return null;
+    try {
+      return [
+        int.parse(hex.substring(0, 8), radix: 16),
+        int.parse(hex.substring(8, 16), radix: 16),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Returns true if two packed hashes are perceptually similar.
+  static bool areDuplicatesPacked(List<int> a, List<int> b) {
+    final distance =
+        _popcount32(a[0] ^ b[0]) + _popcount32(a[1] ^ b[1]);
+    return distance < _hammingThreshold;
+  }
+
   /// Returns true if two hash strings are perceptually similar (duplicates).
   static bool areDuplicates(String hashA, String hashB) {
-    if (hashA.length != hashB.length) return false;
-    return _hammingDistance(hashA, hashB) < _hammingThreshold;
+    final a = pack(hashA);
+    final b = pack(hashB);
+    if (a == null || b == null) return false;
+    return areDuplicatesPacked(a, b);
   }
 
-  static int _hammingDistance(String a, String b) {
-    int distance = 0;
-    final bitsA = _hexToBits(a);
-    final bitsB = _hexToBits(b);
-    for (int i = 0; i < bitsA.length; i++) {
-      if (bitsA[i] != bitsB[i]) distance++;
-    }
-    return distance;
-  }
-
-  static String _hexToBits(String hex) {
-    return hex.split('').map((c) {
-      final val = int.parse(c, radix: 16);
-      return val.toRadixString(2).padLeft(4, '0');
-    }).join();
+  /// SWAR population count over a 32-bit value.
+  static int _popcount32(int v) {
+    v -= (v >> 1) & 0x55555555;
+    v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
+    v = (v + (v >> 4)) & 0x0F0F0F0F;
+    return ((v * 0x01010101) >> 24) & 0xFF;
   }
 }

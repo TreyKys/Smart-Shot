@@ -24,11 +24,12 @@ tasks.register<Delete>("clean") {
 }
 
 subprojects {
-    // 1. The Isar Namespace Fix
+    // 1. The Isar Namespace + compileSdk Fix
     if (name == "isar_flutter_libs") {
         pluginManager.withPlugin("com.android.library") {
             extensions.configure<com.android.build.api.dsl.LibraryExtension> {
                 namespace = "dev.isar.isar_flutter_libs"
+                compileSdk = 35
             }
         }
     }

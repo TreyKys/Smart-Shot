@@ -1,16 +1,41 @@
-# smart_shot
+# Sift
 
-A new Flutter project.
+Sift automatically organizes and tags your screenshots using on-device OCR
+(Google ML Kit) and AI-powered classification (Gemini). Package:
+`com.neurodevlabs.sift`.
 
-## Getting Started
+## Getting started
 
-This project is a starting point for a Flutter application.
+```
+flutter pub get
+```
 
-A few resources to get you started if this is your first Flutter project:
+### Secrets
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Sift takes no secrets from source control or a bundled `.env` — everything
+is supplied at build time via `--dart-define-from-file`, so nothing ships
+inside the compiled app as a readable file.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```
+cp dart_define.example.json dart_define.json   # fill in real values, gitignored
+flutter run --dart-define-from-file=dart_define.json
+```
+
+See `dart_define.example.json` for the full list of keys (Gemini API key,
+RevenueCat API keys, AdMob rewarded ad unit ID).
+
+### Release signing
+
+```
+cp android/key.properties.example android/key.properties   # gitignored
+```
+
+Fill in the real keystore path/passwords (see `android/key.properties.example`
+for the format). Without this file, release builds silently fall back to
+debug signing so local `flutter run --release` still works.
+
+### Building for Play Store
+
+```
+flutter build appbundle --release --dart-define-from-file=dart_define.json
+```
