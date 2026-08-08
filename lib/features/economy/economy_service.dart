@@ -43,34 +43,6 @@ class EconomyService extends _$EconomyService {
 
   int _getCurrentEnergy() => _prefs.getInt('ai_energy') ?? kDailyFreeExtractions;
 
-  Future<bool> hasEnoughEnergy() async {
-    if (ref.read(proServiceProvider)) return true;
-    _prefs = await SharedPreferences.getInstance();
-    final byokKey = _prefs.getString('byok_key') ?? '';
-    if (byokKey.isNotEmpty) return true;
-    await _checkMidnightReset();
-    return _getCurrentEnergy() > 0;
-  }
-
-  Future<void> consumeEnergy(int amount) async {
-    if (ref.read(proServiceProvider)) {
-      // Pro: track cost but don't gate
-      await _trackCost(amount);
-      return;
-    }
-    _prefs = await SharedPreferences.getInstance();
-    final byokKey = _prefs.getString('byok_key') ?? '';
-    if (byokKey.isNotEmpty) {
-      await _trackCost(amount);
-      return;
-    }
-    final current = _getCurrentEnergy();
-    final newEnergy = (current - amount).clamp(0, 9999);
-    await _prefs.setInt('ai_energy', newEnergy);
-    await _trackCost(amount);
-    state = AsyncValue.data(newEnergy);
-  }
-
   /// True when the user's tier doesn't draw down the daily pool.
   Future<bool> _isUnlimited() async {
     if (ref.read(proServiceProvider)) return true;
