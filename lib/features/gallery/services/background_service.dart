@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sift/core/config/app_config.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
@@ -63,30 +64,37 @@ Future<bool> _processDeepScanBatch() async {
       }
 
       try {
-        // Phase 1: OCR (warm file cache in parallel)
-        final ocrText = await ocrService.processImage(file);
-        debugPrint('OCR: ${ocrText.length} chars — ${screenshot.filePath}');
+        // Phase 1: OCR — also decides whether the image is worth uploading.
+        final ocr = await ocrService.processImage(file);
+        debugPrint('OCR: ${ocr.charCount} chars, route=${ocr.route.name} '
+            '— ${screenshot.filePath}');
 
-        // Phase 2: dual-signal Gemini call
+        // Phase 2: Gemini call, routed by what phase 1 found.
         Map<String, dynamic> llmResult = {};
         try {
-          llmResult = await llmService.processFile(file, ocrText: ocrText);
+          llmResult = await llmService.analyze(
+            file,
+            apiKey: AppConfig.geminiApiKey,
+            ocr: ocr,
+          );
         } catch (llmErr) {
           debugPrint("LLM error for ${screenshot.id}: $llmErr — using local tags only");
         }
 
-        // Phase 3: merge AI tags with local engine
-        final aiTags = _toList(llmResult['tags']) ?? [];
-        final localTags = TagEngine.suggestFromOcr(ocrText);
-        final isJunk = TagEngine.isLikelyJunk(ocrText, file);
+        // Phase 3: merge AI tags (closed vocabulary) with local engine
+        final aiTags =
+            TagVocabulary.canonicalize(_toList(llmResult['tags']) ?? const []);
+        final localTags = TagEngine.suggestFromOcr(ocr.text);
+        final isJunk = TagEngine.isLikelyJunk(ocr.text, file);
         final finalTags = (isJunk && aiTags.isEmpty && localTags.isEmpty)
             ? ['#Junk']
             : TagEngine.merge(aiTags, localTags);
 
         await isar.writeTxn(() async {
-          screenshot.ocrText = ocrText;
+          screenshot.ocrText = ocr.text;
           screenshot.tags = finalTags.isEmpty ? null : finalTags;
           if (llmResult.isNotEmpty) {
+            screenshot.topic = llmResult['topic'] as String?;
             screenshot.cleanText = llmResult['cleanText'] as String?;
             screenshot.urls = _toList(llmResult['urls']);
             screenshot.emails = _toList(llmResult['emails']);
