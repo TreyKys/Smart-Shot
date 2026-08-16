@@ -664,11 +664,17 @@ class _ApiKeyWarningBanner extends ConsumerStatefulWidget {
 class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
   bool _dismissed = false;
 
+  /// True only when there's genuinely no way to reach Gemini.
+  ///
+  /// The app no longer embeds its own key — normal users go through the
+  /// App Check-gated proxy, so a configured proxy URL counts as "we can do
+  /// AI". Without this check the banner would warn every single user that
+  /// their key is missing, when not having one is now the correct state.
   bool _noKey() {
-    final envKey = AppConfig.geminiApiKey;
+    if (AppConfig.geminiProxyUrl.isNotEmpty) return false;
     final byokKey =
         ref.read(economyServiceProvider.notifier).getByokKey() ?? '';
-    return envKey.isEmpty && byokKey.isEmpty;
+    return byokKey.isEmpty;
   }
 
   @override

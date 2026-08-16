@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
@@ -39,6 +40,21 @@ Future<void> main() async {
       _crashlyticsReady = true;
     } catch (e, st) {
       debugPrint('Firebase init failed: $e\n$st');
+    }
+
+    try {
+      // Play Integrity attests to Google that this is a real, unmodified
+      // build of the app — that's what the Gemini proxy Worker checks before
+      // forwarding a request. The debug provider replaces that with a token
+      // registered manually in Firebase Console, since Play Integrity
+      // attestation isn't available for local/CI debug builds.
+      await FirebaseAppCheck.instance.activate(
+        providerAndroid: kDebugMode
+            ? const AndroidDebugProvider()
+            : const AndroidPlayIntegrityProvider(),
+      );
+    } catch (e, st) {
+      debugPrint('App Check init failed: $e\n$st');
     }
 
     FlutterError.onError = (details) {

@@ -266,14 +266,16 @@ class GalleryRepository {
     final economy = _ref.read(economyServiceProvider.notifier);
     final progress = _ref.read(processingProgressProvider.notifier);
 
-    // Resolve effective API key: BYOK > build-time config
+    // A BYOK key calls Gemini directly (the user's own key, own cost). With
+    // no BYOK key, LLMService routes through the shared App Check-gated
+    // proxy instead — nothing here needs the app's own key at all anymore.
     final byokKey = economy.getByokKey() ?? '';
-    final apiKey = byokKey.isNotEmpty ? byokKey : AppConfig.geminiApiKey;
-    final hasKey = apiKey.isNotEmpty;
+    final canAttemptAi =
+        byokKey.isNotEmpty || AppConfig.geminiProxyUrl.isNotEmpty;
 
-    if (!hasKey) {
-      debugPrint('No Gemini API key - OCR and local tags only. '
-          'Set GEMINI_API_KEY in .env or BYOK in Settings.');
+    if (!canAttemptAi) {
+      debugPrint('No BYOK key and GEMINI_PROXY_URL not configured - OCR '
+          'and local tags only.');
     }
 
     // Newest first: the user is looking at recent screenshots, so those are the
@@ -304,7 +306,8 @@ class GalleryRepository {
         llmService: llmService,
         economy: economy,
         progress: progress,
-        apiKey: hasKey ? apiKey : null,
+        canAttemptAi: canAttemptAi,
+        byokKey: byokKey,
       );
       processed += handled;
       // A chunk handling nothing means the quota ran out; stop rather than
@@ -332,7 +335,8 @@ class GalleryRepository {
     required LLMService llmService,
     required EconomyService economy,
     required ProcessingProgressNotifier progress,
-    required String? apiKey,
+    required bool canAttemptAi,
+    required String byokKey,
   }) async {
     final ocrByShot = <int, OcrResult>{};
     final alive = <Screenshot>[];
@@ -355,9 +359,9 @@ class GalleryRepository {
     }
     if (alive.isEmpty) return missing.length;
 
-    // Without a key there is nothing to spend, so skip the quota entirely and
-    // fall back to local tagging.
-    if (apiKey == null) {
+    // No BYOK key and no proxy configured — nothing to spend, so skip the
+    // quota entirely and fall back to local tagging.
+    if (!canAttemptAi) {
       await _writeResults(
           alive, const <int, Map<String, dynamic>>{}, ocrByShot, isar);
       for (var i = 0; i < alive.length; i++) {
@@ -398,7 +402,7 @@ class GalleryRepository {
           textItems.sublist(i, math.min(i + kTextBatchSize, textItems.length));
       Map<int, Map<String, dynamic>> batch = {};
       try {
-        batch = await llmService.analyzeTextBatch(slice, apiKey: apiKey);
+        batch = await llmService.analyzeTextBatch(slice, byokApiKey: byokKey);
       } catch (e) {
         debugPrint('Text batch failed ($e) - retrying individually.');
       }
@@ -414,7 +418,7 @@ class GalleryRepository {
         try {
           results[item.id] = await llmService.analyze(
             File(shot.filePath),
-            apiKey: apiKey,
+            byokApiKey: byokKey,
             ocr: ocrByShot[item.id]!,
           );
         } catch (e) {
@@ -429,7 +433,7 @@ class GalleryRepository {
       try {
         results[shot.id] = await llmService.analyze(
           File(shot.filePath),
-          apiKey: apiKey,
+          byokApiKey: byokKey,
           ocr: ocrByShot[shot.id]!,
         );
       } catch (e) {

@@ -14,4 +14,13 @@ void main() {
     expect(AppConfig.revenueCatAndroidApiKey, isEmpty);
     expect(AppConfig.revenueCatIosApiKey, isEmpty);
   });
+
+  test('proxy URL defaults to empty, so an unconfigured build never guesses',
+      () {
+    // The shared Gemini key lives only in the Cloudflare Worker; the app
+    // reaches it through this URL. Empty means "no proxy configured", which
+    // LLMService treats as "skip the AI call" rather than falling back to
+    // some baked-in default endpoint.
+    expect(AppConfig.geminiProxyUrl, isEmpty);
+  });
 }

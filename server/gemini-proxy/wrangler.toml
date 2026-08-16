@@ -1,0 +1,14 @@
+name = "sift-gemini-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[vars]
+# Not secret — this is just which project's App Check tokens to accept.
+# Found in Firebase Console > Project settings > project_number, or in
+# google-services.json as "project_number".
+FIREBASE_PROJECT_NUMBER = "939706737233"
+GEMINI_MODEL = "gemini-2.5-flash"
+
+# GEMINI_API_KEY is NOT set here — it's a secret, set via:
+#   wrangler secret put GEMINI_API_KEY
+# Committing it to this file would defeat the entire point of this Worker.

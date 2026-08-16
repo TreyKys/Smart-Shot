@@ -6,7 +6,19 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   const AppConfig._();
 
+  /// Only used for the BYOK (bring-your-own-key) path, where the user
+  /// supplies their own Gemini key in Settings — their key, their cost, their
+  /// risk to accept. The app's own shared quota no longer uses a client-side
+  /// key at all: see [geminiProxyUrl].
   static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+
+  /// URL of the Cloudflare Worker (server/gemini-proxy/) that fronts Gemini
+  /// for the shared/free-tier quota. The real Gemini key lives only as a
+  /// Worker secret — never compiled into this app. Requests are authorized
+  /// with a Firebase App Check token instead of an embedded API key, so
+  /// there's nothing here for `strings` on the APK or a MITM proxy to find.
+  static const String geminiProxyUrl =
+      String.fromEnvironment('GEMINI_PROXY_URL');
 
   static const String revenueCatAndroidApiKey =
       String.fromEnvironment('REVENUECAT_ANDROID_API_KEY');

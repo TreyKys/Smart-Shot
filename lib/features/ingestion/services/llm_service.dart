@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sift/core/config/app_config.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
@@ -35,14 +37,17 @@ class TextAnalysisItem {
   const TextAnalysisItem({required this.id, required this.ocrText});
 }
 
+/// Two ways this reaches Gemini, chosen per call:
+///
+/// - A user-supplied BYOK key (Settings) calls Gemini directly. Their key,
+///   their cost, their choice to accept the same client-side exposure risk.
+/// - Everyone else goes through the App Check-gated Cloudflare Worker at
+///   [AppConfig.geminiProxyUrl] (see server/gemini-proxy/). The shared key
+///   lives only as a Worker secret — never compiled into this app, never
+///   sent to a client, nothing for `strings` on the APK or a MITM proxy to
+///   find. The Worker verifies a Firebase App Check token instead.
 class LLMService {
-  final String _envApiKey;
-
-  LLMService({String? apiKey}) : _envApiKey = apiKey ?? AppConfig.geminiApiKey {
-    if (_envApiKey.isEmpty) {
-      debugPrint('Warning: GEMINI_API_KEY was not supplied via --dart-define');
-    }
-  }
+  LLMService();
 
   // ── Schema ──────────────────────────────────────────────────────────────────
 
@@ -102,27 +107,19 @@ class LLMService {
         requiredProperties: ['tags'],
       );
 
-  GenerativeModel _model(String apiKey, {required Schema schema}) {
-    return GenerativeModel(
-      model: _kGeminiModel,
-      apiKey: apiKey,
-      generationConfig: GenerationConfig(
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-      ),
-    );
-  }
-
   // ── Single-screenshot analysis ──────────────────────────────────────────────
 
   /// Analyses one screenshot, sending only what the [route] calls for.
+  ///
+  /// [byokApiKey]: pass the user's own key to call Gemini directly (BYOK).
+  /// Leave null/empty to route through the shared proxy instead.
   Future<Map<String, dynamic>> analyze(
     File file, {
-    required String apiKey,
+    String? byokApiKey,
     required OcrResult ocr,
     AnalysisRoute? route,
   }) async {
-    if (!_usableKey(apiKey)) return {};
+    if (!_usable(byokApiKey)) return {};
     final effective = route ?? ocr.route;
 
     final parts = <Part>[TextPart(_promptFor(effective, ocr.text))];
@@ -135,9 +132,8 @@ class LLMService {
       debugPrint('LLM: textOnly route, no image — ${file.path}');
     }
 
-    final model = _model(apiKey, schema: _analysisSchema());
-    final response = await model.generateContent([Content.multi(parts)]);
-    return _decodeObject(response.text);
+    return _generate([Content.multi(parts)], _analysisSchema(),
+        byokApiKey: byokApiKey);
   }
 
   // ── Batched text-only analysis ──────────────────────────────────────────────
@@ -149,9 +145,9 @@ class LLMService {
   /// than silently dropped — one malformed item must not discard the batch.
   Future<Map<int, Map<String, dynamic>>> analyzeTextBatch(
     List<TextAnalysisItem> items, {
-    required String apiKey,
+    String? byokApiKey,
   }) async {
-    if (items.isEmpty || !_usableKey(apiKey)) return {};
+    if (items.isEmpty || !_usable(byokApiKey)) return {};
 
     final buffer = StringBuffer(_kPromptBatch);
     for (final item in items) {
@@ -168,11 +164,9 @@ class LLMService {
       requiredProperties: ['results'],
     );
 
-    final model = _model(apiKey, schema: schema);
-    final response =
-        await model.generateContent([Content.text(buffer.toString())]);
+    final decoded = await _generate([Content.text(buffer.toString())], schema,
+        byokApiKey: byokApiKey);
 
-    final decoded = _decodeObject(response.text);
     final raw = decoded['results'];
     if (raw is! List) {
       debugPrint('LLM batch: no results array — falling back to singles.');
@@ -190,15 +184,139 @@ class LLMService {
     return out;
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Transport ───────────────────────────────────────────────────────────────
 
-  bool _usableKey(String key) {
-    if (key.isEmpty || key == 'INSERT_API_KEY_HERE') {
-      debugPrint('LLMService: skipping — no API key.');
+  Future<Map<String, dynamic>> _generate(
+    List<Content> contents,
+    Schema schema, {
+    String? byokApiKey,
+  }) {
+    final generationConfig = GenerationConfig(
+      responseMimeType: 'application/json',
+      responseSchema: schema,
+    );
+
+    if (byokApiKey != null &&
+        byokApiKey.isNotEmpty &&
+        byokApiKey != 'INSERT_API_KEY_HERE') {
+      return _generateDirect(contents, generationConfig, byokApiKey);
+    }
+    return _generateViaProxy(contents, generationConfig);
+  }
+
+  bool _usable(String? byokApiKey) {
+    final hasByok = byokApiKey != null &&
+        byokApiKey.isNotEmpty &&
+        byokApiKey != 'INSERT_API_KEY_HERE';
+    if (hasByok) return true;
+    if (AppConfig.geminiProxyUrl.isEmpty) {
+      debugPrint(
+          'LLMService: no BYOK key and GEMINI_PROXY_URL not configured — skipping.');
       return false;
     }
     return true;
   }
+
+  /// BYOK path — calls Gemini directly with the user's own key.
+  Future<Map<String, dynamic>> _generateDirect(
+    List<Content> contents,
+    GenerationConfig generationConfig,
+    String apiKey,
+  ) async {
+    try {
+      final model = GenerativeModel(
+        model: _kGeminiModel,
+        apiKey: apiKey,
+        generationConfig: generationConfig,
+      );
+      final response = await model.generateContent(contents);
+      return _decodeObject(response.text);
+    } catch (e, st) {
+      debugPrint('LLMService: direct call failed: $e\n$st');
+      return {};
+    }
+  }
+
+  /// Default path — routes through the App Check-gated proxy. Builds the
+  /// exact REST body Gemini expects (the same shape package:google_generative_ai
+  /// sends) using that package's own Content/GenerationConfig/Schema toJson()
+  /// builders, so the Worker's schema/prompt logic never has to be
+  /// reimplemented server-side or kept in sync with the client by hand.
+  Future<Map<String, dynamic>> _generateViaProxy(
+    List<Content> contents,
+    GenerationConfig generationConfig,
+  ) async {
+    final proxyUrl = AppConfig.geminiProxyUrl;
+    if (proxyUrl.isEmpty) {
+      debugPrint('LLMService: GEMINI_PROXY_URL not configured — skipping.');
+      return {};
+    }
+
+    String? token;
+    try {
+      token = await FirebaseAppCheck.instance.getToken();
+    } catch (e) {
+      debugPrint('LLMService: App Check token fetch failed: $e');
+    }
+    if (token == null || token.isEmpty) {
+      debugPrint(
+          'LLMService: no App Check token — proxy will reject this, skipping.');
+      return {};
+    }
+
+    final requestBody = jsonEncode({
+      'contents': contents.map((c) => c.toJson()).toList(),
+      'generationConfig': generationConfig.toJson(),
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse(proxyUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-AppCheck': token,
+        },
+        body: requestBody,
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint(
+            'LLMService: proxy returned ${response.statusCode}: ${response.body}');
+        return {};
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return {};
+      return _decodeObject(_extractText(decoded));
+    } catch (e, st) {
+      debugPrint('LLMService: proxy request failed: $e\n$st');
+      return {};
+    }
+  }
+
+  /// Extracts the model's text output from a raw Gemini REST response.
+  ///
+  /// Mirrors `GenerateContentResponse.text` from package:google_generative_ai
+  /// (candidates[0].content.parts, concatenating text parts) — that class
+  /// isn't reusable here since it's built for the package's own client, not
+  /// for parsing a response relayed by our own proxy. Returns null rather
+  /// than throwing on a blocked/empty response; the caller already treats a
+  /// null/empty result as "nothing usable came back".
+  String? _extractText(Map<String, dynamic> json) {
+    final candidates = json['candidates'];
+    if (candidates is! List || candidates.isEmpty) return null;
+    final first = candidates.first;
+    if (first is! Map) return null;
+    final content = first['content'];
+    if (content is! Map) return null;
+    final parts = content['parts'];
+    if (parts is! List) return null;
+    final texts =
+        parts.whereType<Map>().map((p) => p['text']).whereType<String>();
+    return texts.isEmpty ? null : texts.join();
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
 
   String _promptFor(AnalysisRoute route, String ocrText) {
     final trimmed = ocrText.trim();

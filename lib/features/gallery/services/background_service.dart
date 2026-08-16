@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sift/core/config/app_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
@@ -28,6 +30,21 @@ void callbackDispatcher() {
 
 Future<bool> _processDeepScanBatch() async {
   try {
+    // WorkManager runs this in its own isolate, so nothing main.dart set up
+    // exists here — Firebase has to be initialized again before App Check can
+    // mint the token the Gemini proxy requires. Without this the proxy path
+    // silently 401s and every screenshot falls back to local-only tags.
+    try {
+      await Firebase.initializeApp();
+      await FirebaseAppCheck.instance.activate(
+        providerAndroid: kDebugMode
+            ? const AndroidDebugProvider()
+            : const AndroidPlayIntegrityProvider(),
+      );
+    } catch (e) {
+      debugPrint('Background isolate Firebase/App Check init failed: $e');
+    }
+
     final dir = await getApplicationDocumentsDirectory();
     final isar = await Isar.open(
       [ScreenshotSchema],
@@ -50,7 +67,12 @@ Future<bool> _processDeepScanBatch() async {
     debugPrint("Processing batch of ${screenshots.length} screenshots...");
 
     final ocrService = OcrService();
-    final llmService = LLMService(apiKey: AppConfig.geminiApiKey);
+    final llmService = LLMService();
+
+    // Honour the user's own key here too — otherwise a BYOK user's background
+    // scans would quietly spend the shared proxy quota instead of their key.
+    final prefs = await SharedPreferences.getInstance();
+    final byokKey = prefs.getString('byok_key') ?? '';
 
     for (final screenshot in screenshots) {
       final file = File(screenshot.filePath);
@@ -74,7 +96,7 @@ Future<bool> _processDeepScanBatch() async {
         try {
           llmResult = await llmService.analyze(
             file,
-            apiKey: AppConfig.geminiApiKey,
+            byokApiKey: byokKey,
             ocr: ocr,
           );
         } catch (llmErr) {
