@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:http/http.dart' as http;
+import 'package:sift/core/config/shared_key_service.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sift/core/config/app_config.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 
@@ -37,15 +35,14 @@ class TextAnalysisItem {
   const TextAnalysisItem({required this.id, required this.ocrText});
 }
 
-/// Two ways this reaches Gemini, chosen per call:
+/// Two keys reach Gemini, chosen per call — the transport is the same either
+/// way:
 ///
-/// - A user-supplied BYOK key (Settings) calls Gemini directly. Their key,
-///   their cost, their choice to accept the same client-side exposure risk.
-/// - Everyone else goes through the App Check-gated Cloudflare Worker at
-///   [AppConfig.geminiProxyUrl] (see server/gemini-proxy/). The shared key
-///   lives only as a Worker secret — never compiled into this app, never
-///   sent to a client, nothing for `strings` on the APK or a MITM proxy to
-///   find. The Worker verifies a Firebase App Check token instead.
+/// - A user-supplied BYOK key (Settings). Their key, their cost, their choice.
+/// - Everyone else uses the shared key from [SharedKeyService], delivered by
+///   Firebase Remote Config once App Check has vouched for the build. It is
+///   never compiled into the app, so there's nothing for `strings` on the APK
+///   to find, and it can be rotated from the console without an update.
 class LLMService {
   LLMService();
 
@@ -111,8 +108,8 @@ class LLMService {
 
   /// Analyses one screenshot, sending only what the [route] calls for.
   ///
-  /// [byokApiKey]: pass the user's own key to call Gemini directly (BYOK).
-  /// Leave null/empty to route through the shared proxy instead.
+  /// [byokApiKey]: pass the user's own key to use it (BYOK). Leave null/empty
+  /// to fall back to the shared Remote Config key.
   Future<Map<String, dynamic>> analyze(
     File file, {
     String? byokApiKey,
@@ -196,28 +193,37 @@ class LLMService {
       responseSchema: schema,
     );
 
-    if (byokApiKey != null &&
-        byokApiKey.isNotEmpty &&
-        byokApiKey != 'INSERT_API_KEY_HERE') {
-      return _generateDirect(contents, generationConfig, byokApiKey);
+    if (_hasByok(byokApiKey)) {
+      return _generateDirect(contents, generationConfig, byokApiKey!);
     }
-    return _generateViaProxy(contents, generationConfig);
+
+    final sharedKey = SharedKeyService.geminiApiKey;
+    if (sharedKey.isEmpty) {
+      debugPrint('LLMService: no BYOK key and no shared key — skipping.');
+      return Future.value({});
+    }
+    return _generateDirect(contents, generationConfig, sharedKey);
   }
 
+  static bool _hasByok(String? byokApiKey) =>
+      byokApiKey != null &&
+      byokApiKey.isNotEmpty &&
+      byokApiKey != 'INSERT_API_KEY_HERE';
+
   bool _usable(String? byokApiKey) {
-    final hasByok = byokApiKey != null &&
-        byokApiKey.isNotEmpty &&
-        byokApiKey != 'INSERT_API_KEY_HERE';
-    if (hasByok) return true;
-    if (AppConfig.geminiProxyUrl.isEmpty) {
+    if (_hasByok(byokApiKey)) return true;
+    if (!SharedKeyService.isConfigured) {
       debugPrint(
-          'LLMService: no BYOK key and GEMINI_PROXY_URL not configured — skipping.');
+          'LLMService: no BYOK key and Remote Config supplied no shared key '
+          '— skipping.');
       return false;
     }
     return true;
   }
 
-  /// BYOK path — calls Gemini directly with the user's own key.
+  /// Calls Gemini directly. Used for both paths — the user's own BYOK key, and
+  /// the shared key Remote Config hands out once App Check has vouched for the
+  /// build.
   Future<Map<String, dynamic>> _generateDirect(
     List<Content> contents,
     GenerationConfig generationConfig,
@@ -235,85 +241,6 @@ class LLMService {
       debugPrint('LLMService: direct call failed: $e\n$st');
       return {};
     }
-  }
-
-  /// Default path — routes through the App Check-gated proxy. Builds the
-  /// exact REST body Gemini expects (the same shape package:google_generative_ai
-  /// sends) using that package's own Content/GenerationConfig/Schema toJson()
-  /// builders, so the Worker's schema/prompt logic never has to be
-  /// reimplemented server-side or kept in sync with the client by hand.
-  Future<Map<String, dynamic>> _generateViaProxy(
-    List<Content> contents,
-    GenerationConfig generationConfig,
-  ) async {
-    final proxyUrl = AppConfig.geminiProxyUrl;
-    if (proxyUrl.isEmpty) {
-      debugPrint('LLMService: GEMINI_PROXY_URL not configured — skipping.');
-      return {};
-    }
-
-    String? token;
-    try {
-      token = await FirebaseAppCheck.instance.getToken();
-    } catch (e) {
-      debugPrint('LLMService: App Check token fetch failed: $e');
-    }
-    if (token == null || token.isEmpty) {
-      debugPrint(
-          'LLMService: no App Check token — proxy will reject this, skipping.');
-      return {};
-    }
-
-    final requestBody = jsonEncode({
-      'contents': contents.map((c) => c.toJson()).toList(),
-      'generationConfig': generationConfig.toJson(),
-    });
-
-    try {
-      final response = await http.post(
-        Uri.parse(proxyUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Firebase-AppCheck': token,
-        },
-        body: requestBody,
-      );
-
-      if (response.statusCode != 200) {
-        debugPrint(
-            'LLMService: proxy returned ${response.statusCode}: ${response.body}');
-        return {};
-      }
-
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map<String, dynamic>) return {};
-      return _decodeObject(_extractText(decoded));
-    } catch (e, st) {
-      debugPrint('LLMService: proxy request failed: $e\n$st');
-      return {};
-    }
-  }
-
-  /// Extracts the model's text output from a raw Gemini REST response.
-  ///
-  /// Mirrors `GenerateContentResponse.text` from package:google_generative_ai
-  /// (candidates[0].content.parts, concatenating text parts) — that class
-  /// isn't reusable here since it's built for the package's own client, not
-  /// for parsing a response relayed by our own proxy. Returns null rather
-  /// than throwing on a blocked/empty response; the caller already treats a
-  /// null/empty result as "nothing usable came back".
-  String? _extractText(Map<String, dynamic> json) {
-    final candidates = json['candidates'];
-    if (candidates is! List || candidates.isEmpty) return null;
-    final first = candidates.first;
-    if (first is! Map) return null;
-    final content = first['content'];
-    if (content is! Map) return null;
-    final parts = content['parts'];
-    if (parts is! List) return null;
-    final texts =
-        parts.whereType<Map>().map((p) => p['text']).whereType<String>();
-    return texts.isEmpty ? null : texts.join();
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

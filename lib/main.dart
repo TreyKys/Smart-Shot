@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:sift/core/config/app_config.dart';
+import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
@@ -45,9 +45,9 @@ Future<void> main() async {
 
     try {
       // Play Integrity attests to Google that this is a real, unmodified
-      // build of the app — that's what the Gemini proxy Worker checks before
-      // forwarding a request. The debug provider replaces that with a token
-      // registered manually in Firebase Console, since Play Integrity
+      // build of the app — that's what Remote Config checks before handing
+      // over the shared Gemini key. The debug provider replaces that with a
+      // token registered manually in Firebase Console, since Play Integrity
       // attestation isn't available for local/CI debug builds.
       await FirebaseAppCheck.instance.activate(
         providerAndroid: kDebugMode
@@ -58,11 +58,11 @@ Future<void> main() async {
       debugPrint('App Check init failed: $e\n$st');
     }
 
-    // Deliberately outside a try/catch: a build that declares it requires the
-    // proxy and then has no URL must not boot into a state where every AI
-    // call quietly returns nothing. Default builds don't set REQUIRE_AI_PROXY,
-    // so this is a no-op for local and CI debug runs.
-    AppConfig.assertAiConfigured();
+    // After App Check, so the fetch carries an attestation token — that's what
+    // lets Remote Config refuse to hand the shared key to a repackaged build.
+    // Throws only when REQUIRE_SHARED_AI_KEY is set and no key came back, so
+    // this is a no-op for local and CI debug runs.
+    await SharedKeyService.initialize();
 
     FlutterError.onError = (details) {
       FlutterError.presentError(details);

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sift/core/config/app_config.dart';
+import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
@@ -666,12 +666,12 @@ class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
 
   /// True only when there's genuinely no way to reach Gemini.
   ///
-  /// The app no longer embeds its own key — normal users go through the
-  /// App Check-gated proxy, so a configured proxy URL counts as "we can do
-  /// AI". Without this check the banner would warn every single user that
-  /// their key is missing, when not having one is now the correct state.
+  /// The app no longer embeds its own key — normal users get the shared key
+  /// from Remote Config, so having one counts as "we can do AI". Without this
+  /// check the banner would warn every single user that their key is missing,
+  /// when not having one of their own is now the correct state.
   bool _noKey() {
-    if (AppConfig.geminiProxyUrl.isNotEmpty) return false;
+    if (SharedKeyService.isConfigured) return false;
     final byokKey =
         ref.read(economyServiceProvider.notifier).getByokKey() ?? '';
     return byokKey.isEmpty;

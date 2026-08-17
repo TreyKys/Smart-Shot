@@ -1,5 +1,12 @@
 # Sift Gemini proxy
 
+> **Not currently used by the app.** Sift now fetches the shared Gemini key
+> from Firebase Remote Config (see `lib/core/config/shared_key_service.dart`),
+> which needs no Cloudflare account and no card. This Worker is kept because it
+> is the stronger design — the key never leaves the server, so it cannot be
+> pulled out of a running app — and is worth adopting if the shared quota ever
+> gets abused. Deploying it means pointing `LLMService` back at a proxy call.
+
 A Cloudflare Worker that stands between the Sift app and Gemini. It holds the
 real `GEMINI_API_KEY` as a server-side secret — the app never has it — and
 only forwards a request once it's verified a Firebase App Check token proving

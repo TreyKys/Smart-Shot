@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
@@ -30,10 +31,12 @@ void callbackDispatcher() {
 
 Future<bool> _processDeepScanBatch() async {
   try {
-    // WorkManager runs this in its own isolate, so nothing main.dart set up
-    // exists here — Firebase has to be initialized again before App Check can
-    // mint the token the Gemini proxy requires. Without this the proxy path
-    // silently 401s and every screenshot falls back to local-only tags.
+    // WorkManager runs this in its own isolate with its own memory, so nothing
+    // main.dart set up exists here — Firebase, App Check and the shared key all
+    // have to be established again. SharedKeyService caches into a static, and
+    // that static is empty in this isolate no matter what the UI isolate
+    // fetched. Skipping the initialize() below would leave every background
+    // scan falling back to local-only tags while the foreground worked fine.
     try {
       await Firebase.initializeApp();
       await FirebaseAppCheck.instance.activate(
@@ -41,6 +44,8 @@ Future<bool> _processDeepScanBatch() async {
             ? const AndroidDebugProvider()
             : const AndroidPlayIntegrityProvider(),
       );
+      // After App Check, so the fetch carries an attestation token.
+      await SharedKeyService.initialize();
     } catch (e) {
       debugPrint('Background isolate Firebase/App Check init failed: $e');
     }
@@ -70,7 +75,7 @@ Future<bool> _processDeepScanBatch() async {
     final llmService = LLMService();
 
     // Honour the user's own key here too — otherwise a BYOK user's background
-    // scans would quietly spend the shared proxy quota instead of their key.
+    // scans would quietly spend the shared quota instead of their own key.
     final prefs = await SharedPreferences.getInstance();
     final byokKey = prefs.getString('byok_key') ?? '';
 

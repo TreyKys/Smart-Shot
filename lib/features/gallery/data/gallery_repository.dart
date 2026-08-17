@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sift/core/config/app_config.dart';
+import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/database/isar_service.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
@@ -266,12 +266,12 @@ class GalleryRepository {
     final economy = _ref.read(economyServiceProvider.notifier);
     final progress = _ref.read(processingProgressProvider.notifier);
 
-    // A BYOK key calls Gemini directly (the user's own key, own cost). With
-    // no BYOK key, LLMService routes through the shared App Check-gated
-    // proxy instead — nothing here needs the app's own key at all anymore.
+    // A BYOK key calls Gemini with the user's own key and cost. Without one,
+    // LLMService falls back to the shared key Remote Config hands out after
+    // App Check — nothing here needs a key compiled into the app.
     final byokKey = economy.getByokKey() ?? '';
     final canAttemptAi =
-        byokKey.isNotEmpty || AppConfig.geminiProxyUrl.isNotEmpty;
+        byokKey.isNotEmpty || SharedKeyService.isConfigured;
 
     if (!canAttemptAi) {
       debugPrint('No BYOK key and GEMINI_PROXY_URL not configured - OCR '
@@ -359,7 +359,7 @@ class GalleryRepository {
     }
     if (alive.isEmpty) return missing.length;
 
-    // No BYOK key and no proxy configured — nothing to spend, so skip the
+    // No BYOK key and no shared key — nothing to spend, so skip the
     // quota entirely and fall back to local tagging.
     if (!canAttemptAi) {
       await _writeResults(

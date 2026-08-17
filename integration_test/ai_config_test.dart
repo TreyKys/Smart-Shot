@@ -1,87 +1,79 @@
 // Guards the shared AI path against failing quietly.
 //
-// Before this, an app built with no GEMINI_PROXY_URL behaved exactly like one
-// whose model had nothing to say: LLMService logged a line to debugPrint and
-// returned {}, the gallery filled in OCR and local tags, and every test
-// passed. The emulator CI job was in precisely that state — green, with AI
-// entirely inert. These tests make the two cases distinguishable and assert
-// whichever one the build actually claims to be in.
-import 'dart:convert';
-
+// An app that can't get a key behaves exactly like one whose model found
+// nothing to say: LLMService logs a line to debugPrint and returns {}, the
+// gallery fills in OCR and local tags, and every test passes. The emulator CI
+// job was in precisely that state — green, with AI entirely inert. These make
+// the two cases distinguishable and assert whichever one is real.
+//
+// Unlike the unit tests, this runs the actual Remote Config fetch against a
+// real device, so it also catches a project where the parameter was never
+// published or App Check is rejecting the build.
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
-import 'package:sift/core/config/app_config.dart';
+import 'package:sift/core/config/shared_key_service.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  test('the build never both requires the proxy and lacks a URL', () {
-    // Mirrors the startup check in main(). Running it here too means the
-    // contradiction is reported as a named test failure rather than as a
-    // StateError thrown from inside app startup, where it reads like a crash.
+  setUpAll(() async {
+    try {
+      await Firebase.initializeApp();
+      await SharedKeyService.initialize();
+    } catch (e) {
+      // initialize() only throws when REQUIRE_SHARED_AI_KEY is set and no key
+      // came back — the first test below reports that as a named failure
+      // rather than letting it abort the whole suite from setUpAll.
+      debugPrintSynchronously('SharedKeyService.initialize threw: $e');
+    }
+  });
+
+  test('the build never both requires a shared key and lacks one', () {
     expect(
-      AppConfig.aiConfigError(
-        proxyUrl: AppConfig.geminiProxyUrl,
-        requireProxy: AppConfig.requireAiProxy,
+      SharedKeyService.configError(
+        key: SharedKeyService.geminiApiKey,
+        mustExist: SharedKeyService.requireSharedKey,
       ),
       isNull,
-      reason: 'This build sets REQUIRE_AI_PROXY but has no GEMINI_PROXY_URL, '
-          'so every AI call would silently return nothing.',
+      reason: 'This build sets REQUIRE_SHARED_AI_KEY but Remote Config '
+          'returned no key, so every shared-quota call would silently return '
+          'nothing.',
     );
   });
 
   test('an unconfigured build is explicitly disabled, not ambiguously quiet',
       () {
-    if (AppConfig.isSharedAiConfigured) {
-      markTestSkipped('Proxy is configured; reachability test covers it.');
+    if (SharedKeyService.isConfigured) {
+      markTestSkipped('Shared key present; the configured test covers it.');
       return;
     }
     // Asserting the negative on purpose: this is the state CI runs in, and
-    // the value of pinning it is that setting GEMINI_PROXY_URL flips which of
-    // these two tests does the real work. Whichever one stands down says so
-    // via markTestSkipped, so neither can go quiet without it showing up in
-    // the run output.
-    expect(AppConfig.geminiProxyUrl, isEmpty);
-    expect(AppConfig.isSharedAiConfigured, isFalse,
-        reason: 'No proxy URL, so the shared AI path is off. Analysis falls '
-            'back to OCR and local tags by design — deploy '
-            'server/gemini-proxy/ and set GEMINI_PROXY_URL to enable it.');
+    // pinning it means publishing the parameter flips which of these two tests
+    // does the real work. Whichever stands down says so via markTestSkipped,
+    // so neither can go quiet without it showing in the run output.
+    expect(SharedKeyService.geminiApiKey, isEmpty);
+    expect(SharedKeyService.isConfigured, isFalse,
+        reason: 'No shared key, so the shared AI path is off. Analysis falls '
+            'back to OCR and local tags by design — publish '
+            '"${SharedKeyService.kGeminiKeyParam}" in Remote Config and '
+            'register an App Check debug token to enable it.');
   });
 
-  test('a configured proxy is reachable and rejects unauthenticated calls',
-      () async {
-    if (!AppConfig.isSharedAiConfigured) {
-      markTestSkipped('No GEMINI_PROXY_URL; nothing deployed to probe yet.');
+  test('a fetched key looks like a real Gemini key', () {
+    if (!SharedKeyService.isConfigured) {
+      markTestSkipped('No shared key fetched; nothing to validate yet.');
       return;
     }
-
-    // Deliberately sent with no App Check token. Two things are checked at
-    // once: that the URL resolves and answers at all (a typo'd or undeployed
-    // Worker fails here), and that it refuses to reach Gemini without
-    // attestation. A 200 would mean the shared key is reachable by anyone who
-    // reads the URL out of the APK.
-    final response = await http.post(
-      Uri.parse(AppConfig.geminiProxyUrl),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': 'ping'}
-            ]
-          }
-        ]
-      }),
-    );
-
-    expect(
-      response.statusCode,
-      401,
-      reason: 'Unauthenticated request to ${AppConfig.geminiProxyUrl} '
-          'returned ${response.statusCode}, expected 401. If this is 200 the '
-          'proxy is forwarding to Gemini without verifying App Check — stop '
-          'and fix the Worker before shipping.',
-    );
-  }, timeout: const Timeout(Duration(seconds: 30)));
+    final key = SharedKeyService.geminiApiKey;
+    // Catches the two ways this goes wrong in practice: a placeholder left in
+    // the console, or a value that arrived with whitespace or quotes around it
+    // from a copy-paste. Both would fail at call time with an opaque 400.
+    expect(key, startsWith('AIza'),
+        reason: 'Remote Config returned "$key", which is not a Google API '
+            'key. Check the parameter value in the Firebase Console.');
+    expect(key, equals(key.trim()));
+    expect(key.length, greaterThan(30));
+  });
 }
