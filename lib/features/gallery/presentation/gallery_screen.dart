@@ -59,18 +59,26 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
             await prefs.setString('smart_indexing_mode', 'live');
             await prefs.setInt(
                 'live_mode_timestamp', DateTime.now().millisecondsSinceEpoch);
+            // Live Mode's promise is "new screenshots get indexed" — without
+            // this, that only happens while the app is open. See
+            // background_service.dart's discoverNewScreenshots call.
+            scheduleBackgroundSync();
             ref.read(galleryRepositoryProvider).syncGallery();
           },
           onDeepScan: () async {
             Navigator.of(context).pop();
             await prefs.setString('smart_indexing_mode', 'deep');
-            scheduleDeepScan();
+            scheduleBackgroundSync();
             ref.read(galleryRepositoryProvider).syncGallery();
           },
         ),
       );
     } else {
-      if (mode == 'deep') scheduleDeepScan();
+      // Covers users who picked a mode before background sync applied to
+      // both — re-registering is idempotent (WorkManager keeps one task per
+      // unique name), so this just backfills Live Mode users who are still
+      // foreground-only from an earlier version.
+      scheduleBackgroundSync();
       ref.read(galleryRepositoryProvider).syncGallery();
     }
   }

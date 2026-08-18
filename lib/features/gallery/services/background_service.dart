@@ -6,6 +6,8 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/config/shared_key_service.dart';
+import 'package:sift/features/gallery/data/gallery_repository.dart'
+    show discoverNewScreenshots;
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
@@ -13,6 +15,9 @@ import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
 import 'package:workmanager/workmanager.dart';
 
+// Name predates this task also covering Live Mode; kept as-is rather than
+// renamed, since WorkManager persists it as an opaque identifier on the OS
+// side and there's no user-visible reason to churn it.
 const String kDeepScanTask = "com.neurodevlabs.sift.deepscan";
 const String kPrefsIndexingMode = "smart_indexing_mode";
 const String kPrefsLiveModeTimestamp = "live_mode_timestamp";
@@ -55,6 +60,24 @@ Future<bool> _processDeepScanBatch() async {
       [ScreenshotSchema],
       directory: dir.path,
     );
+
+    // Without this, the periodic task only ever reprocesses whatever the UI
+    // last queued — a user who never reopens the app after choosing Live
+    // Mode would get no indexing at all, since nothing else discovers new
+    // screenshots. This is the same scan syncGallery() runs in the
+    // foreground, factored out so it works from a bare Isar handle.
+    try {
+      // Bounded: if the permission plugin ever behaves differently than
+      // expected here — e.g. blocks on a UI callback that can't fire with no
+      // Activity attached — this must not hang the whole task until the OS's
+      // own ~10-minute WorkManager execution limit kills it. A timeout turns
+      // that into a fast, logged no-op that still falls through to
+      // processing whatever was already queued.
+      await discoverNewScreenshots(isar).timeout(const Duration(seconds: 20));
+    } catch (e) {
+      debugPrint('discoverNewScreenshots failed: $e — processing whatever '
+          'is already queued.');
+    }
 
     final screenshots = await isar.screenshots
         .filter()
@@ -200,7 +223,13 @@ List<SuggestedAction> _buildActions(Map<String, dynamic> llmResult) {
   return actions;
 }
 
-void scheduleDeepScan() {
+/// Registers the periodic background sync — both Live Mode and Deep Scan use
+/// this now, since both need screenshots discovered and processed without
+/// the app being open. 15 minutes is Android's floor for periodic
+/// WorkManager work, not a choice made here; nothing schedules it tighter.
+/// `requiresBatteryNotLow` and requiring a network connection keep it from
+/// running at a cost the user would notice.
+void scheduleBackgroundSync() {
   Workmanager().registerPeriodicTask(
     "deepScanTask",
     kDeepScanTask,
@@ -213,6 +242,6 @@ void scheduleDeepScan() {
   );
 }
 
-void cancelDeepScan() {
+void cancelBackgroundSync() {
   Workmanager().cancelByUniqueName("deepScanTask");
 }

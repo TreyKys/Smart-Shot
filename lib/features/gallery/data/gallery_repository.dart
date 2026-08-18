@@ -29,6 +29,140 @@ GalleryRepository galleryRepository(GalleryRepositoryRef ref) {
 /// Upper bound on how many assets a single sync will ingest.
 const int _kMaxIngestCount = 500;
 
+// ── Discovery ──────────────────────────────────────────────────────────────
+//
+// Free-standing rather than methods on GalleryRepository, so the WorkManager
+// background isolate can discover new screenshots too: that isolate has no
+// Riverpod ProviderContainer, so anything it calls has to work from a plain
+// Isar handle. GalleryRepository.syncGallery() below is the foreground
+// caller; discoverNewScreenshots() is the background one. Both share these.
+
+/// Finds the "all photos" album, or null if there is none to scan.
+///
+/// Deliberately does not call `Permission.photos.request()` — that shows a
+/// system dialog, which requires a foreground Activity and is a no-op (or
+/// worse, hangs) called from WorkManager's headless isolate. By the time a
+/// background sync runs, the foreground app has already requested and been
+/// granted (or denied) access at least once; this only re-checks that grant.
+Future<AssetPathEntity?> _openAllPhotosAlbum() async {
+  final PermissionState ps = await PhotoManager.requestPermissionExtend();
+  debugPrint('PhotoManager: $ps');
+  if (!ps.isAuth) {
+    debugPrint('Permission denied');
+    return null;
+  }
+
+  final paths = await PhotoManager.getAssetPathList(
+    type: RequestType.image,
+    filterOption: FilterOptionGroup(
+      orders: [const OrderOption(type: OrderOptionType.createDate, asc: false)],
+    ),
+  );
+  if (paths.isEmpty) return null;
+  return paths.firstWhere((p) => p.isAll, orElse: () => paths.first);
+}
+
+Future<void> _ingestAssets(
+  List<AssetEntity> assets,
+  Isar isar,
+  String? mode,
+  int liveTs, {
+  required int startIndex,
+  required _DedupIndex dedup,
+}) async {
+  // Collected across the batch so the whole batch lands in one transaction
+  // instead of one transaction per image.
+  final newShots = <Screenshot>[];
+
+  for (int i = 0; i < assets.length; i++) {
+    final asset = assets[i];
+    final idx = startIndex + i;
+
+    // Live mode: only recent 40, then respect timestamp cutoff
+    if (mode == 'live' && idx > 40) {
+      if (liveTs > 0 &&
+          asset.createDateTime.millisecondsSinceEpoch <= liveTs) {
+        debugPrint('Live mode cutoff at index $idx');
+        break;
+      }
+      if (liveTs == 0) break;
+    }
+
+    if (asset.type != AssetType.image) continue;
+
+    File? file;
+    try {
+      file = await asset.file;
+    } catch (e) {
+      debugPrint('Error getting file for ${asset.id}: $e');
+      continue;
+    }
+    if (file == null) continue;
+
+    // Skip if already in DB
+    final existing =
+        await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
+    if (existing != null) continue;
+
+    // Perceptual dedup — run in compute isolate
+    final hash =
+        await compute(DedupService.hashIsolateEntry, file.absolute.path);
+    if (hash != null && dedup.isDuplicate(hash)) {
+      debugPrint('Dedup: skipping ${file.path}');
+      continue;
+    }
+
+    newShots.add(Screenshot()
+      ..filePath = file.path
+      ..timestamp = asset.createDateTime
+      ..isProcessed = false);
+
+    // Buffered — persisted by dedup.flush() once the run completes.
+    if (hash != null) dedup.add(file.path, hash);
+  }
+
+  if (newShots.isNotEmpty) {
+    await isar.writeTxn(() async {
+      await isar.screenshots.putAll(newShots);
+    });
+  }
+}
+
+/// Background-isolate counterpart to [GalleryRepository.syncGallery] — finds
+/// screenshots the gallery hasn't seen yet and inserts them unprocessed, so
+/// the periodic deep-scan task in background_service.dart has something to
+/// do beyond reprocessing whatever the UI last queued.
+///
+/// No fast-first-10 split and no `Future.microtask` tail: those exist in
+/// syncGallery purely for perceived UI speed, which does not apply to a
+/// headless task. This awaits everything in order and returns once ingestion
+/// is actually done, which is what a WorkManager task needs — the OS expects
+/// the callback to finish, not to fire off unawaited work and return early.
+Future<void> discoverNewScreenshots(Isar isar) async {
+  final album = await _openAllPhotosAlbum();
+  if (album == null) return;
+
+  final count = await album.assetCountAsync;
+  if (count == 0) return;
+
+  final prefs = await SharedPreferences.getInstance();
+  final mode = prefs.getString('smart_indexing_mode');
+  final liveTs = prefs.getInt('live_mode_timestamp') ?? 0;
+  final dedup = await _DedupIndex.load();
+
+  final total = count > _kMaxIngestCount ? _kMaxIngestCount : count;
+  await prefs.setInt('ingest_deferred_count', count - total);
+
+  for (int offset = 0; offset < total; offset += 20) {
+    final end = (offset + 20).clamp(0, total);
+    final batch = await album.getAssetListRange(start: offset, end: end);
+    await _ingestAssets(batch, isar, mode, liveTs,
+        startIndex: offset, dedup: dedup);
+  }
+  await dedup.flush();
+  debugPrint('discoverNewScreenshots: scanned $total assets.');
+}
+
 /// Upper bound on pending rows pulled into memory for one processing run.
 /// The remainder is picked up by the next run rather than loaded up front.
 const int _kMaxPerRun = 300;
@@ -56,26 +190,9 @@ class GalleryRepository {
     final PermissionStatus status = await Permission.photos.request();
     debugPrint('Permission.photos: $status');
 
-    final PermissionState ps = await PhotoManager.requestPermissionExtend();
-    debugPrint('PhotoManager: $ps');
+    final album = await _openAllPhotosAlbum();
+    if (album == null) return;
 
-    if (!ps.isAuth) {
-      debugPrint('Permission denied');
-      return;
-    }
-
-    final paths = await PhotoManager.getAssetPathList(
-      type: RequestType.image,
-      filterOption: FilterOptionGroup(
-        orders: [
-          const OrderOption(type: OrderOptionType.createDate, asc: false)
-        ],
-      ),
-    );
-
-    if (paths.isEmpty) return;
-
-    final album = paths.firstWhere((p) => p.isAll, orElse: () => paths.first);
     final count = await album.assetCountAsync;
     if (count == 0) return;
 
@@ -119,74 +236,6 @@ class GalleryRepository {
     } else {
       await dedup.flush();
       _processAllPending();
-    }
-  }
-
-  Future<void> _ingestAssets(
-    List<AssetEntity> assets,
-    Isar isar,
-    String? mode,
-    int liveTs, {
-    required int startIndex,
-    required _DedupIndex dedup,
-  }) async {
-    // Collected across the batch so the whole batch lands in one transaction
-    // instead of one transaction per image.
-    final newShots = <Screenshot>[];
-
-    for (int i = 0; i < assets.length; i++) {
-      final asset = assets[i];
-      final idx = startIndex + i;
-
-      // Live mode: only recent 40, then respect timestamp cutoff
-      if (mode == 'live' && idx > 40) {
-        if (liveTs > 0 &&
-            asset.createDateTime.millisecondsSinceEpoch <= liveTs) {
-          debugPrint('Live mode cutoff at index $idx');
-          break;
-        }
-        if (liveTs == 0) break;
-      }
-
-      if (asset.type != AssetType.image) continue;
-
-      File? file;
-      try {
-        file = await asset.file;
-      } catch (e) {
-        debugPrint('Error getting file for ${asset.id}: $e');
-        continue;
-      }
-      if (file == null) continue;
-
-      // Skip if already in DB
-      final existing = await isar.screenshots
-          .where()
-          .filePathEqualTo(file.path)
-          .findFirst();
-      if (existing != null) continue;
-
-      // Perceptual dedup — run in compute isolate
-      final hash = await compute(
-          DedupService.hashIsolateEntry, file.absolute.path);
-      if (hash != null && dedup.isDuplicate(hash)) {
-        debugPrint('Dedup: skipping ${file.path}');
-        continue;
-      }
-
-      newShots.add(Screenshot()
-        ..filePath = file.path
-        ..timestamp = asset.createDateTime
-        ..isProcessed = false);
-
-      // Buffered — persisted by dedup.flush() once the run completes.
-      if (hash != null) dedup.add(file.path, hash);
-    }
-
-    if (newShots.isNotEmpty) {
-      await isar.writeTxn(() async {
-        await isar.screenshots.putAll(newShots);
-      });
     }
   }
 
