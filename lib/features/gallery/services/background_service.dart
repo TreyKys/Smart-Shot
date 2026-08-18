@@ -229,17 +229,29 @@ List<SuggestedAction> _buildActions(Map<String, dynamic> llmResult) {
 /// WorkManager work, not a choice made here; nothing schedules it tighter.
 /// `requiresBatteryNotLow` and requiring a network connection keep it from
 /// running at a cost the user would notice.
-void scheduleBackgroundSync() {
-  Workmanager().registerPeriodicTask(
-    "deepScanTask",
-    kDeepScanTask,
-    frequency: const Duration(minutes: 15),
-    initialDelay: const Duration(seconds: 10),
-    constraints: Constraints(
-      networkType: NetworkType.connected,
-      requiresBatteryNotLow: true,
-    ),
-  );
+Future<void> scheduleBackgroundSync() async {
+  // main.dart awaits Workmanager().initialize() before runApp(), so this
+  // should never actually hit an uninitialized plugin. Caught anyway rather
+  // than left to throw into a button's onPressed handler — the cost of being
+  // wrong here is a dropped tap and a silent log line; the cost of not
+  // catching it is a crash mid-onboarding if init ever genuinely fails.
+  // registerPeriodicTask is itself async, so the try/catch has to await it —
+  // wrapping the un-awaited call would only catch a synchronous throw, and
+  // this one fails on the returned Future instead.
+  try {
+    await Workmanager().registerPeriodicTask(
+      "deepScanTask",
+      kDeepScanTask,
+      frequency: const Duration(minutes: 15),
+      initialDelay: const Duration(seconds: 10),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+        requiresBatteryNotLow: true,
+      ),
+    );
+  } catch (e) {
+    debugPrint('scheduleBackgroundSync failed: $e');
+  }
 }
 
 void cancelBackgroundSync() {

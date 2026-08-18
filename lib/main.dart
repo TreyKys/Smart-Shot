@@ -92,7 +92,16 @@ Future<void> main() async {
     }
 
     try {
-      Workmanager().initialize(callbackDispatcher);
+      // Was previously fire-and-forget: initialize() returns a real Future
+      // backed by a platform-channel round trip to native WorkManager setup,
+      // not a Future that resolves immediately. Without this await, runApp()
+      // — and therefore the onboarding screen, which can call
+      // scheduleBackgroundSync() as soon as its first dialog is tapped — could
+      // render before native init actually finished, so registerPeriodicTask
+      // hit "WorkManager Package... not properly initialized" on a fast tap.
+      // Exactly this race is what an integration test caught once Live Mode
+      // started calling scheduleBackgroundSync() too.
+      await Workmanager().initialize(callbackDispatcher);
     } catch (e, st) {
       debugPrint('Workmanager init failed: $e\n$st');
     }
