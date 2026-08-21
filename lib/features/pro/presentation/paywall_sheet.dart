@@ -26,7 +26,7 @@ class PaywallSheetContent extends ConsumerStatefulWidget {
 class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
   List<Package> _packages = [];
   bool _loading = true;
-  int _selectedIndex = 1; // Default: Annual
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -38,8 +38,19 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
     try {
       final offerings = await Purchases.getOfferings();
       if (offerings.current != null) {
+        final packages = offerings.current!.availablePackages;
         setState(() {
-          _packages = offerings.current!.availablePackages;
+          _packages = packages;
+          // Prefer annual as the pre-selected tier when one exists — it's
+          // the better deal, worth defaulting to. Search by type rather than
+          // assuming position: the Offering might be monthly-only today (as
+          // it is at launch), gain an annual tier later, or list packages in
+          // whatever order they were added in the RevenueCat dashboard.
+          // Hardcoding "index 1 is annual" broke the moment there was only
+          // one package to select from.
+          final annualIndex =
+              packages.indexWhere((p) => p.packageType == PackageType.annual);
+          _selectedIndex = annualIndex >= 0 ? annualIndex : 0;
           _loading = false;
         });
       } else {
