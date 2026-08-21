@@ -12,8 +12,15 @@ plugins {
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 val hasReleaseKeystore = keystorePropertiesFile.exists()
+// TEMPORARY — diagnosing a build that keeps signing release with the debug
+// key despite key.properties existing on disk. Remove once resolved.
+println("DIAG rootProject.projectDir = ${rootProject.projectDir}")
+println("DIAG keystorePropertiesFile.absolutePath = ${keystorePropertiesFile.absolutePath}")
+println("DIAG hasReleaseKeystore = $hasReleaseKeystore")
 if (hasReleaseKeystore) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
+    println("DIAG keyAlias read = ${keystoreProperties["keyAlias"]}")
+    println("DIAG storeFile read = ${keystoreProperties["storeFile"]}")
 }
 
 // Google's shared public test AdMob App ID — safe to use in every build
