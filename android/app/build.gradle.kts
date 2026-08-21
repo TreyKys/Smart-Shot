@@ -86,6 +86,7 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            println("DIAG at assignment, release buildType signingConfig = ${signingConfig?.name}")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -99,6 +100,16 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// TEMPORARY — runs after every plugin (including the Flutter Gradle plugin)
+// has finished configuring the project, so it catches a late override even
+// if nothing in this file is the culprit. Remove alongside the other DIAG
+// lines once this is resolved.
+afterEvaluate {
+    val releaseBt = android.buildTypes.getByName("release")
+    println("DIAG afterEvaluate, release buildType signingConfig = ${releaseBt.signingConfig?.name}")
+    println("DIAG afterEvaluate, storeFile = ${releaseBt.signingConfig?.storeFile}")
 }
 
 dependencies {
