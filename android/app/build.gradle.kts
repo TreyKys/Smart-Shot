@@ -12,15 +12,8 @@ plugins {
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 val hasReleaseKeystore = keystorePropertiesFile.exists()
-// TEMPORARY — diagnosing a build that keeps signing release with the debug
-// key despite key.properties existing on disk. Remove once resolved.
-println("DIAG rootProject.projectDir = ${rootProject.projectDir}")
-println("DIAG keystorePropertiesFile.absolutePath = ${keystorePropertiesFile.absolutePath}")
-println("DIAG hasReleaseKeystore = $hasReleaseKeystore")
 if (hasReleaseKeystore) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
-    println("DIAG keyAlias read = ${keystoreProperties["keyAlias"]}")
-    println("DIAG storeFile read = ${keystoreProperties["storeFile"]}")
 }
 
 // Google's shared public test AdMob App ID — safe to use in every build
@@ -86,7 +79,6 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
-            println("DIAG at assignment, release buildType signingConfig = ${signingConfig?.name}")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -100,16 +92,6 @@ android {
 
 flutter {
     source = "../.."
-}
-
-// TEMPORARY — runs after every plugin (including the Flutter Gradle plugin)
-// has finished configuring the project, so it catches a late override even
-// if nothing in this file is the culprit. Remove alongside the other DIAG
-// lines once this is resolved.
-afterEvaluate {
-    val releaseBt = android.buildTypes.getByName("release")
-    println("DIAG afterEvaluate, release buildType signingConfig = ${releaseBt.signingConfig?.name}")
-    println("DIAG afterEvaluate, storeFile = ${releaseBt.signingConfig?.storeFile}")
 }
 
 dependencies {
