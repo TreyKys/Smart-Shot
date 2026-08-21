@@ -39,3 +39,8 @@ debug signing so local `flutter run --release` still works.
 ```
 flutter build appbundle --release --dart-define-from-file=dart_define.json
 ```
+
+For the full process — Play Console app setup, RevenueCat/Play Billing
+integration, and everything that can go wrong along the way (signing
+mismatches, Firebase Studio disk limits, keystore pitfalls) — see
+[`docs/GOOGLE_PLAY_PLAYBOOK.md`](docs/GOOGLE_PLAY_PLAYBOOK.md).
