@@ -8,50 +8,79 @@
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; line-height: 1.6; color: #1a1a1a; }
   h1 { margin-top: 0; }
   h2 { margin-top: 2em; }
+  h3 { margin-top: 1.4em; font-size: 1.05em; }
   .updated { color: #666; font-size: 0.9em; }
+  .callout { background: #f6f6f4; border-left: 3px solid #999; padding: 12px 16px; margin: 1.2em 0; }
   code { background: #f2f2f2; padding: 2px 6px; border-radius: 4px; }
+  ul { padding-left: 1.3em; }
+  li { margin-bottom: 0.4em; }
 </style>
 </head>
 <body>
 <h1>Privacy Policy for Sift</h1>
-<p class="updated">Last updated: July 26, 2026</p>
+<p class="updated">Last updated: August 22, 2026</p>
 
-<p>Sift ("the App", "we", "us") is a screenshot organization app published by NeuroDevLabs. This policy explains what data the App accesses, how it's processed, and your choices.</p>
+<p>Sift ("the App", "we", "us", "our") is a screenshot organization app published by NeuroDev Labs, Lagos, Nigeria. This policy explains, in plain terms, what data the App accesses, how and where it's processed, who else touches it, and the choices and rights you have. It applies to the Android and iOS versions of Sift.</p>
 
-<h2>1. What Sift accesses on your device</h2>
-<p>With your permission, Sift reads the photos/screenshots on your device (Android's <code>READ_MEDIA_IMAGES</code>/<code>READ_MEDIA_VIDEO</code> permissions) so it can organize and tag them. Sift does not access any other files, contacts, location, or messages.</p>
+<div class="callout">
+  <strong>The short version:</strong> your screenshots and their extracted text live in a local database on your device. The one thing that leaves your device is the content of a screenshot itself, sent to Google's Gemini AI to generate tags — because that's how the App's core feature works. We don't run our own servers that store your screenshots, we don't require an account, and we don't sell your data. Section&nbsp;2 below explains exactly what that AI step involves, because it's the part of this policy that matters most.
+</div>
 
-<h2>2. How your screenshots are processed</h2>
+<h2>1. Information We Access on Your Device</h2>
+<p>With your permission, Sift reads the photos and screenshots on your device (Android's <code>READ_MEDIA_IMAGES</code> / <code>READ_MEDIA_VIDEO</code> permissions, or the equivalent photo-library permission on iOS) so it can organize and tag them. You can also send images to Sift directly from another app's share sheet. Sift does not access your contacts, call log, location, calendar, or messages, and does not request any permission beyond photo/media access, notifications, and network access.</p>
+
+<h2>2. How Your Screenshots Are Processed — AI Tagging</h2>
+<p>This is the part of Sift that involves your content leaving your device, so we're explaining it in full rather than summarizing it away.</p>
 <ul>
-  <li><strong>On-device text recognition:</strong> Sift uses Google's ML Kit to extract text from your screenshots directly on your device. This text never leaves your device during extraction.</li>
-  <li><strong>AI tagging:</strong> To generate smart tags and categorize screenshots, Sift sends the screenshot image and/or extracted text to the Google Gemini API (Google's cloud AI service) for analysis. This is the only case where screenshot content leaves your device. Google's handling of this data is governed by the <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener">Gemini API Additional Terms of Service</a>.</li>
-  <li><strong>Local storage:</strong> Screenshot metadata, tags, and app state are stored locally on your device in a local database. We do not operate a server that stores your screenshots or their contents.</li>
-  <li><strong>Bring Your Own Key (BYOK):</strong> If you choose to supply your own Gemini API key in Settings, it is stored locally on your device only and is used to call Google's API directly; we never see it.</li>
+  <li><strong>On-device text recognition.</strong> Sift first uses Google's ML Kit to extract text from a screenshot directly on your device. This step never sends anything anywhere.</li>
+  <li><strong>AI tagging (Google Gemini API).</strong> To generate tags, a short "topic" description, and to pull out any URLs, email addresses, phone numbers, dates, or crypto wallet addresses that are actually present, Sift sends the screenshot — a compressed copy of the image and/or the text extracted from it, depending on how much text ML Kit found — to Google's Gemini API for analysis. <strong>This is the only case where a screenshot's content leaves your device</strong>, and it happens automatically as part of organizing each screenshot you import; there is currently no per-item or global switch to import a screenshot without this step. If you don't want a particular screenshot's content sent to Google, the only reliable way is not to import it into Sift, or to delete it from the App before it's processed.</li>
+  <li><strong>Screenshots can contain other people's personal information, not just yours</strong> — a text conversation, someone else's phone number or email in a message thread, a receipt with a merchant's details, a crypto address, a photo of a document. When you choose to process a screenshot in Sift, you are also choosing to send whatever it depicts to Google for analysis. Please don't import screenshots containing passwords, one-time codes, government ID numbers, or other highly sensitive material you wouldn't want processed by a third-party AI service.</li>
+  <li><strong>Google's handling</strong> of anything sent to the Gemini API is governed by Google's own <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener">Gemini API Additional Terms of Service</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>. We do not control, and are not able to guarantee, how long Google itself retains a request for abuse-monitoring or safety purposes independent of Sift.</li>
+  <li><strong>Two ways this call is made:</strong> if you supply your own Gemini API key in Settings ("bring your own key"), it's stored locally on your device only, used to call Google's API directly, and we never see it or your usage of it. Otherwise, Sift uses a shared API key that the App fetches from Firebase Remote Config — released only after Firebase App Check (via Google Play Integrity) has confirmed the request is coming from a genuine, unmodified copy of Sift. That verification exchanges a device-attestation token, not any personal or screenshot data.</li>
+  <li><strong>Local storage.</strong> The screenshot file itself, the extracted text, tags, and any other metadata are stored locally on your device in a local database (Isar). We do not operate a server that stores your screenshots, their images, or their contents.</li>
 </ul>
 
-<h2>3. Advertising</h2>
-<p>Sift shows optional rewarded ads (via Google AdMob) that let you unlock additional AI processing. AdMob may collect device and advertising identifiers to serve and measure ads, and may personalize ads based on your consent choices. If you are in the EEA, UK, or Switzerland, you'll be shown a consent form before any personalized ads are requested, in line with Google's EU User Consent Policy. You can manage ad personalization in your device's ad settings at any time.</p>
+<h2>3. Diagnostics and Crash Reporting</h2>
+<p>Sift uses Firebase Crashlytics to automatically collect crash reports and basic performance data in production builds — things like device model, OS version, app version, and the code path where a crash happened. This is standard Firebase infrastructure and may include an IP address and a Firebase-generated installation identifier, per <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Firebase's own data handling</a>. Crash reports do not include your screenshots or their extracted text.</p>
 
-<h2>4. Subscriptions and purchases</h2>
-<p>Sift Pro subscriptions are processed through Google Play Billing and managed via RevenueCat, our subscription management provider. RevenueCat receives purchase/transaction data (not your screenshots) necessary to validate and manage your subscription. See <a href="https://www.revenuecat.com/privacy" target="_blank" rel="noopener">RevenueCat's Privacy Policy</a>.</p>
+<h2>4. App Integrity Check</h2>
+<p>Sift uses Firebase App Check (backed by Google Play Integrity on Android) to confirm that requests for the shared AI key described in Section&nbsp;2 are coming from a genuine copy of the App, not a modified or repackaged one. This exchanges a device-attestation token and does not collect personal data about you.</p>
 
-<h2>5. Notifications</h2>
-<p>Sift may show local notifications (e.g. daily digest, processing complete) generated entirely on your device. No notification content is sent to or from a server.</p>
+<h2>5. Advertising</h2>
+<p>Sift shows optional rewarded ads (via Google AdMob) that let you unlock additional AI tagging for the day when you've used up the free daily allowance. AdMob may collect device and advertising identifiers to serve and measure ads, and may personalize ads based on your consent choices. If you're in the EEA, UK, or Switzerland, you'll be shown a consent form before any personalized ads are requested, in line with Google's EU User Consent Policy. You can manage ad personalization in your device's ad settings at any time, and watching a rewarded ad is always optional — it is never required to use the App's core features within the free daily allowance.</p>
 
-<h2>6. Data we do not collect</h2>
-<p>Sift does not require an account or login, does not collect your name or email address, and does not run any analytics or tracking SDK beyond what's described above.</p>
+<h2>6. Subscriptions and Purchases</h2>
+<p>Sift Pro subscriptions are billed through Google Play Billing (or Apple's App Store on iOS) and managed via RevenueCat, our subscription management provider. RevenueCat receives purchase and transaction data — not your screenshots or their contents — necessary to validate and manage your subscription entitlement. See <a href="https://www.revenuecat.com/privacy" target="_blank" rel="noopener">RevenueCat's Privacy Policy</a>.</p>
 
-<h2>7. Data retention and deletion</h2>
-<p>Your screenshots and tags remain on your device until you delete them or uninstall the App. Uninstalling the App removes its local database. To request deletion of any data processed on Google's servers, see Google's own data controls.</p>
+<h2>7. Notifications</h2>
+<p>Sift may show local notifications (for example, a processing-complete alert) generated entirely on your device using your device's own notification system. No notification content is sent to or from a server.</p>
 
-<h2>8. Children's privacy</h2>
-<p>Sift is not directed at children under 13, and we do not knowingly collect data from children.</p>
+<h2>8. Companion Apps</h2>
+<p>Sift may occasionally suggest opening one of our other apps (Pulse, Context, or Magnum Opus) when a screenshot's content looks like a good fit for one of them — for example, a calendar-worthy event. Tapping that suggestion only opens a link to that app; it does not automatically transmit the screenshot or any of its content to the other app.</p>
 
-<h2>9. Changes to this policy</h2>
-<p>We may update this policy as the App evolves. Material changes will be reflected by updating the "Last updated" date above.</p>
+<h2>9. Information We Do Not Collect</h2>
+<p>Sift does not require an account or login, does not collect your name or email address, does not access your contacts or location, and does not run any analytics or tracking beyond what's described in Sections 3–6 above.</p>
 
-<h2>10. Contact</h2>
-<p>Questions about this policy? Contact us at <a href="mailto:support@neurodevlabs.cloud">support@neurodevlabs.cloud</a>.</p>
+<h2>10. Data Retention and Deletion</h2>
+<p>Your screenshots, extracted text, and tags remain on your device until you delete them (including via the App's built-in Purge feature, which is entirely local) or uninstall the App — uninstalling removes the App's entire local database. You can revoke Sift's photo/media permission at any time in your device's system settings. Data that has already been sent to Google (Section&nbsp;2), Firebase (Section&nbsp;3–4), AdMob (Section&nbsp;5), or RevenueCat (Section&nbsp;6) is retained according to each of those providers' own policies, linked above — we don't control those retention periods and can't delete data on those providers' systems on your behalf beyond what their own tools allow.</p>
+
+<h2>11. International Data Transfers</h2>
+<p>Google, Firebase, AdMob, and RevenueCat operate infrastructure across multiple countries, which may be outside your own country or Nigeria. Where content or data is transmitted to these providers as described above, it may be processed on servers located outside the country you're using Sift in. Each provider maintains its own legal safeguards for these transfers under its respective privacy policy, linked throughout this document.</p>
+
+<h2>12. Security</h2>
+<p>All network traffic between the App and the services described above is encrypted in transit (TLS). Your local database is sandboxed to the App by your device's operating system. We recommend protecting your device with a screen lock, since your local Sift data is only as private as the device it lives on.</p>
+
+<h2>13. Children's Privacy</h2>
+<p>Sift is not directed at children under 13 (or the relevant minimum age of digital consent in your country), and we do not knowingly collect data from children. If you believe a child has used the App in a way that concerns you, contact us at the address below and we will help.</p>
+
+<h2>14. Your Rights</h2>
+<p>We operate under the Nigeria Data Protection Act 2023 (NDPA). You may request access to, correction of, or deletion of any personal data we hold about you, and you may object to or withdraw consent for processing at any time — in most cases simply by uninstalling the App, since your content lives on your device rather than on our servers. To exercise any of these rights, or to lodge a complaint, email us at the address below; Nigerian residents may also contact the <a href="https://ndpc.gov.ng" target="_blank" rel="noopener">Nigeria Data Protection Commission (NDPC)</a>. If you are located in the European Economic Area, the UK, or Switzerland, you have equivalent rights under the GDPR/UK GDPR with respect to our own processing, in addition to whatever rights you can exercise directly with Google, Firebase, AdMob, or RevenueCat as independent data controllers for their own processing. If you are a California resident, you have equivalent rights under the CCPA; Sift does not sell personal information.</p>
+
+<h2>15. Changes to This Policy</h2>
+<p>We may update this policy as the App evolves. Material changes will be reflected by updating the "Last updated" date above, and where a change is significant, we'll also make reasonable efforts to flag it inside the App.</p>
+
+<h2>16. Contact</h2>
+<p>Questions about this policy, or a request relating to your data? Contact us at <a href="mailto:support@neurodevlabs.cloud">support@neurodevlabs.cloud</a>.<br>NeuroDev Labs — Lagos, Nigeria.</p>
 
 </body>
 </html>

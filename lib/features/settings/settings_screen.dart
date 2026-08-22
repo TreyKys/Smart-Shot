@@ -5,8 +5,8 @@ import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
 
-// TODO: host legal/privacy-policy.html and legal/terms.html at these URLs
-// (or update to wherever they end up living) before submitting to Play Console.
+// Mirrors legal/privacy-policy.html and legal/terms.html in this repo — kept
+// in sync manually, since neurodevlabs.cloud is built from a separate repo.
 const String kPrivacyPolicyUrl = 'https://neurodevlabs.cloud/sift/privacy-policy.html';
 const String kTermsOfServiceUrl = 'https://neurodevlabs.cloud/sift/terms.html';
 
