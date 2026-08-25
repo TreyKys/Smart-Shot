@@ -1,5 +1,6 @@
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
+import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
 /// Serves the shared Gemini key, fetched from Firebase Remote Config rather
 /// than compiled into the app.
@@ -79,10 +80,20 @@ class SharedKeyService {
         debugPrint(
             'SharedKeyService: Remote Config returned no "$kGeminiKeyParam" — '
             'shared AI is off (BYOK still works).');
+        DiagnosticLog.warn(
+            'SharedKeyService: Remote Config returned no shared key. Shared '
+            'AI is off — either the parameter isn\'t published, or App Check '
+            'rejected this build. Add your own key in Settings (BYOK) to '
+            'keep AI tagging working.');
+      } else {
+        DiagnosticLog.info(
+            'SharedKeyService: shared key fetched from Remote Config '
+            '(${_cached.length} chars) — shared AI is on.');
       }
-    } catch (e, st) {
+    } catch (e) {
       // Offline launches land here, which must not block startup.
-      debugPrint('SharedKeyService: Remote Config fetch failed: $e\n$st');
+      debugPrint('SharedKeyService: Remote Config fetch failed: $e');
+      DiagnosticLog.error('SharedKeyService: Remote Config fetch failed: $e');
     }
 
     final error = configError(key: _cached, mustExist: requireSharedKey);

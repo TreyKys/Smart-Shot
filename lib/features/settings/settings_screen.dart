@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
+import 'package:sift/features/settings/diagnostic_log_screen.dart';
 
 // Mirrors legal/privacy-policy.html and legal/terms.html in this repo — kept
 // in sync manually, since neurodevlabs.cloud is built from a separate repo.
@@ -149,6 +150,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          const Divider(),
+
+          // DIAGNOSTICS
+          ListTile(
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text('Diagnostics Log'),
+            subtitle: const Text(
+                'See whether AI tagging is actually succeeding on this device.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DiagnosticLogScreen()),
+            ),
+          ),
           const Divider(),
 
           // LEGAL

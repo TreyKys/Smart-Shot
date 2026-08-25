@@ -6,6 +6,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/config/shared_key_service.dart';
+import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart'
     show discoverNewScreenshots;
 import 'package:sift/features/gallery/domain/screenshot.dart';
@@ -53,6 +54,10 @@ Future<bool> _processDeepScanBatch() async {
       await SharedKeyService.initialize();
     } catch (e) {
       debugPrint('Background isolate Firebase/App Check init failed: $e');
+      DiagnosticLog.error(
+          'Background scan: Firebase/App Check init failed ($e) — this '
+          'batch will fall back to local-only tags unless a BYOK key is '
+          'set.');
     }
 
     final dir = await getApplicationDocumentsDirectory();
@@ -93,6 +98,9 @@ Future<bool> _processDeepScanBatch() async {
     }
 
     debugPrint("Processing batch of ${screenshots.length} screenshots...");
+    DiagnosticLog.info(
+        'Background scan: processing batch of ${screenshots.length} '
+        'screenshot(s).');
 
     final ocrService = OcrService();
     final llmService = LLMService();
@@ -101,6 +109,9 @@ Future<bool> _processDeepScanBatch() async {
     // scans would quietly spend the shared quota instead of their own key.
     final prefs = await SharedPreferences.getInstance();
     final byokKey = prefs.getString('byok_key') ?? '';
+
+    var aiTaggedCount = 0;
+    var localOnlyCount = 0;
 
     for (final screenshot in screenshots) {
       final file = File(screenshot.filePath);
@@ -129,6 +140,11 @@ Future<bool> _processDeepScanBatch() async {
           );
         } catch (llmErr) {
           debugPrint("LLM error for ${screenshot.id}: $llmErr — using local tags only");
+        }
+        if (llmResult.isNotEmpty) {
+          aiTaggedCount++;
+        } else {
+          localOnlyCount++;
         }
 
         // Phase 3: merge AI tags (closed vocabulary) with local engine
@@ -163,9 +179,13 @@ Future<bool> _processDeepScanBatch() async {
 
     ocrService.dispose();
     await isar.close();
+    DiagnosticLog.info(
+        'Background scan: done — $aiTaggedCount AI-tagged, '
+        '$localOnlyCount fell back to local-only tags.');
     return true;
   } catch (e) {
     debugPrint("Background task failed: $e");
+    DiagnosticLog.error('Background scan: task failed entirely — $e');
     return false;
   }
 }

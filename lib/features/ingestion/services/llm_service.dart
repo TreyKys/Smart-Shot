@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:sift/core/config/shared_key_service.dart';
+import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
@@ -173,6 +174,9 @@ class LLMService {
     final raw = decoded['results'];
     if (raw is! List) {
       debugPrint('LLM batch: no results array — falling back to singles.');
+      DiagnosticLog.warn(
+          'LLMService: batch call of ${items.length} screenshot(s) returned '
+          'no results array — retrying each one individually.');
       return {};
     }
 
@@ -184,6 +188,15 @@ class LLMService {
       if (id is int) out[id] = map;
     }
     debugPrint('LLM batch: ${out.length}/${items.length} returned.');
+    if (out.length < items.length) {
+      DiagnosticLog.warn(
+          'LLMService: batch call returned ${out.length}/${items.length} — '
+          'the rest will be retried individually.');
+    } else {
+      DiagnosticLog.info(
+          'LLMService: batch call ok — ${out.length}/${items.length} '
+          'screenshots classified.');
+    }
     return out;
   }
 
@@ -206,6 +219,9 @@ class LLMService {
     final sharedKey = SharedKeyService.geminiApiKey;
     if (sharedKey.isEmpty) {
       debugPrint('LLMService: no BYOK key and no shared key — skipping.');
+      DiagnosticLog.warn(
+          'LLMService: skipped an AI call — no shared key available at the '
+          'transport layer.');
       return Future.value({});
     }
     return _generateDirect(contents, generationConfig, sharedKey);
@@ -222,6 +238,10 @@ class LLMService {
       debugPrint(
           'LLMService: no BYOK key and Remote Config supplied no shared key '
           '— skipping.');
+      DiagnosticLog.warn(
+          'LLMService: skipped an AI call — no BYOK key set and no shared '
+          'key available. This screenshot will fall back to local '
+          'keyword-only tagging.');
       return false;
     }
     return true;
@@ -242,9 +262,21 @@ class LLMService {
         generationConfig: generationConfig,
       );
       final response = await model.generateContent(contents);
-      return _decodeObject(response.text);
-    } catch (e, st) {
-      debugPrint('LLMService: direct call failed: $e\n$st');
+      final result = _decodeObject(response.text);
+      if (result.isNotEmpty) {
+        DiagnosticLog.info(
+            'LLMService: Gemini call ok — ${result.keys.length} field(s) '
+            'returned.');
+      }
+      return result;
+    } catch (e) {
+      debugPrint('LLMService: direct call failed: $e');
+      // Truncated: API errors can carry the request payload back in the
+      // message, and this is copy-pasted straight into chat by a user.
+      final summary = e.toString();
+      DiagnosticLog.error(
+          'LLMService: Gemini call failed — '
+          '${summary.length > 300 ? '${summary.substring(0, 300)}…' : summary}');
       return {};
     }
   }
@@ -311,13 +343,22 @@ class LLMService {
   /// The schema makes well-formed JSON the norm, but a truncated or
   /// safety-blocked response still has to fail softly rather than throw.
   Map<String, dynamic> _decodeObject(String? responseText) {
-    if (responseText == null || responseText.trim().isEmpty) return {};
+    if (responseText == null || responseText.trim().isEmpty) {
+      DiagnosticLog.warn(
+          'LLMService: Gemini returned an empty response body (likely a '
+          'safety block or truncation) — this screenshot got no AI tags.');
+      return {};
+    }
     try {
       final decoded = jsonDecode(responseText.trim());
       if (decoded is Map<String, dynamic>) return decoded;
       debugPrint('LLMService: response was not an object: $decoded');
+      DiagnosticLog.warn(
+          'LLMService: Gemini response decoded but was not the expected '
+          'JSON object shape.');
     } catch (e) {
       debugPrint('LLMService: JSON parse error: $e\nRaw: $responseText');
+      DiagnosticLog.error('LLMService: could not parse Gemini response: $e');
     }
     return {};
   }
