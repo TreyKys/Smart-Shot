@@ -79,7 +79,28 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
             t.toLowerCase().contains('todo') ||
             t.toLowerCase().contains('task')) ??
         false;
-    final hasDates = (_shot.dates?.isNotEmpty ?? false) || isTodo;
+    // The model extracts any date-shaped text it sees, with no signal for
+    // whether it's an actual event vs. incidental (an album release date, a
+    // publish date, a "since 2020" on a profile). Rather than trust every
+    // extracted date, suppress the button for tags where a date is almost
+    // never something worth putting on a calendar. Not a complete fix — a
+    // Finance chart's axis label or a News article's dateline can still slip
+    // through — but it kills the most common false-positive categories
+    // without touching the AI schema/prompt, which isn't something safe to
+    // tune blind without live-testing against real model output.
+    const neverCalendarTags = {
+      '#Entertainment',
+      '#Memes',
+      '#Gaming',
+      '#SocialMedia',
+      '#TradingCharts',
+      '#Junk',
+    };
+    final looksLikeCalendarNoise =
+        _shot.tags?.any(neverCalendarTags.contains) ?? false;
+    final hasDates =
+        ((_shot.dates?.isNotEmpty ?? false) && !looksLikeCalendarNoise) ||
+            isTodo;
 
     return Scaffold(
       backgroundColor: SiftColors.background,

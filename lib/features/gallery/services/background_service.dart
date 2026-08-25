@@ -204,7 +204,15 @@ List<SuggestedAction> _buildActions(Map<String, dynamic> llmResult) {
     }));
   }
   final appId = llmResult['suggested_app'];
-  if (appId is String && appId.isNotEmpty && appId != 'null') {
+  // The schema explicitly allows the model to return the literal string
+  // "none" ("Best companion app, or 'none'") — that's the documented way it
+  // says "nothing to suggest here." Only excluding 'null' let 'none' fall
+  // through, land in `names[appId] ?? appId`, and render a button literally
+  // labeled "Try none."
+  if (appId is String &&
+      appId.isNotEmpty &&
+      appId != 'null' &&
+      appId != 'none') {
     const names = {
       'pulse': 'Pulse',
       'context': 'Context Dictionary',
