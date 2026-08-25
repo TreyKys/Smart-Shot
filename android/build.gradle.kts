@@ -25,11 +25,24 @@ tasks.register<Delete>("clean") {
 
 subprojects {
     // 1. The Isar Namespace + compileSdk Fix
+    //
+    // isar_flutter_libs' own AAR pulls in an AndroidX resource
+    // (?android:attr/lStar, added in API 31) that its own plugin manifest
+    // doesn't declare a high-enough compileSdk to resolve. A hardcoded
+    // literal here (e.g. 35) can itself fail — resource linking for
+    // isar_flutter_libs breaks with "resource android:attr/lStar not
+    // found" whenever that literal names an SDK platform this machine's
+    // Android SDK manager doesn't actually have installed. Deriving it
+    // from flutter.compileSdkVersion instead pins it to whatever platform
+    // the :app module itself already builds against successfully — same
+    // platform, so if :app resolves, this does too, on any machine.
     if (name == "isar_flutter_libs") {
         pluginManager.withPlugin("com.android.library") {
             extensions.configure<com.android.build.api.dsl.LibraryExtension> {
                 namespace = "dev.isar.isar_flutter_libs"
-                compileSdk = 35
+                compileSdk = project(":app").extensions
+                    .getByType(com.android.build.api.dsl.ApplicationExtension::class.java)
+                    .compileSdk
             }
         }
     }
