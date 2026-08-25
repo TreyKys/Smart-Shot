@@ -27,17 +27,22 @@ subprojects {
     // 1. The Isar Namespace + compileSdk Fix
     //
     // isar_flutter_libs' own AAR pulls in an AndroidX resource
-    // (?android:attr/lStar, added in API 31) that its own plugin manifest
-    // doesn't declare a high-enough compileSdk to resolve. A hardcoded
-    // literal here (e.g. 35) can itself fail — resource linking for
-    // isar_flutter_libs breaks with "resource android:attr/lStar not
-    // found" whenever that literal names an SDK platform this machine's
-    // Android SDK manager doesn't actually have installed. Deriving it
-    // from flutter.compileSdkVersion instead pins it to whatever platform
-    // the :app module itself already builds against successfully — same
-    // platform, so if :app resolves, this does too, on any machine.
+    // (?android:attr/lStar, added in API 31) that needs compileSdk >= 31 to
+    // resolve. isar_flutter_libs' own build.gradle sets its own (lower)
+    // compileSdkVersion as literally the next line after `apply plugin:
+    // "com.android.library"` runs — and `pluginManager.withPlugin(...)`
+    // fires its callback AT THE MOMENT that plugin is applied, i.e. before
+    // isar_flutter_libs' own build.gradle has executed its own `android {
+    // compileSdkVersion ... }` block. So a compileSdk assignment inside
+    // withPlugin() here runs FIRST and then gets silently clobbered by
+    // isar's own lower value running SECOND — which is exactly why bumping
+    // the literal previously had zero effect: neither value was ever the
+    // one actually in force. afterEvaluate runs once isar_flutter_libs'
+    // entire build.gradle — plugin application AND its own android {}
+    // block — has already executed, so this override applies last and
+    // actually sticks.
     if (name == "isar_flutter_libs") {
-        pluginManager.withPlugin("com.android.library") {
+        afterEvaluate {
             extensions.configure<com.android.build.api.dsl.LibraryExtension> {
                 namespace = "dev.isar.isar_flutter_libs"
                 compileSdk = project(":app").extensions
