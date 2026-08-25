@@ -4,12 +4,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum DiagnosticLevel { info, warn, error }
+enum AiLogLevel { info, warn, error }
 
 @immutable
 class DiagnosticEntry {
   final DateTime time;
-  final DiagnosticLevel level;
+  final AiLogLevel level;
   final String message;
   const DiagnosticEntry(this.time, this.level, this.message);
 
@@ -22,9 +22,9 @@ class DiagnosticEntry {
   factory DiagnosticEntry.fromJson(Map<String, dynamic> json) {
     return DiagnosticEntry(
       DateTime.tryParse(json['t'] as String? ?? '') ?? DateTime.now(),
-      DiagnosticLevel.values.firstWhere(
+      AiLogLevel.values.firstWhere(
         (l) => l.name == json['l'],
-        orElse: () => DiagnosticLevel.info,
+        orElse: () => AiLogLevel.info,
       ),
       json['m'] as String? ?? '',
     );
@@ -32,11 +32,11 @@ class DiagnosticEntry {
 
   String get _levelTag {
     switch (level) {
-      case DiagnosticLevel.info:
+      case AiLogLevel.info:
         return 'INFO';
-      case DiagnosticLevel.warn:
+      case AiLogLevel.warn:
         return 'WARN';
-      case DiagnosticLevel.error:
+      case AiLogLevel.error:
         return 'ERROR';
     }
   }
@@ -70,11 +70,11 @@ class DiagnosticLog {
   /// events matter far more than old ones for "what just happened".
   static const int _maxEntries = 300;
 
-  static void info(String message) => unawaited(_add(DiagnosticLevel.info, message));
-  static void warn(String message) => unawaited(_add(DiagnosticLevel.warn, message));
-  static void error(String message) => unawaited(_add(DiagnosticLevel.error, message));
+  static void info(String message) => unawaited(_add(AiLogLevel.info, message));
+  static void warn(String message) => unawaited(_add(AiLogLevel.warn, message));
+  static void error(String message) => unawaited(_add(AiLogLevel.error, message));
 
-  static Future<void> _add(DiagnosticLevel level, String message) async {
+  static Future<void> _add(AiLogLevel level, String message) async {
     final entry = DiagnosticEntry(DateTime.now(), level, message);
     // Still useful when a dev environment *does* have a console attached
     // (emulator, `flutter run`).

@@ -106,13 +106,13 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                     final entry = entries[entries.length - 1 - i];
                     final Color color;
                     switch (entry.level) {
-                      case DiagnosticLevel.error:
+                      case AiLogLevel.error:
                         color = Colors.red;
                         break;
-                      case DiagnosticLevel.warn:
+                      case AiLogLevel.warn:
                         color = Colors.orange;
                         break;
-                      case DiagnosticLevel.info:
+                      case AiLogLevel.info:
                         color = Colors.green;
                         break;
                     }
