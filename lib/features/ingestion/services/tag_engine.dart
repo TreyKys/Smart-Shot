@@ -15,7 +15,14 @@ class TagEngine {
       'paypal', 'stripe', 'venmo', 'cashapp', 'zelle', 'visa', 'mastercard',
       'amex', 'credit card', 'debit card', 'statement', 'interest rate',
       'loan', 'mortgage', 'salary', 'paycheck', 'deposit', 'withdrawal',
-      'iban', 'swift', 'routing number', 'account number', r'$', '£', '€', '¥',
+      'iban', 'swift', 'routing number', 'account number',
+      // Deliberately no bare currency symbols ($, £, €, ¥) here — under
+      // suggestFromOcr's plain substring match below, a single stray glyph
+      // anywhere in noisy OCR text is enough to tag an unrelated screenshot
+      // as Finance on its own (confirmed: a Spotify screenshot picked up
+      // #Finance from nothing but a lone '$'). Every other keyword here is a
+      // real word specific enough that an incidental match is rare; a bare
+      // symbol isn't.
     ],
     '#Receipts': [
       'receipt', 'order #', 'order number', 'subtotal', 'grand total', 'qty',
