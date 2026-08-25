@@ -30,11 +30,16 @@ class DiagnosticEntry {
     );
   }
 
-  String get _levelTag => switch (level) {
-        DiagnosticLevel.info => 'INFO',
-        DiagnosticLevel.warn => 'WARN',
-        DiagnosticLevel.error => 'ERROR',
-      };
+  String get _levelTag {
+    switch (level) {
+      case DiagnosticLevel.info:
+        return 'INFO';
+      case DiagnosticLevel.warn:
+        return 'WARN';
+      case DiagnosticLevel.error:
+        return 'ERROR';
+    }
+  }
 
   @override
   String toString() {

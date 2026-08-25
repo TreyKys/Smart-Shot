@@ -104,11 +104,18 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                   itemCount: entries.length,
                   itemBuilder: (context, i) {
                     final entry = entries[entries.length - 1 - i];
-                    final color = switch (entry.level) {
-                      DiagnosticLevel.error => Colors.red,
-                      DiagnosticLevel.warn => Colors.orange,
-                      DiagnosticLevel.info => Colors.green,
-                    };
+                    final Color color;
+                    switch (entry.level) {
+                      case DiagnosticLevel.error:
+                        color = Colors.red;
+                        break;
+                      case DiagnosticLevel.warn:
+                        color = Colors.orange;
+                        break;
+                      case DiagnosticLevel.info:
+                        color = Colors.green;
+                        break;
+                    }
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
