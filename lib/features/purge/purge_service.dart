@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sift/core/database/isar_service.dart';
+import 'package:sift/features/gallery/data/gallery_repository.dart'
+    show forgetDedupHash;
 import 'package:sift/features/gallery/domain/screenshot.dart';
 
 part 'purge_service.g.dart';
@@ -86,6 +88,10 @@ class PurgeService extends _$PurgeService {
         if (file.existsSync()) {
           await file.delete();
         }
+        // Keep the perceptual-hash dedup index in sync with what's actually
+        // still on disk — otherwise a future legitimate screenshot that looks
+        // similar to this purged one gets silently skipped as a "duplicate".
+        await forgetDedupHash(s.filePath);
       } catch (e) {
         debugPrint('Failed to delete file ${s.filePath}: $e');
       }

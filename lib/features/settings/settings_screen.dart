@@ -36,6 +36,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final isPro = ref.watch(proServiceProvider);
     final energyState = ref.watch(economyServiceProvider);
+    // BYOK bypasses the energy system entirely (see
+    // EconomyService._isUnlimited) — showing "Remaining: N" and a "Refill"
+    // button off the stale `ai_energy` pref would misrepresent a BYOK user's
+    // actual (unlimited) quota. Reads the persisted key, not the draft text
+    // field, so this only flips once Save has actually taken effect.
+    final savedByokKey = ref.watch(economyServiceProvider.notifier).getByokKey();
+    final hasByok = (savedByokKey ?? '').isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings & Pro')),
@@ -72,7 +79,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 16),
 
           // ENERGY STATE
-          if (!isPro) ...[
+          if (!isPro && !hasByok) ...[
             ListTile(
               leading: const Icon(Icons.bolt),
               title: const Text('AI Energy'),

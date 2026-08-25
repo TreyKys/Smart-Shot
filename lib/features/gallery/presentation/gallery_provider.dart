@@ -20,28 +20,6 @@ Stream<List<Screenshot>> galleryStream(GalleryStreamRef ref) async* {
   yield* repository.watchScreenshots(tag: tag);
 }
 
-@riverpod
-Stream<List<String>> uniqueTags(UniqueTagsRef ref) async* {
-  final repository = ref.watch(galleryRepositoryProvider);
-  final stream = repository.watchScreenshots();
-
-  await for (final screenshots in stream) {
-      final Set<String> tags = {};
-      for (var s in screenshots) {
-        if (s.tags != null) {
-           for (var t in s.tags!) {
-             tags.add(t);
-           }
-        }
-      }
-      final sorted = tags.toList()..sort();
-      yield sorted;
-  }
-}
-
-/// Persisted set of pinned screenshot IDs. Populated from SharedPreferences on app start.
-final pinnedIdsProvider = StateProvider<Set<int>>((ref) => {});
-
 /// Stream of (tag, count) pairs sorted by count descending, for the drawer.
 final tagCountsProvider = StreamProvider<List<({String tag, int count})>>((ref) {
   final repository = ref.watch(galleryRepositoryProvider);
@@ -57,4 +35,27 @@ final tagCountsProvider = StreamProvider<List<({String tag, int count})>>((ref) 
         .toList()
       ..sort((a, b) => b.count.compareTo(a.count)));
   });
+});
+
+/// Unique tag names, derived from [tagCountsProvider] rather than watching
+/// the gallery a second time — a separate `watchScreenshots()` subscription
+/// here would duplicate the same Isar watch query tagCountsProvider already
+/// maintains.
+@riverpod
+Stream<List<String>> uniqueTags(UniqueTagsRef ref) {
+  return ref.watch(tagCountsProvider.stream).map(
+        (counts) => counts.map((e) => e.tag).toList()..sort(),
+      );
+}
+
+/// Persisted set of pinned screenshot IDs. Populated from SharedPreferences on app start.
+final pinnedIdsProvider = StateProvider<Set<int>>((ref) => {});
+
+/// Total number of screenshots in the library, independent of any tag
+/// filter — unlike [galleryStreamProvider], which follows
+/// [selectedTagProvider] and therefore reflects the filtered count once a
+/// tag is selected.
+final totalScreenshotCountProvider = StreamProvider<int>((ref) {
+  final repository = ref.watch(galleryRepositoryProvider);
+  return repository.watchScreenshots().map((list) => list.length);
 });

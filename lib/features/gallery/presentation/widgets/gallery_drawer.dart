@@ -12,8 +12,8 @@ class GalleryDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tagsAsync = ref.watch(tagCountsProvider);
     final selectedTag = ref.watch(selectedTagProvider);
-    final totalScreenshots = ref.watch(galleryStreamProvider).maybeWhen(
-          data: (list) => list.length,
+    final totalScreenshots = ref.watch(totalScreenshotCountProvider).maybeWhen(
+          data: (count) => count,
           orElse: () => null,
         );
 
@@ -172,8 +172,7 @@ class GalleryDrawer extends ConsumerWidget {
       return CupertinoIcons.chevron_left_slash_chevron_right;
     if (lower.contains('social') ||
         lower.contains('instagram') ||
-        lower.contains('twitter') ||
-        lower.contains('x')) return CupertinoIcons.person_2;
+        lower.contains('twitter')) return CupertinoIcons.person_2;
     if (lower.contains('meme') || lower.contains('funny'))
       return CupertinoIcons.smiley;
     if (lower.contains('chem') ||

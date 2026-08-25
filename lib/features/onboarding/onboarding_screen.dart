@@ -78,8 +78,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     return _PageContent(page: _pages[index], index: index);
                   }
                   return _ChoosePathPage(onLive: _activateLiveMode, onDeep: () {
-                    showPaywallSheet(context,
-                        triggerFeature: 'Deep Mode (Full Backlog Scan)');
+                    showPaywallSheet(
+                      context,
+                      triggerFeature: 'Deep Mode (Full Backlog Scan)',
+                      // Without this, a successful purchase just closes the
+                      // sheet and leaves the user back on this page —
+                      // onboarding_complete never gets set, so relaunching
+                      // the app sends them through onboarding again despite
+                      // having just paid for Pro.
+                      onPurchased: _activateDeepMode,
+                    );
                   });
                 },
               ),
@@ -128,6 +136,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await prefs.setString('smart_indexing_mode', 'live');
     await prefs.setInt(
         'live_mode_timestamp', DateTime.now().millisecondsSinceEpoch);
+    await prefs.setBool('onboarding_complete', true);
+    if (!mounted) return;
+    _navigateToGallery();
+  }
+
+  Future<void> _activateDeepMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('smart_indexing_mode', 'deep');
     await prefs.setBool('onboarding_complete', true);
     if (!mounted) return;
     _navigateToGallery();

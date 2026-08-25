@@ -101,7 +101,13 @@ class LLMService {
             nullable: true,
           ),
         },
-        requiredProperties: ['tags'],
+        // 'id' must be required whenever it's present in the schema — batch
+        // callers correlate each result back to a screenshot solely by this
+        // field (see analyzeTextBatch), and an optional 'id' lets Gemini omit
+        // it, which silently discards an otherwise-valid classification and
+        // forces a wasted per-image retry for something that was likely
+        // already answered correctly.
+        requiredProperties: withId ? ['id', 'tags'] : ['tags'],
       );
 
   // ── Single-screenshot analysis ──────────────────────────────────────────────

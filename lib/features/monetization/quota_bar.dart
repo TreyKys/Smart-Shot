@@ -14,6 +14,14 @@ class QuotaBar extends ConsumerWidget {
     final isPro = ref.watch(proServiceProvider);
     if (isPro) return const SizedBox.shrink();
 
+    // BYOK users bypass the energy system entirely (their key, their cost —
+    // see EconomyService._isUnlimited), but `ai_energy` in prefs is whatever
+    // it happened to be before they added a key. Without this check, a BYOK
+    // user who used up their free quota first still sees "depleted" here even
+    // though every subsequent AI call actually goes through fine.
+    final byokKey = ref.watch(economyServiceProvider.notifier).getByokKey();
+    if (byokKey != null && byokKey.isNotEmpty) return const SizedBox.shrink();
+
     final energyAsync = ref.watch(economyServiceProvider);
 
     return energyAsync.when(

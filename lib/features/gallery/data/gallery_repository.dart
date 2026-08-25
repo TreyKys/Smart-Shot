@@ -128,6 +128,15 @@ Future<void> _ingestAssets(
   }
 }
 
+/// Drops a deleted screenshot's perceptual-hash entry from the dedup index.
+///
+/// Free-standing (like the discovery helpers above) so callers outside this
+/// file — [PurgeService] included — can keep the dedup index consistent with
+/// what's actually still on disk. Without this, a purged file's hash lingers
+/// forever, and a future legitimate screenshot that happens to look similar
+/// gets silently skipped as a "duplicate" of a file that no longer exists.
+Future<void> forgetDedupHash(String filePath) => _DedupIndex.forget(filePath);
+
 /// Background-isolate counterpart to [GalleryRepository.syncGallery] — finds
 /// screenshots the gallery hasn't seen yet and inserts them unprocessed, so
 /// the periodic deep-scan task in background_service.dart has something to
@@ -519,14 +528,16 @@ class GalleryRepository {
       final localTags = TagEngine.suggestFromOcr(ocr.text);
       final isJunk = TagEngine.isLikelyJunk(ocr.text, File(shot.filePath));
 
-      final List<String> finalTags;
-      if (isJunk) {
-        final others =
-            TagEngine.merge(aiTags, const []).where((t) => t != '#Junk');
-        finalTags = ['#Junk', ...others];
-      } else {
-        finalTags = TagEngine.merge(aiTags, localTags);
-      }
+      // isLikelyJunk is an OCR-length/file-size heuristic that knows nothing
+      // about what the model actually saw — routing sends an image via
+      // AnalysisRoute.vision precisely when OCR found little text, so this
+      // heuristic fires constantly on legitimate vision-routed screenshots
+      // (charts, photos, UI screens). Only fall back to #Junk when neither
+      // the AI nor the local engine found anything to tag it with; otherwise
+      // a confident classification must not be clobbered by a blank-OCR guess.
+      final finalTags = (isJunk && aiTags.isEmpty && localTags.isEmpty)
+          ? const ['#Junk']
+          : TagEngine.merge(aiTags, localTags);
 
       shot.ocrText = ocr.text;
       shot.tags = finalTags.isEmpty ? null : finalTags;
@@ -641,7 +652,14 @@ class GalleryRepository {
       }));
     }
     final appId = llmResult['suggested_app'];
-    if (appId is String && appId.isNotEmpty && appId != 'null') {
+    // The schema explicitly allows the model to return the literal string
+    // "none" as the documented way of saying "nothing to suggest here" (see
+    // llm_service.dart's suggested_app enum). Only excluding 'null' let
+    // 'none' fall through and render a button literally labeled "Try none."
+    if (appId is String &&
+        appId.isNotEmpty &&
+        appId != 'null' &&
+        appId != 'none') {
       actions.add(SuggestedAction()
         ..label = _appName(appId)
         ..payload = _appUrl(appId)

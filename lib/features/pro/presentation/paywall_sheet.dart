@@ -6,18 +6,33 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/pro/pro_service.dart';
 
-void showPaywallSheet(BuildContext context, {String? triggerFeature}) {
+void showPaywallSheet(
+  BuildContext context, {
+  String? triggerFeature,
+  VoidCallback? onPurchased,
+}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => PaywallSheetContent(triggerFeature: triggerFeature),
+    builder: (_) => PaywallSheetContent(
+      triggerFeature: triggerFeature,
+      onPurchased: onPurchased,
+    ),
   );
 }
 
 class PaywallSheetContent extends ConsumerStatefulWidget {
   final String? triggerFeature;
-  const PaywallSheetContent({super.key, this.triggerFeature});
+
+  /// Called after a purchase actually completes (Pro entitlement active) and
+  /// the sheet has popped itself. Lets a caller resume a flow the purchase
+  /// was blocking — e.g. onboarding, which has nothing that otherwise learns
+  /// the purchase succeeded and would leave the user stranded on the sheet's
+  /// former page.
+  final VoidCallback? onPurchased;
+
+  const PaywallSheetContent({super.key, this.triggerFeature, this.onPurchased});
 
   @override
   ConsumerState<PaywallSheetContent> createState() => _PaywallSheetContentState();
@@ -317,6 +332,12 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
     try {
       await ref.read(proServiceProvider.notifier).purchasePackage(pkg);
       if (mounted) Navigator.pop(context);
+      // Only fire the callback once Pro is actually active — purchasePackage
+      // swallows its own errors (state is left unchanged on failure), so a
+      // cancelled or failed purchase must not be treated as a completion.
+      if (ref.read(proServiceProvider)) {
+        widget.onPurchased?.call();
+      }
     } catch (e) {
       debugPrint('Purchase error: $e');
     }

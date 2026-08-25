@@ -32,8 +32,12 @@ class ProService extends _$ProService {
     }
 
     if (configuration != null) {
-      await Purchases.configure(configuration);
-      _checkSubscriptionStatus();
+      try {
+        await Purchases.configure(configuration);
+        _checkSubscriptionStatus();
+      } catch (e) {
+        debugPrint('RevenueCat configure failed: $e');
+      }
     } else {
       debugPrint(
           'RevenueCat API key not supplied via --dart-define; purchases disabled.');
