@@ -46,7 +46,22 @@ const int _kMaxIngestCount = 500;
 /// background sync runs, the foreground app has already requested and been
 /// granted (or denied) access at least once; this only re-checks that grant.
 Future<AssetPathEntity?> _openAllPhotosAlbum() async {
-  final PermissionState ps = await PhotoManager.requestPermissionExtend();
+  // Scoped to images only, matching both AndroidManifest.xml (which declares
+  // only READ_MEDIA_IMAGES — Sift never reads video, see the manifest's
+  // comment) and the RequestType.image query below. An unscoped call here
+  // defaults to requesting *both* image and video access, which on Android
+  // 13+ makes PhotoManager check for a READ_MEDIA_VIDEO grant that the
+  // manifest no longer declares at all — a check that can never succeed, so
+  // PhotoManager reports the whole request denied even when READ_MEDIA_IMAGES
+  // (all this app actually needs) is genuinely granted. Confirmed via the
+  // diagnostics log: PermissionState.denied on a device where Android
+  // Settings showed photo access as granted.
+  final PermissionState ps = await PhotoManager.requestPermissionExtend(
+    requestOption: const PermissionRequestOption(
+      androidPermission:
+          AndroidPermission(type: RequestType.image, mediaLocation: false),
+    ),
+  );
   debugPrint('PhotoManager: $ps');
   if (!ps.isAuth) {
     debugPrint('Permission denied');
