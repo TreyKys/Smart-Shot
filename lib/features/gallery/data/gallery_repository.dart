@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/database/isar_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
+import 'package:sift/features/collections/collections_service.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
@@ -283,8 +284,12 @@ Future<void> discoverNewScreenshots(Isar isar) async {
 const int _kMaxPerRun = 300;
 
 /// Concurrent in-flight Gemini calls. These are network-bound, so a handful in
-/// parallel is a near-linear speedup; the cap keeps memory and rate limits sane.
-const int _kVisionConcurrency = 4;
+/// parallel is a near-linear speedup; the cap keeps memory and rate limits
+/// sane. Lowered from 4 — the shared key's per-minute quota was observed
+/// getting exhausted mid-batch on a real device (confirmed via the
+/// diagnostics log: several concurrent 429s in one run), and LLMService's own
+/// retry-with-backoff can only do so much against a burst this wide.
+const int _kVisionConcurrency = 2;
 
 class GalleryRepository {
   final GalleryRepositoryRef _ref;
@@ -412,6 +417,17 @@ class GalleryRepository {
         debugPrint('deleteScreenshot: file delete failed — $e');
       }
     }
+    // Otherwise a deleted screenshot's id lingers in whatever collections it
+    // was filed into — same class of bug forgetDedupHash() exists to avoid.
+    await _ref.read(collectionsServiceProvider.notifier).forgetScreenshot(id);
+  }
+
+  /// All screenshots, unfiltered — used by the Gallery Assistant to run its
+  /// own local matching against tags/topic/dates rather than duplicating an
+  /// Isar query for every kind of request it might need to handle.
+  Future<List<Screenshot>> allScreenshots() async {
+    final isar = await _ref.read(isarProvider.future);
+    return isar.screenshots.where().sortByTimestampDesc().findAll();
   }
 
   /// Overwrites the tags list for a given screenshot.

@@ -255,30 +255,63 @@ class LLMService {
     GenerationConfig generationConfig,
     String apiKey,
   ) async {
-    try {
-      final model = GenerativeModel(
-        model: _kGeminiModel,
-        apiKey: apiKey,
-        generationConfig: generationConfig,
-      );
-      final response = await model.generateContent(contents);
-      final result = _decodeObject(response.text);
-      if (result.isNotEmpty) {
-        DiagnosticLog.info(
-            'LLMService: Gemini call ok — ${result.keys.length} field(s) '
-            'returned.');
+    // A big batch (e.g. a first sync after enabling Live Mode, landing dozens
+    // of screenshots at once) can burn through the shared key's per-minute
+    // Gemini quota in seconds, especially with several vision calls running
+    // concurrently (see _kVisionConcurrency). Rather than let a 429 discard
+    // the screenshot straight to the weaker local-only tagger, back off and
+    // retry — the quota window is short-lived, so a few seconds' wait usually
+    // clears it without needing a bigger quota at all.
+    const maxAttempts = 3;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final model = GenerativeModel(
+          model: _kGeminiModel,
+          apiKey: apiKey,
+          generationConfig: generationConfig,
+        );
+        final response = await model.generateContent(contents);
+        final result = _decodeObject(response.text);
+        if (result.isNotEmpty) {
+          DiagnosticLog.info(
+              'LLMService: Gemini call ok — ${result.keys.length} field(s) '
+              'returned${attempt > 1 ? ' (after $attempt attempts)' : ''}.');
+        }
+        return result;
+      } catch (e) {
+        if (_isRateLimitError(e) && attempt < maxAttempts) {
+          final wait = Duration(seconds: 3 * attempt);
+          debugPrint('LLMService: rate-limited (attempt $attempt/'
+              '$maxAttempts) — retrying in ${wait.inSeconds}s.');
+          DiagnosticLog.warn(
+              'LLMService: Gemini rate-limited — retrying in '
+              '${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
+          await Future.delayed(wait);
+          continue;
+        }
+        debugPrint('LLMService: direct call failed: $e');
+        // Truncated: API errors can carry the request payload back in the
+        // message, and this is copy-pasted straight into chat by a user.
+        final summary = e.toString();
+        DiagnosticLog.error(
+            'LLMService: Gemini call failed — '
+            '${summary.length > 300 ? '${summary.substring(0, 300)}…' : summary}');
+        return {};
       }
-      return result;
-    } catch (e) {
-      debugPrint('LLMService: direct call failed: $e');
-      // Truncated: API errors can carry the request payload back in the
-      // message, and this is copy-pasted straight into chat by a user.
-      final summary = e.toString();
-      DiagnosticLog.error(
-          'LLMService: Gemini call failed — '
-          '${summary.length > 300 ? '${summary.substring(0, 300)}…' : summary}');
-      return {};
     }
+    return {};
+  }
+
+  /// String-matched rather than a typed exception check — the
+  /// google_generative_ai package surfaces API errors as a message string,
+  /// not a distinct rate-limit exception subtype or exposed HTTP status.
+  static bool _isRateLimitError(Object e) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('quota') ||
+        msg.contains('rate limit') ||
+        msg.contains('429') ||
+        msg.contains('resource_exhausted') ||
+        msg.contains('resource exhausted');
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

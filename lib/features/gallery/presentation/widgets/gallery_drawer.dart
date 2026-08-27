@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/features/collections/presentation/collections_screen.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/settings/settings_screen.dart';
 
@@ -83,6 +84,20 @@ class GalleryDrawer extends ConsumerWidget {
             onTap: () {
               ref.read(selectedTagProvider.notifier).select(null);
               Navigator.pop(context);
+            },
+          ),
+
+          // Collections
+          _DrawerTile(
+            icon: Icons.folder_outlined,
+            label: 'Collections',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const CollectionsScreen()),
+              );
             },
           ),
 

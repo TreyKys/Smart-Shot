@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/features/collections/presentation/collection_picker_sheet.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
@@ -122,6 +123,13 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
             ),
             onPressed: _togglePin,
             tooltip: isPinned ? 'Unpin' : 'Pin',
+          ),
+          IconButton(
+            icon: const Icon(Icons.folder_outlined,
+                color: SiftColors.textSecondary),
+            tooltip: 'Add to Collection',
+            onPressed: () => showCollectionPickerSheet(context,
+                screenshotIds: [_shot.id]),
           ),
           IconButton(
             icon: const Icon(Icons.ios_share, color: SiftColors.textSecondary),

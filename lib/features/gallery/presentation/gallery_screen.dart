@@ -5,6 +5,8 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/features/assistant/presentation/assistant_screen.dart';
+import 'package:sift/features/collections/presentation/collection_picker_sheet.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
@@ -141,9 +143,20 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           ? _BulkActionsFab(
               count: _selectedIds.length,
               onDelete: _deleteSelected,
+              onAddToCollection: () => showCollectionPickerSheet(
+                context,
+                screenshotIds: _selectedIds.toList(),
+              ),
               onCancel: _exitSelectMode,
             )
-          : null,
+          : FloatingActionButton(
+              heroTag: 'ask_sift',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AssistantScreen()),
+              ),
+              backgroundColor: SiftColors.accent,
+              child: const Icon(Icons.auto_awesome, color: Colors.black),
+            ),
       appBar: AppBar(
         backgroundColor: SiftColors.background,
         title: selectedTag != null
@@ -574,12 +587,15 @@ class _ScreenshotCard extends ConsumerWidget {
 class _BulkActionsFab extends StatelessWidget {
   final int count;
   final VoidCallback onDelete;
+  final VoidCallback onAddToCollection;
   final VoidCallback onCancel;
 
-  const _BulkActionsFab(
-      {required this.count,
-      required this.onDelete,
-      required this.onCancel});
+  const _BulkActionsFab({
+    required this.count,
+    required this.onDelete,
+    required this.onAddToCollection,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -596,6 +612,18 @@ class _BulkActionsFab extends StatelessWidget {
             'Delete $count',
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 10),
+        FloatingActionButton.extended(
+          heroTag: 'bulk_collection',
+          onPressed: onAddToCollection,
+          backgroundColor: SiftColors.surfaceElevated,
+          icon: const Icon(Icons.folder_outlined, color: SiftColors.accent),
+          label: const Text(
+            'Add to Collection',
+            style: TextStyle(
+                color: SiftColors.textPrimary, fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(height: 10),
