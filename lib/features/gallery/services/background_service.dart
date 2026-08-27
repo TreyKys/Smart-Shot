@@ -130,7 +130,7 @@ Future<bool> _processDeepScanBatch() async {
         debugPrint('OCR: ${ocr.charCount} chars, route=${ocr.route.name} '
             '— ${screenshot.filePath}');
 
-        // Phase 2: Gemini call, routed by what phase 1 found.
+        // Phase 2: AI call, routed by what phase 1 found.
         Map<String, dynamic> llmResult = {};
         try {
           llmResult = await llmService.analyze(

@@ -46,7 +46,7 @@ Future<void> main() async {
     try {
       // Play Integrity attests to Google that this is a real, unmodified
       // build of the app — that's what Remote Config checks before handing
-      // over the shared Gemini key. The debug provider replaces that with a
+      // over the shared Qwen key. The debug provider replaces that with a
       // token registered manually in Firebase Console, since Play Integrity
       // attestation isn't available for local/CI debug builds.
       await FirebaseAppCheck.instance.activate(

@@ -14,10 +14,10 @@ OcrService ocrService(OcrServiceRef ref) {
 
 /// How a screenshot should be sent to the model.
 ///
-/// The cost of a Gemini call is dominated by image tokens — a 1568px image is
-/// roughly 1,600 tokens, while a screenshot's OCR text is usually 100–500.
-/// So the useful question is not "AI or not" but "does this image carry signal
-/// the text doesn't". Text-dominant screenshots (receipts, chats, articles,
+/// The cost of a vision call is dominated by image tokens — a screenshot at
+/// this size is easily several times the ~100–500 tokens its OCR text would
+/// cost instead. So the useful question is not "AI or not" but "does this
+/// image carry signal the text doesn't". Text-dominant screenshots (receipts, chats, articles,
 /// code) lose nothing by being sent as text. Image-dominant ones — memes,
 /// photos, charts, which are exactly the cases OCR handles badly — need the
 /// pixels.

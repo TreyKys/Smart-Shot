@@ -1,11 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sift/core/ai/qwen_client.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 
@@ -16,9 +15,15 @@ LLMService llmService(LlmServiceRef ref) {
   return LLMService();
 }
 
-const String _kGeminiModel = 'gemini-2.5-flash';
+// Picked as the default vision-capable Qwen model — fast/cheap tier,
+// mirroring gemini-2.5-flash's role before the provider switch. NOT verified
+// against a live call (no DashScope key was available while writing this);
+// confirm the exact model id once real access exists — Alibaba's naming has
+// shifted before (qwen-vl-plus vs qwen2.5-vl-*) and may again.
+const String _kQwenModel = 'qwen-vl-plus';
 
-/// Long-edge cap for uploaded images — beyond this Gemini gains no detail.
+/// Long-edge cap for uploaded images — vision models generally gain nothing
+/// past this regardless of provider.
 const int _kMaxUploadEdge = 1568;
 
 /// How many text-only screenshots to classify in a single request.
@@ -36,80 +41,24 @@ class TextAnalysisItem {
   const TextAnalysisItem({required this.id, required this.ocrText});
 }
 
-/// Two keys reach Gemini, chosen per call — the transport is the same either
-/// way:
+/// Two keys reach the model, chosen per call — the transport is the same
+/// either way:
 ///
 /// - A user-supplied BYOK key (Settings). Their key, their cost, their choice.
 /// - Everyone else uses the shared key from [SharedKeyService], delivered by
 ///   Firebase Remote Config once App Check has vouched for the build. It is
 ///   never compiled into the app, so there's nothing for `strings` on the APK
 ///   to find, and it can be rotated from the console without an update.
+///
+/// Calls Alibaba Cloud DashScope (Qwen) via [QwenClient] — previously Gemini,
+/// via google_generative_ai. That package enforced this class's JSON shape
+/// and tag enum server-side (`responseSchema`); DashScope's json_object mode
+/// only guarantees valid JSON syntax, not a specific shape, so the shape is
+/// now spelled out in the prompt text instead (see [_jsonShapeInstructions])
+/// and TagVocabulary.canonicalize() downstream is the safety net for any tag
+/// that slips through anyway.
 class LLMService {
   LLMService();
-
-  // ── Schema ──────────────────────────────────────────────────────────────────
-
-  /// Shape of one screenshot's analysis.
-  ///
-  /// Enforced server-side, which is what lets the prompt drop its "output
-  /// strictly valid JSON, no markdown" pleading and lets the parser drop its
-  /// fence-stripping and String-vs-List coercion. Tags are an enum over the
-  /// closed vocabulary, so the model cannot invent a tag the gallery has no
-  /// filter for.
-  static Schema _analysisSchema({bool withId = false}) => Schema.object(
-        properties: {
-          if (withId)
-            'id': Schema.integer(
-                description: 'Echo back the id of the screenshot analysed.'),
-          'tags': Schema.array(
-            items: Schema.enumString(enumValues: TagVocabulary.bareNames),
-            description: '1-3 categories that best describe the content.',
-          ),
-          'topic': Schema.string(
-            description:
-                'A short specific subject line, e.g. "Uber receipt, 12 Mar" '
-                'or "Solana staking rewards". Free text, not a category.',
-            nullable: true,
-          ),
-          'cleanText': Schema.string(
-              description: 'Readable text from the screenshot, tidied up.',
-              nullable: true),
-          'urls': Schema.array(items: Schema.string(), nullable: true),
-          'emails': Schema.array(items: Schema.string(), nullable: true),
-          'phoneNumbers': Schema.array(items: Schema.string(), nullable: true),
-          'dates': Schema.array(
-            items: Schema.string(description: 'ISO 8601, YYYY-MM-DD.'),
-            nullable: true,
-          ),
-          'cryptoAddresses':
-              Schema.array(items: Schema.string(), nullable: true),
-          'suggested_actions': Schema.array(
-            nullable: true,
-            items: Schema.object(
-              properties: {
-                'label': Schema.string(description: 'Short button label.'),
-                'payload': Schema.string(
-                    description: 'URL, address or number to act on.'),
-                'intent_type':
-                    Schema.enumString(enumValues: ['url', 'copy', 'dial']),
-              },
-              requiredProperties: ['label', 'payload', 'intent_type'],
-            ),
-          ),
-          'suggested_app': Schema.enumString(
-            enumValues: ['pulse', 'context', 'magnum_opus', 'none'],
-            description: 'Best companion app, or "none".',
-            nullable: true,
-          ),
-        },
-        // 'id' must be required whenever it's present in the schema — batch
-        // callers correlate each result back to a screenshot solely by this
-        // field (see analyzeTextBatch), and an optional 'id' lets Gemini omit
-        // it, which silently discards an otherwise-valid classification and
-        // forces a wasted per-image retry for something that was likely
-        // already answered correctly.
-        requiredProperties: withId ? ['id', 'tags'] : ['tags'],
-      );
 
   // ── Single-screenshot analysis ──────────────────────────────────────────────
 
@@ -126,18 +75,23 @@ class LLMService {
     if (!_usable(byokApiKey)) return {};
     final effective = route ?? ocr.route;
 
-    final parts = <Part>[TextPart(_promptFor(effective, ocr.text))];
+    final prompt =
+        '${_promptFor(effective, ocr.text)}\n\n${_jsonShapeInstructions()}';
+
+    Uint8List? imageBytes;
+    String? imageMime;
     if (effective != AnalysisRoute.textOnly) {
       final (bytes, mime) = await _prepareImage(file);
-      parts.add(DataPart(mime, bytes));
-      debugPrint(
-          'LLM: ${effective.name} route, ${bytes.length} image bytes — ${file.path}');
+      imageBytes = bytes;
+      imageMime = mime;
+      debugPrint('LLM: ${effective.name} route, ${bytes.length} image bytes '
+          '— ${file.path}');
     } else {
       debugPrint('LLM: textOnly route, no image — ${file.path}');
     }
 
-    return _generate([Content.multi(parts)], _analysisSchema(),
-        byokApiKey: byokApiKey);
+    return _generate(prompt,
+        imageBytes: imageBytes, imageMime: imageMime, byokApiKey: byokApiKey);
   }
 
   // ── Batched text-only analysis ──────────────────────────────────────────────
@@ -160,16 +114,12 @@ class LLMService {
         ..writeln('--- SCREENSHOT id=${item.id} ---')
         ..writeln(item.ocrText.trim());
     }
+    buffer
+      ..writeln()
+      ..writeln(_jsonShapeInstructionsBatch());
 
-    final schema = Schema.object(
-      properties: {
-        'results': Schema.array(items: _analysisSchema(withId: true)),
-      },
-      requiredProperties: ['results'],
-    );
-
-    final decoded = await _generate([Content.text(buffer.toString())], schema,
-        byokApiKey: byokApiKey);
+    final decoded =
+        await _generate(buffer.toString(), byokApiKey: byokApiKey);
 
     final raw = decoded['results'];
     if (raw is! List) {
@@ -203,20 +153,22 @@ class LLMService {
   // ── Transport ───────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> _generate(
-    List<Content> contents,
-    Schema schema, {
+    String prompt, {
+    Uint8List? imageBytes,
+    String? imageMime,
     String? byokApiKey,
   }) {
-    final generationConfig = GenerationConfig(
-      responseMimeType: 'application/json',
-      responseSchema: schema,
-    );
-
     if (_hasByok(byokApiKey)) {
-      return _generateDirect(contents, generationConfig, byokApiKey!);
+      return QwenClient.completeJson(
+        apiKey: byokApiKey!,
+        model: _kQwenModel,
+        prompt: prompt,
+        imageBytes: imageBytes,
+        imageMime: imageMime,
+      );
     }
 
-    final sharedKey = SharedKeyService.geminiApiKey;
+    final sharedKey = SharedKeyService.apiKey;
     if (sharedKey.isEmpty) {
       debugPrint('LLMService: no BYOK key and no shared key — skipping.');
       DiagnosticLog.warn(
@@ -224,7 +176,13 @@ class LLMService {
           'transport layer.');
       return Future.value({});
     }
-    return _generateDirect(contents, generationConfig, sharedKey);
+    return QwenClient.completeJson(
+      apiKey: sharedKey,
+      model: _kQwenModel,
+      prompt: prompt,
+      imageBytes: imageBytes,
+      imageMime: imageMime,
+    );
   }
 
   static bool _hasByok(String? byokApiKey) =>
@@ -247,73 +205,6 @@ class LLMService {
     return true;
   }
 
-  /// Calls Gemini directly. Used for both paths — the user's own BYOK key, and
-  /// the shared key Remote Config hands out once App Check has vouched for the
-  /// build.
-  Future<Map<String, dynamic>> _generateDirect(
-    List<Content> contents,
-    GenerationConfig generationConfig,
-    String apiKey,
-  ) async {
-    // A big batch (e.g. a first sync after enabling Live Mode, landing dozens
-    // of screenshots at once) can burn through the shared key's per-minute
-    // Gemini quota in seconds, especially with several vision calls running
-    // concurrently (see _kVisionConcurrency). Rather than let a 429 discard
-    // the screenshot straight to the weaker local-only tagger, back off and
-    // retry — the quota window is short-lived, so a few seconds' wait usually
-    // clears it without needing a bigger quota at all.
-    const maxAttempts = 3;
-    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        final model = GenerativeModel(
-          model: _kGeminiModel,
-          apiKey: apiKey,
-          generationConfig: generationConfig,
-        );
-        final response = await model.generateContent(contents);
-        final result = _decodeObject(response.text);
-        if (result.isNotEmpty) {
-          DiagnosticLog.info(
-              'LLMService: Gemini call ok — ${result.keys.length} field(s) '
-              'returned${attempt > 1 ? ' (after $attempt attempts)' : ''}.');
-        }
-        return result;
-      } catch (e) {
-        if (_isRateLimitError(e) && attempt < maxAttempts) {
-          final wait = Duration(seconds: 3 * attempt);
-          debugPrint('LLMService: rate-limited (attempt $attempt/'
-              '$maxAttempts) — retrying in ${wait.inSeconds}s.');
-          DiagnosticLog.warn(
-              'LLMService: Gemini rate-limited — retrying in '
-              '${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
-          await Future.delayed(wait);
-          continue;
-        }
-        debugPrint('LLMService: direct call failed: $e');
-        // Truncated: API errors can carry the request payload back in the
-        // message, and this is copy-pasted straight into chat by a user.
-        final summary = e.toString();
-        DiagnosticLog.error(
-            'LLMService: Gemini call failed — '
-            '${summary.length > 300 ? '${summary.substring(0, 300)}…' : summary}');
-        return {};
-      }
-    }
-    return {};
-  }
-
-  /// String-matched rather than a typed exception check — the
-  /// google_generative_ai package surfaces API errors as a message string,
-  /// not a distinct rate-limit exception subtype or exposed HTTP status.
-  static bool _isRateLimitError(Object e) {
-    final msg = e.toString().toLowerCase();
-    return msg.contains('quota') ||
-        msg.contains('rate limit') ||
-        msg.contains('429') ||
-        msg.contains('resource_exhausted') ||
-        msg.contains('resource exhausted');
-  }
-
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   String _promptFor(AnalysisRoute route, String ocrText) {
@@ -334,10 +225,11 @@ class LLMService {
 
   /// Downscales and re-encodes before upload.
   ///
-  /// Gemini tiles vision input at 768px, so anything beyond ~1568px on the long
-  /// edge costs upload time and tokens for pixels the model discards. A phone
-  /// screenshot is typically a 2–4 MB PNG; this usually lands under 300 KB.
-  /// Falls back to the original bytes if compression fails for any reason.
+  /// Vision models generally tile/downsample input around this resolution
+  /// anyway, so anything beyond ~1568px on the long edge costs upload time
+  /// and tokens for pixels the model would discard. A phone screenshot is
+  /// typically a 2–4 MB PNG; this usually lands under 300 KB. Falls back to
+  /// the original bytes if compression fails for any reason.
   Future<(Uint8List, String)> _prepareImage(File file) async {
     try {
       final compressed = await FlutterImageCompress.compressWithFile(
@@ -372,36 +264,10 @@ class LLMService {
         return 'image/jpeg';
     }
   }
-
-  /// The schema makes well-formed JSON the norm, but a truncated or
-  /// safety-blocked response still has to fail softly rather than throw.
-  Map<String, dynamic> _decodeObject(String? responseText) {
-    if (responseText == null || responseText.trim().isEmpty) {
-      DiagnosticLog.warn(
-          'LLMService: Gemini returned an empty response body (likely a '
-          'safety block or truncation) — this screenshot got no AI tags.');
-      return {};
-    }
-    try {
-      final decoded = jsonDecode(responseText.trim());
-      if (decoded is Map<String, dynamic>) return decoded;
-      debugPrint('LLMService: response was not an object: $decoded');
-      DiagnosticLog.warn(
-          'LLMService: Gemini response decoded but was not the expected '
-          'JSON object shape.');
-    } catch (e) {
-      debugPrint('LLMService: JSON parse error: $e\nRaw: $responseText');
-      DiagnosticLog.error('LLMService: could not parse Gemini response: $e');
-    }
-    return {};
-  }
 }
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
 
-// The output shape is enforced by responseSchema, so the prompt only has to
-// describe judgement — not formatting, not the tag list, not "return valid
-// JSON". Tags are constrained to the closed vocabulary by the schema enum.
 const String _kPromptBase = '''
 You are analysing a screenshot from a user's phone to help them find it later.
 
@@ -434,3 +300,57 @@ later, for example "Uber receipt, 12 Mar" rather than "a receipt".
 Extract URLs, emails, phone numbers, dates and crypto addresses only when they
 are genuinely present. Do not guess or invent them.
 ''';
+
+// Gemini enforced this JSON shape and the tag enum server-side via
+// `responseSchema`; DashScope's json_object mode only guarantees valid JSON
+// syntax, not this specific shape — so it's spelled out in the prompt
+// instead. Any tag outside the given list is dropped downstream by
+// TagVocabulary.canonicalize() as a second line of defence, but a tighter
+// prompt means that rarely has to fire.
+
+const String _kResponseFormatNote =
+    'Respond with ONLY a single JSON object — no markdown, no code fences, '
+    'no text before or after it. Use exactly this shape:';
+
+const String _kTagRule =
+    '"tags" must use only values from the list given — never invent a new one.';
+
+/// The object shape one screenshot's analysis must have.
+String _analysisShape({bool withId = false}) {
+  final tagList = TagVocabulary.bareNames.join(', ');
+  return '{\n'
+      '${withId ? '  "id": <integer — echo the screenshot id given above>,\n' : ''}'
+      '  "tags": [<1 to 3 values, each exactly one of: $tagList>],\n'
+      '  "topic": <short specific string, or null>,\n'
+      '  "cleanText": <string, or null>,\n'
+      '  "urls": [<strings>] or null,\n'
+      '  "emails": [<strings>] or null,\n'
+      '  "phoneNumbers": [<strings>] or null,\n'
+      '  "dates": [<"YYYY-MM-DD" strings>] or null,\n'
+      '  "cryptoAddresses": [<strings>] or null,\n'
+      '  "suggested_actions": [{"label": <string>, "payload": <string>, '
+      '"intent_type": "url" or "copy" or "dial"}] or null,\n'
+      '  "suggested_app": "pulse" or "context" or "magnum_opus" or "none", '
+      'or null\n'
+      '}';
+}
+
+/// Full response-format instructions for a single-screenshot call.
+String _jsonShapeInstructions() =>
+    '$_kResponseFormatNote\n${_analysisShape()}\n$_kTagRule';
+
+/// Full response-format instructions for a batched call — one shape nested
+/// inside a "results" array, one entry per screenshot in the batch.
+String _jsonShapeInstructionsBatch() {
+  final indented =
+      _analysisShape(withId: true).split('\n').map((l) => '    $l').join('\n');
+  return '$_kResponseFormatNote\n'
+      '{\n'
+      '  "results": [\n'
+      '    <one object per screenshot above, each shaped exactly like:\n'
+      '$indented\n'
+      '    >\n'
+      '  ]\n'
+      '}\n'
+      '$_kTagRule';
+}

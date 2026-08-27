@@ -49,7 +49,7 @@ class DiagnosticEntry {
 }
 
 /// Persisted, cross-isolate log of AI-pipeline events (shared-key fetch, App
-/// Check, Gemini calls, parse results).
+/// Check, AI calls, parse results).
 ///
 /// Exists because a real device has no dev-environment path back to us — no
 /// adb, no logcat — so `debugPrint` alone is invisible once the app isn't

@@ -7,10 +7,10 @@ class AppConfig {
   const AppConfig._();
 
   /// Only used for the BYOK (bring-your-own-key) path, where the user
-  /// supplies their own Gemini key in Settings — their key, their cost, their
-  /// risk to accept. The app's own shared quota uses a key fetched at runtime
-  /// instead: see SharedKeyService.
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+  /// supplies their own Qwen (Alibaba Cloud DashScope) key in Settings —
+  /// their key, their cost, their risk to accept. The app's own shared quota
+  /// uses a key fetched at runtime instead: see SharedKeyService.
+  static const String qwenApiKey = String.fromEnvironment('QWEN_API_KEY');
 
   static const String revenueCatAndroidApiKey =
       String.fromEnvironment('REVENUECAT_ANDROID_API_KEY');

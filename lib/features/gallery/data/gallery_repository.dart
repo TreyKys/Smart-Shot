@@ -283,7 +283,7 @@ Future<void> discoverNewScreenshots(Isar isar) async {
 /// The remainder is picked up by the next run rather than loaded up front.
 const int _kMaxPerRun = 300;
 
-/// Concurrent in-flight Gemini calls. These are network-bound, so a handful in
+/// Concurrent in-flight AI calls. These are network-bound, so a handful in
 /// parallel is a near-linear speedup; the cap keeps memory and rate limits
 /// sane. Lowered from 4 — the shared key's per-minute quota was observed
 /// getting exhausted mid-batch on a real device (confirmed via the
@@ -464,7 +464,7 @@ class GalleryRepository {
     final economy = _ref.read(economyServiceProvider.notifier);
     final progress = _ref.read(processingProgressProvider.notifier);
 
-    // A BYOK key calls Gemini with the user's own key and cost. Without one,
+    // A BYOK key calls the AI with the user's own key and cost. Without one,
     // LLMService falls back to the shared key Remote Config hands out after
     // App Check — nothing here needs a key compiled into the app.
     final byokKey = economy.getByokKey() ?? '';

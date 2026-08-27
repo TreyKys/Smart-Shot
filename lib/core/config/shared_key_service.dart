@@ -2,8 +2,8 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
-/// Serves the shared Gemini key, fetched from Firebase Remote Config rather
-/// than compiled into the app.
+/// Serves the shared Qwen (Alibaba Cloud DashScope) API key, fetched from
+/// Firebase Remote Config rather than compiled into the app.
 ///
 /// The key is stored as a Remote Config parameter and delivered at runtime.
 /// App Check enforcement is switched on for Remote Config in the Firebase
@@ -16,14 +16,18 @@ import 'package:sift/core/diagnostics/diagnostic_log.dart';
 /// memory. What it gives up in absolute secrecy against a determined attacker
 /// it makes back in operational control — the key is never in the APK, never
 /// in this repo, and can be rotated or revoked from the console without
-/// shipping an update. server/gemini-proxy/ holds a stronger design (the key
-/// never leaves the server at all) if that trade stops being worth it.
+/// shipping an update.
+///
+/// The Remote Config parameter name below (`qwen_api_key`) must be created
+/// in the Firebase Console — it did not exist under this name before the
+/// Gemini → Qwen switch, so publishing a Qwen key requires adding this
+/// parameter fresh, not just updating the old `gemini_api_key` one.
 class SharedKeyService {
   const SharedKeyService._();
 
   /// Remote Config parameter name. Must match the key in the Firebase Console
   /// exactly — a typo here reads as "no key configured" rather than an error.
-  static const String kGeminiKeyParam = 'gemini_api_key';
+  static const String kQwenKeyParam = 'qwen_api_key';
 
   /// Makes a missing key a hard failure instead of a silent no-op. Off by
   /// default so local and CI builds still run without Remote Config reachable;
@@ -35,7 +39,7 @@ class SharedKeyService {
   static String _cached = '';
 
   /// The fetched key, or empty when Remote Config had nothing for us.
-  static String get geminiApiKey => _cached;
+  static String get apiKey => _cached;
 
   static bool get isConfigured => _cached.isNotEmpty;
 
@@ -49,7 +53,7 @@ class SharedKeyService {
     required bool mustExist,
   }) {
     if (key.isNotEmpty || !mustExist) return null;
-    return 'No "$kGeminiKeyParam" came back from Remote Config but '
+    return 'No "$kQwenKeyParam" came back from Remote Config but '
         'REQUIRE_SHARED_AI_KEY is set. This build would skip every shared-quota '
         'AI call. Check that the parameter is published in the Firebase '
         'Console and that App Check is not rejecting this build.';
@@ -72,13 +76,13 @@ class SharedKeyService {
           minimumFetchInterval: const Duration(hours: 1),
         ),
       );
-      await remoteConfig.setDefaults(const {kGeminiKeyParam: ''});
+      await remoteConfig.setDefaults(const {kQwenKeyParam: ''});
       await remoteConfig.fetchAndActivate();
-      _cached = remoteConfig.getString(kGeminiKeyParam).trim();
+      _cached = remoteConfig.getString(kQwenKeyParam).trim();
 
       if (_cached.isEmpty) {
         debugPrint(
-            'SharedKeyService: Remote Config returned no "$kGeminiKeyParam" — '
+            'SharedKeyService: Remote Config returned no "$kQwenKeyParam" — '
             'shared AI is off (BYOK still works).');
         DiagnosticLog.warn(
             'SharedKeyService: Remote Config returned no shared key. Shared '

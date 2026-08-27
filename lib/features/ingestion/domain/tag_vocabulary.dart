@@ -1,7 +1,8 @@
 /// The single closed set of tags the app recognises.
 ///
-/// Both the local [TagEngine] and the Gemini response schema draw from this
-/// list, so a tag can never come back that the gallery has no filter for.
+/// Both the local [TagEngine] and the AI prompt draw from this list, and
+/// [canonicalize] drops anything the model returns that isn't on it — so a
+/// tag can never end up stored that the gallery has no filter for.
 ///
 /// The previous prompt shipped an open-ended list that invited the model to
 /// "invent precise variants", and the list itself contained near-duplicates

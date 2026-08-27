@@ -713,7 +713,7 @@ class _ApiKeyWarningBanner extends ConsumerStatefulWidget {
 class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
   bool _dismissed = false;
 
-  /// True only when there's genuinely no way to reach Gemini.
+  /// True only when there's genuinely no way to reach the AI.
   ///
   /// The app no longer embeds its own key — normal users get the shared key
   /// from Remote Config, so having one counts as "we can do AI". Without this
@@ -744,7 +744,7 @@ class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
             const SizedBox(width: 10),
             const Expanded(
               child: Text(
-                'No Gemini API key — AI tagging disabled. Tap to add one in Settings.',
+                'No Qwen API key — AI tagging disabled. Tap to add one in Settings.',
                 style: TextStyle(color: SiftColors.warning, fontSize: 12),
               ),
             ),
