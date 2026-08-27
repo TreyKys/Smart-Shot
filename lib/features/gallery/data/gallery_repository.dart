@@ -9,6 +9,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/database/isar_service.dart';
+import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
@@ -49,6 +50,16 @@ Future<AssetPathEntity?> _openAllPhotosAlbum() async {
   debugPrint('PhotoManager: $ps');
   if (!ps.isAuth) {
     debugPrint('Permission denied');
+    // ps.isAuth is false for PermissionState.limited on Android 14+'s
+    // "Select photos..." partial-access grant, not just an outright denial —
+    // logged with the raw state name so a "yes I granted access" from the
+    // user (limited counts as granted in the OS's own permission dialog) can
+    // still be told apart from a real denial once this shows up in the log.
+    DiagnosticLog.warn(
+        'Gallery sync: PhotoManager permission is "$ps", not authorized — '
+        'nothing will be scanned. If you picked "Select photos" rather than '
+        '"Allow all" when granting access, re-grant full access in Android '
+        'Settings → Apps → Sift → Permissions → Photos and videos.');
     return null;
   }
 
@@ -58,11 +69,54 @@ Future<AssetPathEntity?> _openAllPhotosAlbum() async {
       orders: [const OrderOption(type: OrderOptionType.createDate, asc: false)],
     ),
   );
-  if (paths.isEmpty) return null;
-  return paths.firstWhere((p) => p.isAll, orElse: () => paths.first);
+  if (paths.isEmpty) {
+    DiagnosticLog.warn(
+        'Gallery sync: permission is "$ps" but PhotoManager returned zero '
+        'albums — nothing to scan.');
+    return null;
+  }
+  final album = paths.firstWhere((p) => p.isAll, orElse: () => paths.first);
+  final count = await album.assetCountAsync;
+  DiagnosticLog.info(
+      'Gallery sync: permission "$ps", scanning album "${album.name}" '
+      '($count assets, isAll=${album.isAll}) out of ${paths.length} '
+      'album(s) found.');
+  return album;
 }
 
-Future<void> _ingestAssets(
+/// Tally of what one [_ingestAssets] call actually did with its batch —
+/// returned so callers can log a single end-of-run summary instead of one
+/// line per asset, and so a run that added zero rows can say *why* (every
+/// asset already in the DB? all filtered out by Live Mode's cutoff? none of
+/// them actually images?) instead of just going silent.
+typedef _IngestStats = ({
+  int added,
+  int alreadyInDb,
+  int nonImage,
+  int dedupSkipped,
+  int fileUnavailable,
+  int liveModeCutoff,
+});
+
+const _IngestStats _kEmptyIngestStats = (
+  added: 0,
+  alreadyInDb: 0,
+  nonImage: 0,
+  dedupSkipped: 0,
+  fileUnavailable: 0,
+  liveModeCutoff: 0,
+);
+
+_IngestStats _mergeStats(_IngestStats a, _IngestStats b) => (
+      added: a.added + b.added,
+      alreadyInDb: a.alreadyInDb + b.alreadyInDb,
+      nonImage: a.nonImage + b.nonImage,
+      dedupSkipped: a.dedupSkipped + b.dedupSkipped,
+      fileUnavailable: a.fileUnavailable + b.fileUnavailable,
+      liveModeCutoff: a.liveModeCutoff + b.liveModeCutoff,
+    );
+
+Future<_IngestStats> _ingestAssets(
   List<AssetEntity> assets,
   Isar isar,
   String? mode,
@@ -73,6 +127,7 @@ Future<void> _ingestAssets(
   // Collected across the batch so the whole batch lands in one transaction
   // instead of one transaction per image.
   final newShots = <Screenshot>[];
+  var alreadyInDb = 0, nonImage = 0, dedupSkipped = 0, fileUnavailable = 0, liveModeCutoff = 0;
 
   for (int i = 0; i < assets.length; i++) {
     final asset = assets[i];
@@ -83,32 +138,47 @@ Future<void> _ingestAssets(
       if (liveTs > 0 &&
           asset.createDateTime.millisecondsSinceEpoch <= liveTs) {
         debugPrint('Live mode cutoff at index $idx');
+        liveModeCutoff += assets.length - i;
         break;
       }
-      if (liveTs == 0) break;
+      if (liveTs == 0) {
+        liveModeCutoff += assets.length - i;
+        break;
+      }
     }
 
-    if (asset.type != AssetType.image) continue;
+    if (asset.type != AssetType.image) {
+      nonImage++;
+      continue;
+    }
 
     File? file;
     try {
       file = await asset.file;
     } catch (e) {
       debugPrint('Error getting file for ${asset.id}: $e');
+      fileUnavailable++;
       continue;
     }
-    if (file == null) continue;
+    if (file == null) {
+      fileUnavailable++;
+      continue;
+    }
 
     // Skip if already in DB
     final existing =
         await isar.screenshots.where().filePathEqualTo(file.path).findFirst();
-    if (existing != null) continue;
+    if (existing != null) {
+      alreadyInDb++;
+      continue;
+    }
 
     // Perceptual dedup — run in compute isolate
     final hash =
         await compute(DedupService.hashIsolateEntry, file.absolute.path);
     if (hash != null && dedup.isDuplicate(hash)) {
       debugPrint('Dedup: skipping ${file.path}');
+      dedupSkipped++;
       continue;
     }
 
@@ -126,6 +196,15 @@ Future<void> _ingestAssets(
       await isar.screenshots.putAll(newShots);
     });
   }
+
+  return (
+    added: newShots.length,
+    alreadyInDb: alreadyInDb,
+    nonImage: nonImage,
+    dedupSkipped: dedupSkipped,
+    fileUnavailable: fileUnavailable,
+    liveModeCutoff: liveModeCutoff,
+  );
 }
 
 /// Drops a deleted screenshot's perceptual-hash entry from the dedup index.
@@ -152,7 +231,10 @@ Future<void> discoverNewScreenshots(Isar isar) async {
   if (album == null) return;
 
   final count = await album.assetCountAsync;
-  if (count == 0) return;
+  if (count == 0) {
+    DiagnosticLog.warn('Gallery sync: album has 0 assets — nothing to scan.');
+    return;
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final mode = prefs.getString('smart_indexing_mode');
@@ -162,14 +244,23 @@ Future<void> discoverNewScreenshots(Isar isar) async {
   final total = count > _kMaxIngestCount ? _kMaxIngestCount : count;
   await prefs.setInt('ingest_deferred_count', count - total);
 
+  var stats = _kEmptyIngestStats;
   for (int offset = 0; offset < total; offset += 20) {
     final end = (offset + 20).clamp(0, total);
     final batch = await album.getAssetListRange(start: offset, end: end);
-    await _ingestAssets(batch, isar, mode, liveTs,
-        startIndex: offset, dedup: dedup);
+    stats = _mergeStats(
+        stats,
+        await _ingestAssets(batch, isar, mode, liveTs,
+            startIndex: offset, dedup: dedup));
   }
   await dedup.flush();
   debugPrint('discoverNewScreenshots: scanned $total assets.');
+  DiagnosticLog.info(
+      'Gallery sync (background): scanned $total of $count asset(s), mode='
+      '"${mode ?? "unset"}" — added ${stats.added}, already had '
+      '${stats.alreadyInDb}, ${stats.nonImage} not images, '
+      '${stats.dedupSkipped} deduped, ${stats.fileUnavailable} unreadable, '
+      '${stats.liveModeCutoff} past Live Mode cutoff.');
 }
 
 /// Upper bound on pending rows pulled into memory for one processing run.
@@ -203,7 +294,10 @@ class GalleryRepository {
     if (album == null) return;
 
     final count = await album.assetCountAsync;
-    if (count == 0) return;
+    if (count == 0) {
+      DiagnosticLog.warn('Gallery sync: album has 0 assets — nothing to scan.');
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString('smart_indexing_mode');
@@ -214,7 +308,7 @@ class GalleryRepository {
 
     // Fetch first 10 immediately for fast UI paint
     final firstBatch = await album.getAssetListRange(start: 0, end: 10);
-    await _ingestAssets(firstBatch, isar, mode, liveTs,
+    var stats = await _ingestAssets(firstBatch, isar, mode, liveTs,
         startIndex: 0, dedup: dedup);
 
     // Then ingest the rest lazily in the background
@@ -230,22 +324,37 @@ class GalleryRepository {
 
     if (total > 10) {
       Future.microtask(() async {
+        var rest = _kEmptyIngestStats;
         for (int offset = 10; offset < total; offset += 20) {
           final end = (offset + 20).clamp(0, total);
           final batch =
               await album.getAssetListRange(start: offset, end: end);
-          await _ingestAssets(batch, isar, mode, liveTs,
-              startIndex: offset, dedup: dedup);
+          rest = _mergeStats(
+              rest,
+              await _ingestAssets(batch, isar, mode, liveTs,
+                  startIndex: offset, dedup: dedup));
           await Future.delayed(Duration.zero); // yield to event loop
         }
         await dedup.flush();
+        _logSyncSummary(_mergeStats(stats, rest), total, count, mode);
         // Once all ingested, kick off automatic AI processing
         _processAllPending();
       });
     } else {
       await dedup.flush();
+      _logSyncSummary(stats, total, count, mode);
       _processAllPending();
     }
+  }
+
+  void _logSyncSummary(
+      _IngestStats stats, int total, int count, String? mode) {
+    DiagnosticLog.info(
+        'Gallery sync: scanned $total of $count asset(s), mode='
+        '"${mode ?? "unset"}" — added ${stats.added}, already had '
+        '${stats.alreadyInDb}, ${stats.nonImage} not images, '
+        '${stats.dedupSkipped} deduped, ${stats.fileUnavailable} unreadable, '
+        '${stats.liveModeCutoff} past Live Mode cutoff.');
   }
 
   // ── Share intent ───────────────────────────────────────────────────────────

@@ -173,8 +173,21 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
             IconButton(
               icon: const Icon(Icons.sync, color: SiftColors.textSecondary),
               tooltip: 'Sync gallery',
-              onPressed: () =>
-                  ref.read(galleryRepositoryProvider).syncGallery(),
+              onPressed: () {
+                // syncGallery() runs silently unless it actually finds new
+                // screenshots to ingest — without this, tapping the button
+                // and having nothing visibly happen (permission denied,
+                // empty album, everything already synced) reads as "the
+                // button is broken" rather than "there was nothing to do".
+                // Settings → Diagnostics Log has the real reason either way.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Syncing… check Settings → '
+                          'Diagnostics Log for details.'),
+                      duration: Duration(seconds: 2)),
+                );
+                ref.read(galleryRepositoryProvider).syncGallery();
+              },
               onLongPress: () {
                 ref.read(galleryRepositoryProvider).reprocessAll();
                 ScaffoldMessenger.of(context).showSnackBar(
