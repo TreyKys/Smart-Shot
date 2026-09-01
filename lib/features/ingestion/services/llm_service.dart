@@ -15,15 +15,18 @@ LLMService llmService(LlmServiceRef ref) {
   return LLMService();
 }
 
-// Pixtral (Mistral's original standalone vision model) is deprecated —
-// vision is folded into the unified flagship models now. mistral-small-2603
-// is the one pinned here: dated (not a "-latest" alias, so behavior doesn't
-// shift under us silently), confirmed present in the account's own rate
-// limit table (see mistral_rate_limits.dart), and the best balance of speed
-// vs. token budget among the models available. Still not verified against
-// an actual multimodal call — confirm it accepts image input once real
-// usage is possible; if not, mistral-medium-latest is next best guess.
-const String _kMistralModel = 'mistral-small-2603';
+// "Ministral" is easy to misread as Mistral's old text-only edge line — this
+// "-2512" generation is a different, newer model: a 3.4B language model
+// fused with its own 0.4B vision encoder, genuinely multimodal, not a
+// smaller version of the same architecture. Picked over mistral-small-2603
+// (the previous pin) because it's vision-capable AND has far better limits
+// in this account's own rate table (see mistral_rate_limits.dart) — ~15x
+// the requests/second, ~26x the tokens/minute. The one real tradeoff: 3B
+// parameters is small, so watch tagging quality once live; TagVocabulary's
+// closed-vocabulary filtering and the local TagEngine fallback both exist
+// as a safety net if it turns out too weak, and mistral-small-2603 is the
+// fallback if so. Still not verified against an actual multimodal call.
+const String _kMistralModel = 'ministral-3b-2512';
 
 /// Long-edge cap for uploaded images — vision models generally gain nothing
 /// past this regardless of provider.
