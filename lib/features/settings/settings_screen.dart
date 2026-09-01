@@ -120,8 +120,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // BYOK
           ListTile(
             leading: const Icon(Icons.vpn_key),
-            title: const Text('Bring Your Own Key (Qwen)'),
-            subtitle: const Text('Power users: Bypass the energy and ad systems entirely by using your own Qwen (Alibaba Cloud DashScope) API key.'),
+            title: const Text('Bring Your Own Key (Mistral)'),
+            subtitle: const Text('Power users: Bypass the energy and ad systems entirely by using your own Mistral AI API key.'),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -131,7 +131,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: TextField(
                     controller: _byokController,
                     decoration: const InputDecoration(
-                      hintText: 'Enter Qwen API Key',
+                      hintText: 'Enter Mistral API Key',
                       border: OutlineInputBorder(),
                     ),
                   ),

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sift/core/ai/qwen_client.dart';
+import 'package:sift/core/ai/mistral_client.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
@@ -15,12 +15,12 @@ LLMService llmService(LlmServiceRef ref) {
   return LLMService();
 }
 
-// Picked as the default vision-capable Qwen model — fast/cheap tier,
-// mirroring gemini-2.5-flash's role before the provider switch. NOT verified
-// against a live call (no DashScope key was available while writing this);
-// confirm the exact model id once real access exists — Alibaba's naming has
-// shifted before (qwen-vl-plus vs qwen2.5-vl-*) and may again.
-const String _kQwenModel = 'qwen-vl-plus';
+// Mistral's vision-capable model line (Pixtral), pinned to a dated release
+// rather than a "-latest" alias so behavior doesn't shift under us silently.
+// NOT verified against a live call — no Mistral API key was available while
+// writing this; confirm the exact model id once real access exists, and
+// check whether the free tier restricts which models it can call at all.
+const String _kMistralModel = 'pixtral-12b-2409';
 
 /// Long-edge cap for uploaded images — vision models generally gain nothing
 /// past this regardless of provider.
@@ -50,12 +50,13 @@ class TextAnalysisItem {
 ///   never compiled into the app, so there's nothing for `strings` on the APK
 ///   to find, and it can be rotated from the console without an update.
 ///
-/// Calls Alibaba Cloud DashScope (Qwen) via [QwenClient] — previously Gemini,
-/// via google_generative_ai. That package enforced this class's JSON shape
-/// and tag enum server-side (`responseSchema`); DashScope's json_object mode
-/// only guarantees valid JSON syntax, not a specific shape, so the shape is
-/// now spelled out in the prompt text instead (see [_jsonShapeInstructions])
-/// and TagVocabulary.canonicalize() downstream is the safety net for any tag
+/// Calls Mistral AI via [MistralClient] — previously Qwen (Alibaba Cloud
+/// DashScope), and before that Gemini via google_generative_ai. Gemini's
+/// `responseSchema` enforced this class's JSON shape and tag enum
+/// server-side; neither DashScope's nor Mistral's json_object mode
+/// guarantees more than valid JSON syntax, so the shape is spelled out in
+/// the prompt text instead (see [_jsonShapeInstructions]) and
+/// TagVocabulary.canonicalize() downstream is the safety net for any tag
 /// that slips through anyway.
 class LLMService {
   LLMService();
@@ -159,9 +160,9 @@ class LLMService {
     String? byokApiKey,
   }) {
     if (_hasByok(byokApiKey)) {
-      return QwenClient.completeJson(
+      return MistralClient.completeJson(
         apiKey: byokApiKey!,
-        model: _kQwenModel,
+        model: _kMistralModel,
         prompt: prompt,
         imageBytes: imageBytes,
         imageMime: imageMime,
@@ -176,9 +177,9 @@ class LLMService {
           'transport layer.');
       return Future.value({});
     }
-    return QwenClient.completeJson(
+    return MistralClient.completeJson(
       apiKey: sharedKey,
-      model: _kQwenModel,
+      model: _kMistralModel,
       prompt: prompt,
       imageBytes: imageBytes,
       imageMime: imageMime,
@@ -302,11 +303,11 @@ are genuinely present. Do not guess or invent them.
 ''';
 
 // Gemini enforced this JSON shape and the tag enum server-side via
-// `responseSchema`; DashScope's json_object mode only guarantees valid JSON
-// syntax, not this specific shape — so it's spelled out in the prompt
-// instead. Any tag outside the given list is dropped downstream by
-// TagVocabulary.canonicalize() as a second line of defence, but a tighter
-// prompt means that rarely has to fire.
+// `responseSchema`; neither DashScope's nor Mistral's json_object mode
+// guarantees more than valid JSON syntax — not this specific shape — so
+// it's spelled out in the prompt instead. Any tag outside the given list is
+// dropped downstream by TagVocabulary.canonicalize() as a second line of
+// defence, but a tighter prompt means that rarely has to fire.
 
 const String _kResponseFormatNote =
     'Respond with ONLY a single JSON object — no markdown, no code fences, '

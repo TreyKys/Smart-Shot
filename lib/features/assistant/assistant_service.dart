@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
-import 'package:sift/core/ai/qwen_client.dart';
+import 'package:sift/core/ai/mistral_client.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
 // Same model as LLMService's screenshot tagging — one fewer thing to keep in
-// sync if Alibaba changes naming, and this call is small (a sentence plus a
+// sync if Mistral changes naming, and this call is small (a sentence plus a
 // short tag/collection list) so the vision-capable tier costs nothing extra
 // here even though no image is ever sent.
-const String _kAssistantModel = 'qwen-vl-plus';
+const String _kAssistantModel = 'pixtral-12b-2409';
 
 enum AssistantIntent {
   search,
@@ -142,7 +142,7 @@ before or after it. Use exactly this shape:
 User: $message
 ''';
 
-    final map = await QwenClient.completeJson(
+    final map = await MistralClient.completeJson(
       apiKey: apiKey,
       model: _kAssistantModel,
       prompt: prompt,

@@ -5,43 +5,41 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
-/// Shared low-level transport for Alibaba Cloud DashScope's OpenAI-compatible
-/// chat completions API — used by both LLMService (screenshot tagging) and
+/// Shared low-level transport for Mistral AI's OpenAI-compatible chat
+/// completions API — used by both LLMService (screenshot tagging) and
 /// AssistantService (chat), so auth/retry/JSON-parsing logic lives in one
 /// place rather than being duplicated per caller.
 ///
-/// Replaces the previous google_generative_ai-based transport (Gemini). The
-/// two providers differ in one structurally important way: Gemini's
-/// `responseSchema` enforced the JSON shape and tag enum server-side, so a
-/// malformed or off-vocabulary response literally couldn't come back.
-/// DashScope's `response_format: json_object` only guarantees valid JSON
-/// syntax, not a specific shape — callers now carry that responsibility via
-/// their prompt text (spelling out the exact required keys and the closed
-/// tag vocabulary) and defensive parsing downstream
-/// (TagVocabulary.canonicalize() already drops anything off-vocabulary).
+/// Second provider swap this project has been through: Gemini
+/// (google_generative_ai, schema-enforced) → Qwen (Alibaba Cloud DashScope,
+/// OpenAI-compatible) → Mistral (this one, also OpenAI-compatible). Since
+/// Qwen and Mistral share the same request/response shape, this is mostly
+/// QwenClient with the endpoint and model names swapped — the JSON-shape
+/// discipline that move away from Gemini required (spelling the exact
+/// response shape out in the prompt, since neither DashScope's nor Mistral's
+/// json_object mode enforces a specific schema server-side) carries over
+/// unchanged.
 ///
-/// NOT YET VERIFIED AGAINST A LIVE KEY — there was no DashScope API key
+/// NOT YET VERIFIED AGAINST A LIVE KEY — there was no Mistral API key
 /// available while writing this. The endpoint, auth header shape, and
-/// request/response JSON shape all follow Alibaba's own documented
-/// OpenAI-compatibility layer, but the model name and exact response
-/// envelope should be double-checked against a real call once a key exists.
-class QwenClient {
-  QwenClient._();
+/// request/response JSON envelope follow Mistral's own documented API
+/// (which is intentionally OpenAI-compatible), but the exact model name and
+/// response envelope should be double-checked against a real call once a key
+/// exists — see the model constants in llm_service.dart and
+/// assistant_service.dart, both one-line changes if the model id is wrong.
+class MistralClient {
+  MistralClient._();
 
-  /// International (Singapore) endpoint — the default for API access granted
-  /// outside mainland China, which is the assumption here given no region
-  /// was confirmed. If access turns out to be mainland-only, this is the one
-  /// line to change: swap to
-  /// 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'.
-  static const String _endpoint =
-      'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions';
+  static const String _endpoint = 'https://api.mistral.ai/v1/chat/completions';
 
   /// Sends one chat-completion request expecting a JSON object back.
   ///
   /// [imageBytes]/[imageMime] attach one image as a base64 data URI, in the
   /// same vision message shape OpenAI-compatible APIs use. Retries with
-  /// backoff on HTTP 429 (rate limit) up to 3 attempts, same policy the
-  /// Gemini transport used.
+  /// backoff on HTTP 429 (rate limit) up to 3 attempts — Mistral's free tier
+  /// is reported to be rate-limited quite tightly (a couple of requests per
+  /// minute on some accounts, per its own docs' "for evaluation, not
+  /// production" framing), so this matters more here than it did on Qwen.
   static Future<Map<String, dynamic>> completeJson({
     required String apiKey,
     required String model,
@@ -82,12 +80,14 @@ class QwenClient {
             .timeout(const Duration(seconds: 45));
 
         if (response.statusCode == 429 && attempt < maxAttempts) {
-          final wait = Duration(seconds: 3 * attempt);
-          debugPrint('QwenClient: rate-limited (attempt $attempt/'
+          final wait = Duration(seconds: 5 * attempt);
+          debugPrint('MistralClient: rate-limited (attempt $attempt/'
               '$maxAttempts) — retrying in ${wait.inSeconds}s.');
           DiagnosticLog.warn(
-              'QwenClient: rate-limited — retrying in ${wait.inSeconds}s '
-              '(attempt $attempt/$maxAttempts).');
+              'MistralClient: rate-limited — retrying in ${wait.inSeconds}s '
+              '(attempt $attempt/$maxAttempts). If this fires constantly, '
+              'the free-tier RPM limit is the bottleneck, not the monthly '
+              'token cap — check Mistral\'s console for your real limit.');
           await Future.delayed(wait);
           continue;
         }
@@ -96,16 +96,17 @@ class QwenClient {
           final bodySnippet = response.body.length > 300
               ? '${response.body.substring(0, 300)}…'
               : response.body;
-          debugPrint('QwenClient: HTTP ${response.statusCode}: $bodySnippet');
+          debugPrint(
+              'MistralClient: HTTP ${response.statusCode}: $bodySnippet');
           DiagnosticLog.error(
-              'QwenClient: HTTP ${response.statusCode} — $bodySnippet');
+              'MistralClient: HTTP ${response.statusCode} — $bodySnippet');
           return {};
         }
 
         return _extractJson(response.body);
       } catch (e) {
-        debugPrint('QwenClient: call failed: $e');
-        DiagnosticLog.error('QwenClient: call failed — $e');
+        debugPrint('MistralClient: call failed: $e');
+        DiagnosticLog.error('MistralClient: call failed — $e');
         return {};
       }
     }
@@ -116,37 +117,38 @@ class QwenClient {
     try {
       final decoded = jsonDecode(responseBody);
       if (decoded is! Map) {
-        DiagnosticLog.warn('QwenClient: top-level response was not an object.');
+        DiagnosticLog.warn(
+            'MistralClient: top-level response was not an object.');
         return {};
       }
       final choices = decoded['choices'];
       if (choices is! List || choices.isEmpty) {
-        DiagnosticLog.warn('QwenClient: response had no choices.');
+        DiagnosticLog.warn('MistralClient: response had no choices.');
         return {};
       }
       final firstChoice = choices.first;
       final message = firstChoice is Map ? firstChoice['message'] : null;
       final text = message is Map ? message['content'] as String? : null;
       if (text == null || text.trim().isEmpty) {
-        DiagnosticLog.warn('QwenClient: empty message content.');
+        DiagnosticLog.warn('MistralClient: empty message content.');
         return {};
       }
       final parsed = jsonDecode(_stripFences(text.trim()));
       if (parsed is Map<String, dynamic>) return parsed;
-      debugPrint('QwenClient: model content was not a JSON object: $parsed');
-      DiagnosticLog.warn('QwenClient: model content was not a JSON object.');
+      debugPrint(
+          'MistralClient: model content was not a JSON object: $parsed');
+      DiagnosticLog.warn(
+          'MistralClient: model content was not a JSON object.');
       return {};
     } catch (e) {
-      debugPrint('QwenClient: JSON parse error: $e\nRaw: $responseBody');
-      DiagnosticLog.error('QwenClient: could not parse response: $e');
+      debugPrint('MistralClient: JSON parse error: $e\nRaw: $responseBody');
+      DiagnosticLog.error('MistralClient: could not parse response: $e');
       return {};
     }
   }
 
-  /// Some models wrap JSON in ```json fences even when told not to — Gemini's
-  /// schema enforcement made this a non-issue; DashScope's json_object mode
-  /// doesn't guarantee fence-free output the same way, so this is a safety
-  /// net rather than the expected path.
+  /// Some models wrap JSON in ```json fences even when told not to — a
+  /// safety net rather than the expected path, same as the Qwen transport.
   static String _stripFences(String text) {
     final fenced = RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$');
     final match = fenced.firstMatch(text);

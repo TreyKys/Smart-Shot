@@ -2,8 +2,8 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
-/// Serves the shared Qwen (Alibaba Cloud DashScope) API key, fetched from
-/// Firebase Remote Config rather than compiled into the app.
+/// Serves the shared Mistral AI API key, fetched from Firebase Remote Config
+/// rather than compiled into the app.
 ///
 /// The key is stored as a Remote Config parameter and delivered at runtime.
 /// App Check enforcement is switched on for Remote Config in the Firebase
@@ -18,16 +18,17 @@ import 'package:sift/core/diagnostics/diagnostic_log.dart';
 /// in this repo, and can be rotated or revoked from the console without
 /// shipping an update.
 ///
-/// The Remote Config parameter name below (`qwen_api_key`) must be created
-/// in the Firebase Console — it did not exist under this name before the
-/// Gemini → Qwen switch, so publishing a Qwen key requires adding this
-/// parameter fresh, not just updating the old `gemini_api_key` one.
+/// The Remote Config parameter name below (`mistral_api_key`) must be
+/// created in the Firebase Console — third name this parameter has had
+/// (`gemini_api_key` → `qwen_api_key` → this one) as the AI provider has
+/// changed. Each switch needs the new parameter added fresh; the old ones
+/// are just dead config, not automatically renamed.
 class SharedKeyService {
   const SharedKeyService._();
 
   /// Remote Config parameter name. Must match the key in the Firebase Console
   /// exactly — a typo here reads as "no key configured" rather than an error.
-  static const String kQwenKeyParam = 'qwen_api_key';
+  static const String kMistralKeyParam = 'mistral_api_key';
 
   /// Makes a missing key a hard failure instead of a silent no-op. Off by
   /// default so local and CI builds still run without Remote Config reachable;
@@ -53,7 +54,7 @@ class SharedKeyService {
     required bool mustExist,
   }) {
     if (key.isNotEmpty || !mustExist) return null;
-    return 'No "$kQwenKeyParam" came back from Remote Config but '
+    return 'No "$kMistralKeyParam" came back from Remote Config but '
         'REQUIRE_SHARED_AI_KEY is set. This build would skip every shared-quota '
         'AI call. Check that the parameter is published in the Firebase '
         'Console and that App Check is not rejecting this build.';
@@ -76,14 +77,14 @@ class SharedKeyService {
           minimumFetchInterval: const Duration(hours: 1),
         ),
       );
-      await remoteConfig.setDefaults(const {kQwenKeyParam: ''});
+      await remoteConfig.setDefaults(const {kMistralKeyParam: ''});
       await remoteConfig.fetchAndActivate();
-      _cached = remoteConfig.getString(kQwenKeyParam).trim();
+      _cached = remoteConfig.getString(kMistralKeyParam).trim();
 
       if (_cached.isEmpty) {
         debugPrint(
-            'SharedKeyService: Remote Config returned no "$kQwenKeyParam" — '
-            'shared AI is off (BYOK still works).');
+            'SharedKeyService: Remote Config returned no "$kMistralKeyParam" '
+            '— shared AI is off (BYOK still works).');
         DiagnosticLog.warn(
             'SharedKeyService: Remote Config returned no shared key. Shared '
             'AI is off — either the parameter isn\'t published, or App Check '

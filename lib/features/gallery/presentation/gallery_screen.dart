@@ -744,7 +744,7 @@ class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
             const SizedBox(width: 10),
             const Expanded(
               child: Text(
-                'No Qwen API key — AI tagging disabled. Tap to add one in Settings.',
+                'No Mistral API key — AI tagging disabled. Tap to add one in Settings.',
                 style: TextStyle(color: SiftColors.warning, fontSize: 12),
               ),
             ),
