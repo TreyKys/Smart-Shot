@@ -16,17 +16,19 @@ LLMService llmService(LlmServiceRef ref) {
 }
 
 // "Ministral" is easy to misread as Mistral's old text-only edge line — this
-// "-2512" generation is a different, newer model: a 3.4B language model
-// fused with its own 0.4B vision encoder, genuinely multimodal, not a
-// smaller version of the same architecture. Picked over mistral-small-2603
-// (the previous pin) because it's vision-capable AND has far better limits
-// in this account's own rate table (see mistral_rate_limits.dart) — ~15x
-// the requests/second, ~26x the tokens/minute. The one real tradeoff: 3B
-// parameters is small, so watch tagging quality once live; TagVocabulary's
-// closed-vocabulary filtering and the local TagEngine fallback both exist
-// as a safety net if it turns out too weak, and mistral-small-2603 is the
-// fallback if so. Still not verified against an actual multimodal call.
-const String _kMistralModel = 'ministral-3b-2512';
+// "-2512" generation is a different, newer model family: a language model
+// fused with its own vision encoder, genuinely multimodal, not a smaller
+// version of some other architecture. 8B over the 3B sibling: more capacity
+// for the same family's vision-language design, still well ahead of
+// mistral-small-2603 (the original pin) on this account's free-tier rate
+// table (see mistral_rate_limits.dart) — ~3.8x the requests/second, ~12.5x
+// the tokens/minute. If billing moves to the paid tier, note the RPS/TPM
+// entry in that table is still the free-tier number — the real paid limit
+// is likely higher but unconfirmed. TagVocabulary's closed-vocabulary
+// filtering and the local TagEngine fallback remain the safety net if
+// quality still needs a bigger model; mistral-small-2603 is the fallback.
+// Still not verified against an actual multimodal call.
+const String _kMistralModel = 'ministral-8b-2512';
 
 /// Long-edge cap for uploaded images — vision models generally gain nothing
 /// past this regardless of provider.
