@@ -59,17 +59,22 @@ class _CollectionPickerSheetState
     final name = _controller.text.trim();
     if (name.isEmpty) return;
     setState(() => _busy = true);
-    final collection =
-        await ref.read(collectionsServiceProvider.notifier).create(name);
-    await ref
-        .read(collectionsServiceProvider.notifier)
-        .addScreenshots(collection.id, widget.screenshotIds);
+    final service = ref.read(collectionsServiceProvider.notifier);
+    // Reuse an existing collection with the same name (case-insensitive)
+    // rather than always creating a new one — matches how the assistant's
+    // own "add to collection" confirmation resolves a name (see
+    // AssistantScreen._confirm), so typing an existing collection's name
+    // here doesn't silently produce a second, identically-named collection.
+    final existing = service.findByName(name);
+    final collection = existing ?? await service.create(name);
+    await service.addScreenshots(collection.id, widget.screenshotIds);
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Created "${collection.name}" and added '
-                '${widget.screenshotIds.length}')),
+            content: Text('${existing == null ? 'Created' : 'Added to'} '
+                '"${collection.name}" — ${widget.screenshotIds.length} '
+                'screenshot${widget.screenshotIds.length == 1 ? '' : 's'}')),
       );
     }
   }

@@ -20,13 +20,21 @@ class _TokenBucket {
   }
 
   Future<void> consume(double amount) async {
+    // A request asking for more than the bucket can ever hold would
+    // otherwise wait forever — refills top out at [capacity], so `_tokens`
+    // can never reach an [amount] above it. Clamping here means an
+    // oversized estimate (an unrecognized model id falling back to
+    // kMistralFallbackLimit's modest budget, say, combined with an
+    // unusually large batch) costs a slightly-too-eager admission instead
+    // of hanging this queue — and every call queued behind it — permanently.
+    final target = amount > capacity ? capacity : amount;
     while (true) {
       _refill();
-      if (_tokens >= amount) {
-        _tokens -= amount;
+      if (_tokens >= target) {
+        _tokens -= target;
         return;
       }
-      final deficitSeconds = (amount - _tokens) / ratePerSecond;
+      final deficitSeconds = (target - _tokens) / ratePerSecond;
       final waitMs = (deficitSeconds * 1000).ceil().clamp(10, 60000);
       await Future.delayed(Duration(milliseconds: waitMs));
     }

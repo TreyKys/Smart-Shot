@@ -74,27 +74,40 @@ class DiagnosticLog {
   static void warn(String message) => unawaited(_add(AiLogLevel.warn, message));
   static void error(String message) => unawaited(_add(AiLogLevel.error, message));
 
-  static Future<void> _add(AiLogLevel level, String message) async {
+  /// Serializes every persist within this isolate — callers use `unawaited`,
+  /// so without this, concurrent writers (e.g. up to `_kVisionConcurrency`
+  /// AI calls in flight at once, each logging its own outcome) would each
+  /// read-modify-write `_prefsKey` independently and clobber one another,
+  /// silently dropping entries. This is the same admission-tail pattern
+  /// RateLimitedQueue uses to serialize its own concurrent callers.
+  static Future<void> _writeTail = Future.value();
+
+  static Future<void> _add(AiLogLevel level, String message) {
     final entry = DiagnosticEntry(DateTime.now(), level, message);
     // Still useful when a dev environment *does* have a console attached
     // (emulator, `flutter run`).
     debugPrint('DiagnosticLog: $entry');
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      // Each isolate's SharedPreferences instance only reflects native state
-      // as of its own last fetch — reload() forces this write to actually
-      // see what the other isolate persisted, instead of clobbering it with
-      // a stale snapshot.
-      await prefs.reload();
-      final raw = prefs.getStringList(_prefsKey) ?? <String>[];
-      raw.add(jsonEncode(entry.toJson()));
-      final trimmed =
-          raw.length > _maxEntries ? raw.sublist(raw.length - _maxEntries) : raw;
-      await prefs.setStringList(_prefsKey, trimmed);
-    } catch (e) {
-      // Persisting the log must never be why an AI call itself fails.
-      debugPrint('DiagnosticLog: failed to persist entry: $e');
-    }
+    final myTurn = _writeTail.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        // Each isolate's SharedPreferences instance only reflects native
+        // state as of its own last fetch — reload() forces this write to
+        // actually see what the other isolate persisted, instead of
+        // clobbering it with a stale snapshot.
+        await prefs.reload();
+        final raw = prefs.getStringList(_prefsKey) ?? <String>[];
+        raw.add(jsonEncode(entry.toJson()));
+        final trimmed = raw.length > _maxEntries
+            ? raw.sublist(raw.length - _maxEntries)
+            : raw;
+        await prefs.setStringList(_prefsKey, trimmed);
+      } catch (e) {
+        // Persisting the log must never be why an AI call itself fails.
+        debugPrint('DiagnosticLog: failed to persist entry: $e');
+      }
+    });
+    _writeTail = myTurn;
+    return myTurn;
   }
 
   /// Loads the full persisted log, oldest first.
