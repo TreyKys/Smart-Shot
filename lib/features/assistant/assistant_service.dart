@@ -7,7 +7,7 @@ import 'package:sift/core/diagnostics/diagnostic_log.dart';
 // sync if Mistral changes naming, and this call is small (a sentence plus a
 // short tag/collection list) so the vision-capable tier costs nothing extra
 // here even though no image is ever sent.
-const String _kAssistantModel = 'pixtral-12b-2409';
+const String _kAssistantModel = 'mistral-small-2603';
 
 enum AssistantIntent {
   search,

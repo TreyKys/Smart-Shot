@@ -283,13 +283,15 @@ Future<void> discoverNewScreenshots(Isar isar) async {
 /// The remainder is picked up by the next run rather than loaded up front.
 const int _kMaxPerRun = 300;
 
-/// Concurrent in-flight AI calls. These are network-bound, so a handful in
-/// parallel is a near-linear speedup; the cap keeps memory and rate limits
-/// sane. Lowered from 4 — the shared key's per-minute quota was observed
-/// getting exhausted mid-batch on a real device (confirmed via the
-/// diagnostics log: several concurrent 429s in one run), and LLMService's own
-/// retry-with-backoff can only do so much against a burst this wide.
-const int _kVisionConcurrency = 2;
+/// Concurrent callers submitting to MistralClient at once. Raised back up
+/// now that MistralClient itself queues and paces every call against the
+/// model's real rate limit (RateLimitedQueue) — this number no longer has to
+/// double as the rate-limiting defence the way it did when the only
+/// protection was "don't fire too many at once and hope." More callers here
+/// just means the queue's backlog stays fuller, so a slot is always ready to
+/// go the instant the rate limit allows the next one — not that the API
+/// gets hit any harder than the account's own limit permits.
+const int _kVisionConcurrency = 6;
 
 class GalleryRepository {
   final GalleryRepositoryRef _ref;

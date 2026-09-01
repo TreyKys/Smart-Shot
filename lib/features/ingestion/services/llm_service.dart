@@ -15,12 +15,15 @@ LLMService llmService(LlmServiceRef ref) {
   return LLMService();
 }
 
-// Mistral's vision-capable model line (Pixtral), pinned to a dated release
-// rather than a "-latest" alias so behavior doesn't shift under us silently.
-// NOT verified against a live call — no Mistral API key was available while
-// writing this; confirm the exact model id once real access exists, and
-// check whether the free tier restricts which models it can call at all.
-const String _kMistralModel = 'pixtral-12b-2409';
+// Pixtral (Mistral's original standalone vision model) is deprecated —
+// vision is folded into the unified flagship models now. mistral-small-2603
+// is the one pinned here: dated (not a "-latest" alias, so behavior doesn't
+// shift under us silently), confirmed present in the account's own rate
+// limit table (see mistral_rate_limits.dart), and the best balance of speed
+// vs. token budget among the models available. Still not verified against
+// an actual multimodal call — confirm it accepts image input once real
+// usage is possible; if not, mistral-medium-latest is next best guess.
+const String _kMistralModel = 'mistral-small-2603';
 
 /// Long-edge cap for uploaded images — vision models generally gain nothing
 /// past this regardless of provider.

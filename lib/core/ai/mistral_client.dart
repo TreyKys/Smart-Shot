@@ -3,44 +3,84 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:sift/core/ai/mistral_rate_limits.dart';
+import 'package:sift/core/ai/rate_limited_queue.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
 /// Shared low-level transport for Mistral AI's OpenAI-compatible chat
 /// completions API — used by both LLMService (screenshot tagging) and
-/// AssistantService (chat), so auth/retry/JSON-parsing logic lives in one
-/// place rather than being duplicated per caller.
+/// AssistantService (chat), so auth/retry/rate-limiting/JSON-parsing logic
+/// lives in one place rather than being duplicated per caller.
 ///
-/// Second provider swap this project has been through: Gemini
-/// (google_generative_ai, schema-enforced) → Qwen (Alibaba Cloud DashScope,
-/// OpenAI-compatible) → Mistral (this one, also OpenAI-compatible). Since
-/// Qwen and Mistral share the same request/response shape, this is mostly
-/// QwenClient with the endpoint and model names swapped — the JSON-shape
-/// discipline that move away from Gemini required (spelling the exact
-/// response shape out in the prompt, since neither DashScope's nor Mistral's
-/// json_object mode enforces a specific schema server-side) carries over
-/// unchanged.
+/// Third provider this project has run on: Gemini (google_generative_ai,
+/// schema-enforced) → Qwen (Alibaba Cloud DashScope) → Mistral (this one).
+/// Qwen and Mistral share the same OpenAI-compatible request/response shape,
+/// so this is mostly the Qwen transport with the endpoint and model names
+/// swapped — the JSON-shape discipline the move away from Gemini required
+/// (spelling the exact response shape out in the prompt, since neither
+/// DashScope's nor Mistral's json_object mode enforces a schema server-side)
+/// carries over unchanged.
 ///
-/// NOT YET VERIFIED AGAINST A LIVE KEY — there was no Mistral API key
-/// available while writing this. The endpoint, auth header shape, and
-/// request/response JSON envelope follow Mistral's own documented API
-/// (which is intentionally OpenAI-compatible), but the exact model name and
-/// response envelope should be double-checked against a real call once a key
-/// exists — see the model constants in llm_service.dart and
-/// assistant_service.dart, both one-line changes if the model id is wrong.
+/// Every call is paced through a [RateLimitedQueue] keyed by model, built
+/// from [kMistralRateLimits] — real numbers pulled from the account's own
+/// Mistral console, not guessed. Several of those limits are fractional
+/// requests-per-second (mistral-large-2512 allows roughly one request per 14
+/// seconds), which a naive fire-and-hope client blows through immediately;
+/// queueing admission instead of just retrying after a 429 is what actually
+/// keeps a real screenshot-tagging workload from failing outright.
 class MistralClient {
   MistralClient._();
 
   static const String _endpoint = 'https://api.mistral.ai/v1/chat/completions';
 
-  /// Sends one chat-completion request expecting a JSON object back.
+  static final Map<String, RateLimitedQueue> _queues = {};
+
+  static RateLimitedQueue _queueFor(String model) {
+    return _queues.putIfAbsent(model, () {
+      final limit = kMistralRateLimits[model] ?? kMistralFallbackLimit;
+      return RateLimitedQueue(
+        requestsPerSecond: limit.rps,
+        tokensPerMinute: limit.tpm,
+      );
+    });
+  }
+
+  /// ~4 characters per token for English-ish text, plus a fixed allowance
+  /// for image tokens. Both are approximations pending a real call to see
+  /// actual usage in the response — overestimating just makes the queue
+  /// wait a touch longer than strictly necessary, which is the safe
+  /// direction; underestimating risks a real 429 slipping through.
+  static int _estimateTokens(String prompt, {required bool hasImage}) {
+    final textTokens = (prompt.length / 4).ceil();
+    const imageTokenAllowance = 1100;
+    return textTokens + (hasImage ? imageTokenAllowance : 0);
+  }
+
+  /// Sends one chat-completion request expecting a JSON object back —
+  /// queued against the model's real rate limit first (see class doc), then
+  /// retried with backoff if a 429 gets through anyway.
   ///
   /// [imageBytes]/[imageMime] attach one image as a base64 data URI, in the
-  /// same vision message shape OpenAI-compatible APIs use. Retries with
-  /// backoff on HTTP 429 (rate limit) up to 3 attempts — Mistral's free tier
-  /// is reported to be rate-limited quite tightly (a couple of requests per
-  /// minute on some accounts, per its own docs' "for evaluation, not
-  /// production" framing), so this matters more here than it did on Qwen.
+  /// same vision message shape OpenAI-compatible APIs use.
   static Future<Map<String, dynamic>> completeJson({
+    required String apiKey,
+    required String model,
+    required String prompt,
+    Uint8List? imageBytes,
+    String? imageMime,
+  }) {
+    final estimatedTokens =
+        _estimateTokens(prompt, hasImage: imageBytes != null);
+    return _queueFor(model).run(estimatedTokens, () => _completeJsonNow(
+          apiKey: apiKey,
+          model: model,
+          prompt: prompt,
+          imageBytes: imageBytes,
+          imageMime: imageMime,
+        ));
+  }
+
+  static Future<Map<String, dynamic>> _completeJsonNow({
     required String apiKey,
     required String model,
     required String prompt,
@@ -79,15 +119,17 @@ class MistralClient {
             )
             .timeout(const Duration(seconds: 45));
 
+        // The queue should mean this rarely fires — a genuine safety net
+        // (clock drift, a second isolate's queue running independently,
+        // the token estimate above being wrong) rather than the primary
+        // defence.
         if (response.statusCode == 429 && attempt < maxAttempts) {
           final wait = Duration(seconds: 5 * attempt);
           debugPrint('MistralClient: rate-limited (attempt $attempt/'
               '$maxAttempts) — retrying in ${wait.inSeconds}s.');
           DiagnosticLog.warn(
-              'MistralClient: rate-limited — retrying in ${wait.inSeconds}s '
-              '(attempt $attempt/$maxAttempts). If this fires constantly, '
-              'the free-tier RPM limit is the bottleneck, not the monthly '
-              'token cap — check Mistral\'s console for your real limit.');
+              'MistralClient: rate-limited despite queueing — retrying in '
+              '${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
           await Future.delayed(wait);
           continue;
         }
@@ -148,7 +190,7 @@ class MistralClient {
   }
 
   /// Some models wrap JSON in ```json fences even when told not to — a
-  /// safety net rather than the expected path, same as the Qwen transport.
+  /// safety net rather than the expected path.
   static String _stripFences(String text) {
     final fenced = RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$');
     final match = fenced.firstMatch(text);
