@@ -4,16 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
 
-// This is not a test of App Check — nothing in this app's Gemini path routes
-// through Firebase, so App Check has no way to affect it either way (Gemini
-// calls go straight to generativelanguage.googleapis.com via API key).
+// This is not a test of App Check — nothing in this app's AI path routes
+// through Firebase, so App Check has no way to affect it either way (AI
+// calls go straight to the provider's API via API key — see MistralClient).
 //
 // What this actually pins down: gallery_repository.dart wraps every
 // llmService.analyze() call in try/catch, and on failure the screenshot's
 // `llm` map is just {} — the exact same shape as a screenshot with no API key
 // configured. This test reproduces that {} case directly against the pure
 // tagging logic (the same calls _writeResults makes) to prove a failed or
-// missing Gemini call degrades to local-only tags instead of leaving a
+// missing AI call degrades to local-only tags instead of leaving a
 // screenshot untagged or corrupting its state.
 void main() {
   // Mirrors GalleryRepository._list() and ._writeResults()'s tag branch
@@ -56,7 +56,7 @@ void main() {
     return TagEngine.merge(aiTags, localTags);
   }
 
-  group('Gemini call fails or returns nothing (llm == {})', () {
+  group('AI call fails or returns nothing (llm == {})', () {
     test('rich OCR text still gets tagged from local keyword scoring', () {
       const ocr = 'PayPal receipt\nTotal: \$42.00\nOrder #A1B2C3\nThank you '
           'for your purchase';
@@ -82,7 +82,7 @@ void main() {
     });
   });
 
-  group('Gemini succeeds but with garbage/malformed content', () {
+  group('AI call succeeds but with garbage/malformed content', () {
     test('unmappable tags are dropped, local tags fill the gap', () {
       const ocr = 'Uber trip receipt\nTotal fare: \$18.50\nDriver: Alex';
       final tags = resolveTags(ocr, {

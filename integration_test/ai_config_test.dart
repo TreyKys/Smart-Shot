@@ -33,7 +33,7 @@ void main() {
   test('the build never both requires a shared key and lacks one', () {
     expect(
       SharedKeyService.configError(
-        key: SharedKeyService.geminiApiKey,
+        key: SharedKeyService.apiKey,
         mustExist: SharedKeyService.requireSharedKey,
       ),
       isNull,
@@ -53,27 +53,32 @@ void main() {
     // pinning it means publishing the parameter flips which of these two tests
     // does the real work. Whichever stands down says so via markTestSkipped,
     // so neither can go quiet without it showing in the run output.
-    expect(SharedKeyService.geminiApiKey, isEmpty);
+    expect(SharedKeyService.apiKey, isEmpty);
     expect(SharedKeyService.isConfigured, isFalse,
         reason: 'No shared key, so the shared AI path is off. Analysis falls '
             'back to OCR and local tags by design — publish '
-            '"${SharedKeyService.kGeminiKeyParam}" in Remote Config and '
+            '"${SharedKeyService.kMistralKeyParam}" in Remote Config and '
             'register an App Check debug token to enable it.');
   });
 
-  test('a fetched key looks like a real Gemini key', () {
+  test('a fetched key looks like a plausible API key', () {
     if (!SharedKeyService.isConfigured) {
       markTestSkipped('No shared key fetched; nothing to validate yet.');
       return;
     }
-    final key = SharedKeyService.geminiApiKey;
-    // Catches the two ways this goes wrong in practice: a placeholder left in
-    // the console, or a value that arrived with whitespace or quotes around it
-    // from a copy-paste. Both would fail at call time with an opaque 400.
-    expect(key, startsWith('AIza'),
-        reason: 'Remote Config returned "$key", which is not a Google API '
-            'key. Check the parameter value in the Firebase Console.');
-    expect(key, equals(key.trim()));
-    expect(key.length, greaterThan(30));
+    final key = SharedKeyService.apiKey;
+    // Deliberately no vendor-specific prefix check (Gemini keys start
+    // "AIza"; Mistral's format hasn't been confirmed against a real key at
+    // the time this was written) — just catches the two ways this goes
+    // wrong regardless of provider: a placeholder left in the console, or a
+    // value that arrived with whitespace or quotes around it from a
+    // copy-paste. Both would fail at call time with an opaque 4xx.
+    expect(key, equals(key.trim()),
+        reason: 'Remote Config returned "$key" with leading/trailing '
+            'whitespace or quotes — check the parameter value in the '
+            'Firebase Console.');
+    expect(key.length, greaterThan(10),
+        reason: 'Remote Config returned "$key", too short to plausibly be a '
+            'real API key — check for a placeholder value.');
   });
 }

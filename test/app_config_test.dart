@@ -10,7 +10,7 @@ void main() {
   });
 
   test('secrets default to empty (never a hardcoded placeholder)', () {
-    expect(AppConfig.geminiApiKey, isEmpty);
+    expect(AppConfig.mistralApiKey, isEmpty);
     expect(AppConfig.revenueCatAndroidApiKey, isEmpty);
     expect(AppConfig.revenueCatIosApiKey, isEmpty);
   });

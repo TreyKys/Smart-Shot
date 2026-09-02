@@ -79,16 +79,16 @@ class _CollectionDetailScreenState
           ? const Center(
               child: CircularProgressIndicator(color: SiftColors.accent))
           : shots.isEmpty
-              ? Center(
+              ? const Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(32),
+                    padding: EdgeInsets.all(32),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.photo_outlined,
+                        Icon(Icons.photo_outlined,
                             size: 48, color: SiftColors.textTertiary),
-                        const SizedBox(height: 12),
-                        const Text('Nothing here yet.',
+                        SizedBox(height: 12),
+                        Text('Nothing here yet.',
                             style: TextStyle(
                                 color: SiftColors.textSecondary, fontSize: 15)),
                         const SizedBox(height: 6),

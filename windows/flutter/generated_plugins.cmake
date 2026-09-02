@@ -3,6 +3,9 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  firebase_app_check
+  firebase_core
+  firebase_remote_config
   isar_flutter_libs
   permission_handler_windows
   share_plus

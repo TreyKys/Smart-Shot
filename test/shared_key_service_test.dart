@@ -30,7 +30,7 @@ void main() {
       expect(error, isNotNull);
       // This surfaces at launch, potentially far from whoever configured the
       // build, so the message has to name the parameter and both likely causes.
-      expect(error, contains(SharedKeyService.kGeminiKeyParam));
+      expect(error, contains(SharedKeyService.kMistralKeyParam));
       expect(error, contains('Remote Config'));
       expect(error, contains('App Check'));
     });
@@ -39,12 +39,12 @@ void main() {
   test('the parameter name matches what the Firebase Console expects', () {
     // A typo here reads as "no key configured" rather than an error, so it is
     // worth pinning literally.
-    expect(SharedKeyService.kGeminiKeyParam, 'gemini_api_key');
+    expect(SharedKeyService.kMistralKeyParam, 'mistral_api_key');
   });
 
   test('defaults to unconfigured, so nothing is assumed before a fetch', () {
     expect(SharedKeyService.requireSharedKey, isFalse);
-    expect(SharedKeyService.geminiApiKey, isEmpty);
+    expect(SharedKeyService.apiKey, isEmpty);
     expect(SharedKeyService.isConfigured, isFalse);
   });
 
@@ -53,7 +53,7 @@ void main() {
 
     SharedKeyService.debugSetKey('AIza-test');
     expect(SharedKeyService.isConfigured, isTrue);
-    expect(SharedKeyService.geminiApiKey, 'AIza-test');
+    expect(SharedKeyService.apiKey, 'AIza-test');
 
     SharedKeyService.debugSetKey('');
     expect(SharedKeyService.isConfigured, isFalse);

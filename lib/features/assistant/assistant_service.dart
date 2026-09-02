@@ -99,9 +99,10 @@ class AssistantService {
     final hasByok = byokApiKey != null &&
         byokApiKey.isNotEmpty &&
         byokApiKey != 'INSERT_API_KEY_HERE';
-    // byokApiKey's static type stays String? even where hasByok is true — the
-    // ! here is safe precisely because hasByok already confirmed non-null.
-    final apiKey = hasByok ? byokApiKey! : SharedKeyService.apiKey;
+    // Dart's flow analysis promotes byokApiKey to String here — hasByok was
+    // assigned directly from a `byokApiKey != null && ...` expression, which
+    // it tracks through the ternary condition below.
+    final apiKey = hasByok ? byokApiKey : SharedKeyService.apiKey;
     if (apiKey.isEmpty) {
       DiagnosticLog.warn('AssistantService: no API key available — skipping.');
       return AssistantPlan.unavailable;
