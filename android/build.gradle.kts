@@ -61,4 +61,24 @@ subprojects {
             }
         }
     }
+
+    // 3. The other half of the JVM Mismatch Fix — Kotlin's side.
+    //
+    // Fix #2 above pins every plugin's *Java* compile task to 17. Kotlin
+    // Gradle Plugin 2.2+ no longer inherits that: with no jvmTarget set
+    // explicitly, it defaults a plugin's *Kotlin* compile task to whatever
+    // JDK is running Gradle itself (21 here), which is exactly what fix #2
+    // was written to prevent — just for the other compiler. Any plugin that
+    // has Kotlin sources but doesn't set kotlinOptions.jvmTarget itself
+    // (receive_sharing_intent, at minimum) ends up with
+    // compileReleaseJavaWithJavac targeting 17 and compileReleaseKotlin
+    // targeting 21 in the same module, which Gradle refuses to build.
+    // Pinning every Kotlin compile task's jvmTarget to 17 here, the same way
+    // fix #2 already pins the Java side, keeps both compilers in a module
+    // agreeing no matter what JDK happens to be running Gradle.
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions.jvmTarget.set(
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        )
+    }
 }
