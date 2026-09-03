@@ -53,13 +53,27 @@ subprojects {
     }
 
     // 2. The JVM Mismatch Fix (Forces all plugins to use Java 17)
-    pluginManager.withPlugin("com.android.library") {
-        extensions.configure<com.android.build.api.dsl.LibraryExtension> {
-            compileOptions {
-                sourceCompatibility = org.gradle.api.JavaVersion.VERSION_17
-                targetCompatibility = org.gradle.api.JavaVersion.VERSION_17
-            }
-        }
+    //
+    // Started as the same withPlugin-vs-afterEvaluate timing trap as fix #1
+    // above (add_2_calendar defaults to Java 1.8, and setting
+    // LibraryExtension.compileOptions from withPlugin ran too early, getting
+    // clobbered by the plugin's own lower value running second). Moving that
+    // override into afterEvaluate — the fix #1 pattern — traded that bug for
+    // a different one: AGP finalizes compileOptions.sourceCompatibility /
+    // targetCompatibility (locks the Property so nothing can set it again)
+    // partway through evaluation, and by afterEvaluate that lock is often
+    // already in place, so the assignment throws "sourceCompatibility has
+    // been finalized" instead of silently doing nothing.
+    //
+    // Configuring the JavaCompile tasks directly — the same approach fix #3
+    // below already uses for Kotlin — sidesteps both problems at once: task
+    // properties aren't finalized the way the compileOptions DSL is, and
+    // tasks.withType(...).configureEach runs lazily against every matching
+    // task as it's created, so ordering relative to any particular plugin's
+    // own build.gradle stops mattering.
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = org.gradle.api.JavaVersion.VERSION_17.toString()
+        targetCompatibility = org.gradle.api.JavaVersion.VERSION_17.toString()
     }
 
     // 3. The other half of the JVM Mismatch Fix — Kotlin's side.
