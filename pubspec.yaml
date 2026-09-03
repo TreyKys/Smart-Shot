@@ -1,7 +1,7 @@
 name: sift
 description: "Sift — automatically organize and tag your screenshots with on-device OCR and AI."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   # Floor is set by patrol_finders (Dart 3.8 / Flutter 3.32); firebase_* needs 3.6+.
