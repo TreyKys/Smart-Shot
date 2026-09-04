@@ -52,47 +52,68 @@ subprojects {
         }
     }
 
-    // 2. The JVM Mismatch Fix (Forces all plugins to use Java 17)
+    // 2. The JVM Mismatch Fix — make each plugin's Kotlin task follow its
+    // OWN Java task, instead of forcing every plugin to one fixed version.
     //
-    // Started as the same withPlugin-vs-afterEvaluate timing trap as fix #1
-    // above (add_2_calendar defaults to Java 1.8, and setting
-    // LibraryExtension.compileOptions from withPlugin ran too early, getting
-    // clobbered by the plugin's own lower value running second). Moving that
-    // override into afterEvaluate — the fix #1 pattern — traded that bug for
-    // a different one: AGP finalizes compileOptions.sourceCompatibility /
-    // targetCompatibility (locks the Property so nothing can set it again)
-    // partway through evaluation, and by afterEvaluate that lock is often
-    // already in place, so the assignment throws "sourceCompatibility has
-    // been finalized" instead of silently doing nothing.
+    // Earlier attempts here tried to force every plugin's *Java* compile
+    // task to 17 (to give fix #3 below, which pins Kotlin to 17, something
+    // consistent to match) — via pluginManager.withPlugin, then afterEvaluate,
+    // then configuring the JavaCompile tasks directly, then an eager
+    // gradle.projectsEvaluated backstop. Every one of those either lost a
+    // silent last-write race against AGP's own configuration (so the plugin
+    // shipped targeting 1.8 regardless — this is what actually broke
+    // add_2_calendar), hit "sourceCompatibility has been finalized" because
+    // AGP locks that Property partway through evaluation, or — worse, for
+    // the eager backstop — broke flutter_local_notifications' compile
+    // classpath entirely (100 "package android.* does not exist" errors)
+    // by writing to JavaCompile's fields through a path that skips whatever
+    // else AGP's own configuration wires up alongside them.
     //
-    // Configuring the JavaCompile tasks directly — the same approach fix #3
-    // below already uses for Kotlin — sidesteps both problems at once: task
-    // properties aren't finalized the way the compileOptions DSL is, and
-    // tasks.withType(...).configureEach runs lazily against every matching
-    // task as it's created, so ordering relative to any particular plugin's
-    // own build.gradle stops mattering.
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = org.gradle.api.JavaVersion.VERSION_17.toString()
-        targetCompatibility = org.gradle.api.JavaVersion.VERSION_17.toString()
-    }
-
-    // 3. The other half of the JVM Mismatch Fix — Kotlin's side.
+    // None of that is actually necessary: the only real requirement is that
+    // a module's Java and Kotlin compile tasks agree with EACH OTHER, not
+    // that every module in the whole build target the same JVM version.
+    // Reading each module's Java target back out (safe — a read, not a
+    // write, so it isn't affected by the finalization AGP applies to writes)
+    // after that module has fully configured itself, and pointing that
+    // SAME module's Kotlin task at it, guarantees the two agree without
+    // needing to fight AGP for control of the Java side at all — whether a
+    // plugin ends up at AGP's own default, or an explicit value it set
+    // itself (1.8 for add_2_calendar), Kotlin now simply follows suit.
     //
-    // Fix #2 above pins every plugin's *Java* compile task to 17. Kotlin
-    // Gradle Plugin 2.2+ no longer inherits that: with no jvmTarget set
-    // explicitly, it defaults a plugin's *Kotlin* compile task to whatever
-    // JDK is running Gradle itself (21 here), which is exactly what fix #2
-    // was written to prevent — just for the other compiler. Any plugin that
-    // has Kotlin sources but doesn't set kotlinOptions.jvmTarget itself
-    // (receive_sharing_intent, at minimum) ends up with
-    // compileReleaseJavaWithJavac targeting 17 and compileReleaseKotlin
-    // targeting 21 in the same module, which Gradle refuses to build.
-    // Pinning every Kotlin compile task's jvmTarget to 17 here, the same way
-    // fix #2 already pins the Java side, keeps both compilers in a module
-    // agreeing no matter what JDK happens to be running Gradle.
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        compilerOptions.jvmTarget.set(
-            org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-        )
+    // The first cut of this registered afterEvaluate directly from here —
+    // which runs too EARLY: this subprojects{} block's own content is
+    // injected before the module's own build.gradle (and therefore before
+    // com.android.library) even applies, so multiple afterEvaluate callbacks
+    // fire in registration order and ours went first, before AGP's own
+    // internal task-creation afterEvaluate (AGP commonly defers creating the
+    // JavaCompile task itself to its own afterEvaluate) had created the task
+    // at all — so the read silently found nothing for receive_sharing_intent
+    // and skipped it, leaving its Kotlin task at Gradle's own JDK (21).
+    // Registering from inside withPlugin("org.jetbrains.kotlin.android")
+    // instead means our registration call itself only happens once that
+    // module's script reaches its kotlin-android plugin id — which, by the
+    // near-universal Flutter-plugin-template convention of listing
+    // com.android.library before kotlin-android in the same plugins{} block,
+    // is after AGP's own plugin (and whatever afterEvaluate it registered)
+    // is already in the queue — so ours lands later in the same project's
+    // afterEvaluate queue and runs after AGP's task-creation has completed.
+    pluginManager.withPlugin("org.jetbrains.kotlin.android") {
+        val matchKotlinToJava: Project.() -> Unit = {
+            val javaTarget = tasks.withType<JavaCompile>()
+                .firstOrNull()
+                ?.targetCompatibility
+            if (javaTarget != null) {
+                tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+                    compilerOptions.jvmTarget.set(
+                        org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(javaTarget)
+                    )
+                }
+            }
+        }
+        // :app itself is already fully evaluated by the time this runs,
+        // because the evaluationDependsOn(":app") above forces it to finish
+        // first — calling afterEvaluate on an already-evaluated project
+        // throws, so run directly for it and defer everyone else normally.
+        if (state.executed) matchKotlinToJava() else afterEvaluate(matchKotlinToJava)
     }
 }
