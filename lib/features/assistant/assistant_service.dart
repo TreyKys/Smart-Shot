@@ -144,6 +144,7 @@ before or after it. Use exactly this shape:
 User: $message
 ''';
 
+    final callStarted = DateTime.now();
     final map = await MistralClient.completeJson(
       apiKey: apiKey,
       model: _kAssistantModel,
@@ -152,6 +153,16 @@ User: $message
       // background tagging batch on the same model's shared queue.
       priority: RequestPriority.interactive,
     );
+    final elapsed = DateTime.now().difference(callStarted);
+    if (elapsed > const Duration(seconds: 5)) {
+      // Anything past a couple seconds here is worth knowing about even on
+      // success — RateLimitedQueue only logs a slow *wait*, so a call that
+      // cleared admission quickly but the HTTP round trip itself was slow
+      // wouldn't otherwise show up anywhere.
+      DiagnosticLog.warn(
+          'AssistantService: MistralClient.completeJson took '
+          '${elapsed.inSeconds}s (model=$_kAssistantModel).');
+    }
     if (map.isEmpty) return AssistantPlan.failed;
 
     final intent = _parseIntent(map['intent'] as String?);

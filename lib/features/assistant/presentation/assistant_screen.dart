@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/assistant/assistant_service.dart';
 import 'package:sift/features/collections/collections_service.dart';
@@ -132,14 +133,43 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     try {
       final repo = ref.read(galleryRepositoryProvider);
       final collections = ref.read(collectionsServiceProvider).value ?? [];
-      final tags = await ref.read(uniqueTagsProvider.future);
+      // Bounded — the previous version of this screen had no visibility at
+      // all into a hang here, so a stuck Isar/Riverpod stream (not the AI
+      // call at all) would look identical to the AI itself being slow, with
+      // an empty diagnostic log either way. If this ever actually times out,
+      // the log line proves the AI call was never the problem.
+      final tags = await ref.read(uniqueTagsProvider.future).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          DiagnosticLog.error(
+              'AssistantScreen: uniqueTagsProvider did not emit within 10s '
+              '— falling back to no tags rather than hanging.');
+          return const <String>[];
+        },
+      );
       final byokKey = ref.read(economyServiceProvider.notifier).getByokKey();
 
-      final plan = await _service.plan(
-        text,
-        availableTags: tags,
-        availableCollections: collections.map((c) => c.name).toList(),
-        byokApiKey: byokKey,
+      DiagnosticLog.info('AssistantScreen: calling AssistantService.plan()…');
+      // A real ceiling so a genuine hang — anywhere in plan(), not just a
+      // slow AI response, which already has its own 45s HTTP timeout —
+      // surfaces as "something went wrong" instead of a spinner that never
+      // resolves. That's the actual bug report this guards against: no
+      // failure message ever arrived at all.
+      final plan = await _service
+          .plan(
+            text,
+            availableTags: tags,
+            availableCollections: collections.map((c) => c.name).toList(),
+            byokApiKey: byokKey,
+          )
+          .timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          DiagnosticLog.error(
+              'AssistantScreen: AssistantService.plan() did not return '
+              'within 60s.');
+          return AssistantPlan.failed;
+        },
       );
 
       final all = await repo.allScreenshots();

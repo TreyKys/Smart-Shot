@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
+import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
 /// A single token bucket — refills continuously at [ratePerSecond], holds at
 /// most [capacity] tokens.
@@ -82,7 +83,11 @@ enum RequestPriority { interactive, background }
 class _PendingAdmission {
   final RequestPriority priority;
   final double estimatedTokens;
+  final DateTime enqueuedAt = clock.now();
   final Completer<void> completer = Completer<void>();
+  // Set once a single slow-wait warning has fired for this entry, so a
+  // genuinely long wait logs once instead of once per 250ms retry tick.
+  bool loggedSlowWait = false;
   _PendingAdmission({required this.priority, required this.estimatedTokens});
 }
 
@@ -207,6 +212,25 @@ class RateLimitedQueue {
           _requestBucket.secondsUntilAvailable(1),
           _tokenBucket.secondsUntilAvailable(head.estimatedTokens),
         );
+        // Logged once per entry, not once per retry tick — this is exactly
+        // the "is it actually the rate limit, or stuck somewhere else
+        // entirely" question a silent admission wait leaves unanswerable
+        // from a user-supplied diagnostic log otherwise. Five seconds is
+        // short enough to still catch a real user-reported hang.
+        if (!head.loggedSlowWait &&
+            clock.now().difference(head.enqueuedAt) >
+                const Duration(seconds: 5)) {
+          head.loggedSlowWait = true;
+          final requestWait = _requestBucket.secondsUntilAvailable(1);
+          final tokenWait =
+              _tokenBucket.secondsUntilAvailable(head.estimatedTokens);
+          DiagnosticLog.warn(
+              'RateLimitedQueue: ${head.priority.name} call (estTokens='
+              '${head.estimatedTokens.toStringAsFixed(0)}) still waiting on '
+              'admission after 5s — requestBucket needs '
+              '${requestWait.toStringAsFixed(1)}s, tokenBucket needs '
+              '${tokenWait.toStringAsFixed(1)}s.');
+        }
         final waitMs = (waitSeconds * 1000).ceil().clamp(10, 250);
         await Future.delayed(Duration(milliseconds: waitMs));
       }
