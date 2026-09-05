@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:sift/core/ai/mistral_client.dart';
+import 'package:sift/core/ai/rate_limited_queue.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
@@ -147,6 +148,9 @@ User: $message
       apiKey: apiKey,
       model: _kAssistantModel,
       prompt: prompt,
+      // A person is waiting on this one — it must not queue behind a big
+      // background tagging batch on the same model's shared queue.
+      priority: RequestPriority.interactive,
     );
     if (map.isEmpty) return AssistantPlan.failed;
 

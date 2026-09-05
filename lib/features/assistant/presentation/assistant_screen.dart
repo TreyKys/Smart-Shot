@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift/core/theme/app_theme.dart';
@@ -56,6 +58,14 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   final _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
   bool _busy = false;
+  // Bare spinner with no text reads as "broken" the moment a reply takes more
+  // than a second or two — which happens for real reasons (the shared AI key
+  // is momentarily rate-limited, a cold network call, a slow device) even
+  // with the interactive queue priority fix in mistral_client.dart. These
+  // escalate what's shown the longer a single request actually runs, so a
+  // slow reply reads as "still working" instead of "stuck."
+  Timer? _busyMessageTimer;
+  String? _busyMessage;
 
   @override
   void initState() {
@@ -70,9 +80,30 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
   @override
   void dispose() {
+    _busyMessageTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _startBusyMessages() {
+    _busyMessageTimer?.cancel();
+    setState(() => _busyMessage = null);
+    _busyMessageTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted || !_busy) return;
+      setState(() => _busyMessage = 'Thinking…');
+      _busyMessageTimer = Timer(const Duration(seconds: 8), () {
+        if (!mounted || !_busy) return;
+        setState(() =>
+            _busyMessage = 'Still working — the AI is a little busy right now.');
+      });
+    });
+  }
+
+  void _stopBusyMessages() {
+    _busyMessageTimer?.cancel();
+    _busyMessageTimer = null;
+    if (mounted) setState(() => _busyMessage = null);
   }
 
   void _scrollToEnd() {
@@ -96,6 +127,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       _busy = true;
     });
     _scrollToEnd();
+    _startBusyMessages();
 
     try {
       final repo = ref.read(galleryRepositoryProvider);
@@ -114,6 +146,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       final matched = _match(all, plan);
       _respond(plan, matched);
     } finally {
+      _stopBusyMessages();
       if (mounted) setState(() => _busy = false);
       _scrollToEnd();
     }
@@ -328,13 +361,26 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
             ),
           ),
           if (_busy)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: SiftColors.accent),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: SiftColors.accent),
+                  ),
+                  if (_busyMessage != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      _busyMessage!,
+                      style: const TextStyle(
+                          color: SiftColors.textTertiary, fontSize: 12),
+                    ),
+                  ],
+                ],
               ),
             ),
           SafeArea(

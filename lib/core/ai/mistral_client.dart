@@ -67,16 +67,25 @@ class MistralClient {
     required String prompt,
     Uint8List? imageBytes,
     String? imageMime,
+    // Defaults to background (bulk screenshot tagging) — callers waiting on
+    // a person in the UI, like the chat assistant, should pass interactive
+    // so they don't queue behind a big tagging backlog. See
+    // RequestPriority's doc for why this doesn't risk the real rate limit.
+    RequestPriority priority = RequestPriority.background,
   }) {
     final estimatedTokens =
         _estimateTokens(prompt, hasImage: imageBytes != null);
-    return _queueFor(model).run(estimatedTokens, () => _completeJsonNow(
-          apiKey: apiKey,
-          model: model,
-          prompt: prompt,
-          imageBytes: imageBytes,
-          imageMime: imageMime,
-        ));
+    return _queueFor(model).run(
+      estimatedTokens,
+      () => _completeJsonNow(
+        apiKey: apiKey,
+        model: model,
+        prompt: prompt,
+        imageBytes: imageBytes,
+        imageMime: imageMime,
+      ),
+      priority: priority,
+    );
   }
 
   static Future<Map<String, dynamic>> _completeJsonNow({
