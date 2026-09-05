@@ -29,6 +29,17 @@ class _JunkReviewScreenState extends ConsumerState<JunkReviewScreen> {
   int _totalInBatch = 0;
   int _keptCount = 0;
   int _deletedCount = 0;
+  // Neither the swipe gesture nor the Keep/Delete buttons disable themselves
+  // while a keep/delete is in flight (deleteScreenshot does real file I/O
+  // plus an Isar write). Without this guard, a rapid double-tap or a
+  // tap-then-swipe on the same card fires _keep/_delete twice before the
+  // first setState ever runs — both calls capture the same "top" via a
+  // StatelessWidget that hasn't rebuilt yet, so the second call's
+  // _removeTop still blindly removes whatever is now at index 0. After the
+  // first call's removal that's a DIFFERENT, never-reviewed screenshot,
+  // which then silently disappears from this batch (not deleted — just
+  // skipped) and skews the kept/deleted counts shown at the end.
+  bool _processing = false;
 
   @override
   void initState() {
@@ -48,6 +59,8 @@ class _JunkReviewScreenState extends ConsumerState<JunkReviewScreen> {
   }
 
   Future<void> _keep(Screenshot shot) async {
+    if (_processing) return;
+    _processing = true;
     final isar = await ref.read(isarProvider.future);
     await isar.writeTxn(() async {
       shot.junkReviewed = true;
@@ -57,11 +70,14 @@ class _JunkReviewScreenState extends ConsumerState<JunkReviewScreen> {
   }
 
   Future<void> _delete(Screenshot shot) async {
+    if (_processing) return;
+    _processing = true;
     await ref.read(galleryRepositoryProvider).deleteScreenshot(shot.id);
     _removeTop(kept: false);
   }
 
   void _removeTop({required bool kept}) {
+    _processing = false;
     if (!mounted) return;
     setState(() {
       _batch!.removeAt(0);

@@ -203,13 +203,22 @@ Future<bool> _processDeepScanBatch() async {
 
 const String _kPrefsLastJunkNotificationAt = 'last_junk_notification_at';
 const Duration _kJunkNotificationMinInterval = Duration(hours: 24);
+// A separate, much shorter floor for the "batch is already full" path.
+// Without its own cooldown, a full batch stays full (unreviewedCount only
+// drops once the user actually reviews it) so "sooner if full" would
+// re-fire on literally every 15-minute scan until they do — the exact
+// notification-every-quarter-hour spam this whole cadence exists to avoid.
+// An hour still answers a busy day far faster than the 24h floor without
+// nagging every single scan.
+const Duration _kJunkNotificationMinIntervalWhenFull = Duration(hours: 1);
 
-/// Notifies at most once every [_kJunkNotificationMinInterval] — sooner only
-/// if a full [kJunkBatchSize] worth of unreviewed #Junk has piled up, so a
-/// heavy week doesn't just sit unnoticed until the daily window comes
-/// around. A failure here (notification init, plugin channel, whatever)
-/// must not fail the whole scan — tagging already succeeded by this point
-/// and shouldn't be thrown away over a nudge that didn't fire.
+/// Notifies at most once every [_kJunkNotificationMinInterval] — sooner,
+/// but still throttled to [_kJunkNotificationMinIntervalWhenFull], if a full
+/// [kJunkBatchSize] worth of unreviewed #Junk has piled up, so a heavy week
+/// doesn't just sit unnoticed until the daily window comes around. A
+/// failure here (notification init, plugin channel, whatever) must not fail
+/// the whole scan — tagging already succeeded by this point and shouldn't
+/// be thrown away over a nudge that didn't fire.
 Future<void> _maybeNotifyJunkBatch(Isar isar) async {
   try {
     final unreviewedCount = await isar.screenshots
@@ -224,9 +233,11 @@ Future<void> _maybeNotifyJunkBatch(Isar isar) async {
     final sinceLast = DateTime.now()
         .difference(DateTime.fromMillisecondsSinceEpoch(lastNotifiedMs));
 
-    final dueForDailyNudge = sinceLast >= _kJunkNotificationMinInterval;
     final batchIsFull = unreviewedCount >= kJunkBatchSize;
-    if (!dueForDailyNudge && !batchIsFull) return;
+    final requiredInterval = batchIsFull
+        ? _kJunkNotificationMinIntervalWhenFull
+        : _kJunkNotificationMinInterval;
+    if (sinceLast < requiredInterval) return;
 
     // A fresh plugin instance in this isolate, same as SharedKeyService
     // above — nothing main.dart's own init() set up carries over here.
