@@ -22,9 +22,14 @@ final galleryStreamProvider =
 );
 
 typedef GalleryStreamRef = AutoDisposeStreamProviderRef<List<Screenshot>>;
-String _$uniqueTagsHash() => r'a99832f7e67577cbe96c38fe6964604b237e1465';
+String _$uniqueTagsHash() => r'b6c2bcba6d42de4f7b64f3050695317c03c73659';
 
-/// See also [uniqueTags].
+/// Unique tag names, derived from [tagCountsProvider] rather than watching
+/// the gallery a second time — a separate `watchScreenshots()` subscription
+/// here would duplicate the same Isar watch query tagCountsProvider already
+/// maintains.
+///
+/// Copied from [uniqueTags].
 @ProviderFor(uniqueTags)
 final uniqueTagsProvider = AutoDisposeStreamProvider<List<String>>.internal(
   uniqueTags,

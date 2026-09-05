@@ -10,6 +10,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:sift/core/config/shared_key_service.dart';
+import 'package:sift/core/navigation.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
@@ -158,6 +159,14 @@ class _SiftAppState extends ConsumerState<SiftApp> {
       ref.read(economyServiceProvider.notifier).loadRewardedAd();
     });
 
+    // Covers the case NotificationService's own onDidReceiveNotificationResponse
+    // callback can't: the app was fully closed and got launched by the tap
+    // itself, so there was no running isolate for that callback to fire in.
+    NotificationService.instance
+        .routeIfLaunchedFromNotification()
+        .catchError((e, st) =>
+            debugPrint('routeIfLaunchedFromNotification failed: $e'));
+
     setState(() => _initDone = true);
   }
 
@@ -194,6 +203,7 @@ class _SiftAppState extends ConsumerState<SiftApp> {
 
     return MaterialApp(
       title: 'Sift',
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: buildSiftLightTheme(),
       darkTheme: buildSiftTheme(),

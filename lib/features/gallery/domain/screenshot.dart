@@ -52,4 +52,9 @@ class Screenshot {
   int? fileSizeBytes;
 
   bool isProcessed = false;
+
+  /// True once this screenshot has gone through the junk-batch review flow
+  /// (kept or deleted either way) — keeps a reviewed #Junk shot from being
+  /// pulled into a future batch just because the tag is still there.
+  bool junkReviewed = false;
 }

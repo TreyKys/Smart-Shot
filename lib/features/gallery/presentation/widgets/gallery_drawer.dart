@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/collections/presentation/collections_screen.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
+import 'package:sift/features/junk_review/junk_review_service.dart';
+import 'package:sift/features/junk_review/presentation/junk_review_screen.dart';
 import 'package:sift/features/settings/settings_screen.dart';
 
 class GalleryDrawer extends ConsumerWidget {
@@ -13,6 +15,10 @@ class GalleryDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tagsAsync = ref.watch(tagCountsProvider);
     final selectedTag = ref.watch(selectedTagProvider);
+    final unreviewedJunk = ref.watch(unreviewedJunkCountProvider).maybeWhen(
+          data: (count) => count,
+          orElse: () => 0,
+        );
     final totalScreenshots = ref.watch(totalScreenshotCountProvider).maybeWhen(
           data: (count) => count,
           orElse: () => null,
@@ -100,6 +106,21 @@ class GalleryDrawer extends ConsumerWidget {
               );
             },
           ),
+
+          if (unreviewedJunk > 0)
+            _DrawerTile(
+              icon: Icons.auto_delete_outlined,
+              iconColor: SiftColors.tagJunk,
+              label: 'Review Junk',
+              count: unreviewedJunk,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const JunkReviewScreen()),
+                );
+              },
+            ),
 
           const Divider(
               color: SiftColors.border, thickness: 0.5, height: 1),

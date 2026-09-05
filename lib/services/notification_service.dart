@@ -1,11 +1,19 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:sift/core/navigation.dart';
+import 'package:sift/features/junk_review/presentation/junk_review_screen.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+/// Payload strings notifications can carry — matched in [_route] to decide
+/// what tapping one should open. A plain string, not an enum, because it
+/// crosses the plugin's platform channel as one either way and this is the
+/// only place that ever reads it back.
+const String _kPayloadJunkReview = 'junk_review';
+
 /// Engagement notification service.
 /// Handles: processing complete, storage pressure, daily digest,
-/// re-engagement nudge, and quota nudge.
+/// re-engagement nudge, quota nudge, and junk-batch-ready.
 class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
@@ -27,6 +35,13 @@ class NotificationService {
     );
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
+      // Fires when a notification is tapped while this isolate is alive
+      // (foreground or backgrounded, not fully killed) — the background
+      // WorkManager isolate that can also call init() has no navigator to
+      // route with, but it's never the one receiving a tap either, so
+      // appNavigatorKey being unattached there is harmless.
+      onDidReceiveNotificationResponse: (response) =>
+          _route(response.payload),
     );
 
     // Create notification channel (Android 8+)
@@ -43,6 +58,30 @@ class NotificationService {
         ?.createNotificationChannel(channel);
 
     debugPrint('NotificationService: initialised.');
+  }
+
+  /// Call once, after the widget tree is up — handles the case
+  /// [init]'s own callback can't: the app was fully closed and got launched
+  /// by tapping a notification, so there was no running isolate for the tap
+  /// to reach in the first place.
+  Future<void> routeIfLaunchedFromNotification() async {
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp ?? false) {
+      _route(details!.notificationResponse?.payload);
+    }
+  }
+
+  void _route(String? payload) {
+    if (payload == _kPayloadJunkReview) {
+      // A frame or two after a cold start, the navigator may not be
+      // attached yet — addPostFrameCallback runs after the current frame
+      // finishes building rather than needing this to be synchronous.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        appNavigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const JunkReviewScreen()),
+        );
+      });
+    }
   }
 
   // ── Immediate notifications ───────────────────────────────────────────────
@@ -71,6 +110,22 @@ class NotificationService {
       id: 1003,
       title: 'Sift AI',
       body: '$used of $total AI scans used today. Pro removes this limit.',
+    );
+  }
+
+  /// [count] is capped at kJunkBatchSize by the caller (background_service.dart)
+  /// — this doesn't re-check, it just reports whatever it's given. Reusing
+  /// id 1004 for every call means a second batch accumulating before the
+  /// first is reviewed updates the existing notification instead of piling
+  /// up a new one each time — exactly the "notify rarely" half of the
+  /// scan-often-notify-rarely cadence background_service.dart implements.
+  Future<void> notifyJunkBatchReady(int count) async {
+    await _show(
+      id: 1004,
+      title: 'Junk to clear out',
+      body: '$count screenshot${count == 1 ? '' : 's'} look like junk — '
+          'swipe through and clear them out.',
+      payload: _kPayloadJunkReview,
     );
   }
 
@@ -123,9 +178,13 @@ class NotificationService {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  Future<void> _show(
-      {required int id, required String title, required String body}) async {
-    await _plugin.show(id, title, body, _notifDetails());
+  Future<void> _show({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    await _plugin.show(id, title, body, _notifDetails(), payload: payload);
   }
 
   NotificationDetails _notifDetails() {

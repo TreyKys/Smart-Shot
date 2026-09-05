@@ -52,34 +52,44 @@ const ScreenshotSchema = CollectionSchema(
       name: r'isProcessed',
       type: IsarType.bool,
     ),
-    r'ocrText': PropertySchema(
+    r'junkReviewed': PropertySchema(
       id: 7,
+      name: r'junkReviewed',
+      type: IsarType.bool,
+    ),
+    r'ocrText': PropertySchema(
+      id: 8,
       name: r'ocrText',
       type: IsarType.string,
     ),
     r'phoneNumbers': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'phoneNumbers',
       type: IsarType.stringList,
     ),
     r'suggestedActions': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'suggestedActions',
       type: IsarType.objectList,
       target: r'SuggestedAction',
     ),
     r'tags': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'tags',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
+    r'topic': PropertySchema(
+      id: 13,
+      name: r'topic',
+      type: IsarType.string,
+    ),
     r'urls': PropertySchema(
-      id: 12,
+      id: 14,
       name: r'urls',
       type: IsarType.stringList,
     )
@@ -137,6 +147,19 @@ const ScreenshotSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'cleanText',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'topic': IndexSchema(
+      id: 1007953096175763270,
+      name: r'topic',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'topic',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -251,6 +274,12 @@ int _screenshotEstimateSize(
     }
   }
   {
+    final value = object.topic;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final list = object.urls;
     if (list != null) {
       bytesCount += 3 + list.length * 3;
@@ -278,17 +307,19 @@ void _screenshotSerialize(
   writer.writeStringList(offsets[4], object.emails);
   writer.writeString(offsets[5], object.filePath);
   writer.writeBool(offsets[6], object.isProcessed);
-  writer.writeString(offsets[7], object.ocrText);
-  writer.writeStringList(offsets[8], object.phoneNumbers);
+  writer.writeBool(offsets[7], object.junkReviewed);
+  writer.writeString(offsets[8], object.ocrText);
+  writer.writeStringList(offsets[9], object.phoneNumbers);
   writer.writeObjectList<SuggestedAction>(
-    offsets[9],
+    offsets[10],
     allOffsets,
     SuggestedActionSchema.serialize,
     object.suggestedActions,
   );
-  writer.writeStringList(offsets[10], object.tags);
-  writer.writeDateTime(offsets[11], object.timestamp);
-  writer.writeStringList(offsets[12], object.urls);
+  writer.writeStringList(offsets[11], object.tags);
+  writer.writeDateTime(offsets[12], object.timestamp);
+  writer.writeString(offsets[13], object.topic);
+  writer.writeStringList(offsets[14], object.urls);
 }
 
 Screenshot _screenshotDeserialize(
@@ -306,17 +337,19 @@ Screenshot _screenshotDeserialize(
   object.filePath = reader.readString(offsets[5]);
   object.id = id;
   object.isProcessed = reader.readBool(offsets[6]);
-  object.ocrText = reader.readStringOrNull(offsets[7]);
-  object.phoneNumbers = reader.readStringList(offsets[8]);
+  object.junkReviewed = reader.readBool(offsets[7]);
+  object.ocrText = reader.readStringOrNull(offsets[8]);
+  object.phoneNumbers = reader.readStringList(offsets[9]);
   object.suggestedActions = reader.readObjectList<SuggestedAction>(
-    offsets[9],
+    offsets[10],
     SuggestedActionSchema.deserialize,
     allOffsets,
     SuggestedAction(),
   );
-  object.tags = reader.readStringList(offsets[10]);
-  object.timestamp = reader.readDateTime(offsets[11]);
-  object.urls = reader.readStringList(offsets[12]);
+  object.tags = reader.readStringList(offsets[11]);
+  object.timestamp = reader.readDateTime(offsets[12]);
+  object.topic = reader.readStringOrNull(offsets[13]);
+  object.urls = reader.readStringList(offsets[14]);
   return object;
 }
 
@@ -342,21 +375,25 @@ P _screenshotDeserializeProp<P>(
     case 6:
       return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 8:
-      return (reader.readStringList(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 9:
+      return (reader.readStringList(offset)) as P;
+    case 10:
       return (reader.readObjectList<SuggestedAction>(
         offset,
         SuggestedActionSchema.deserialize,
         allOffsets,
         SuggestedAction(),
       )) as P;
-    case 10:
-      return (reader.readStringList(offset)) as P;
     case 11:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringList(offset)) as P;
     case 12:
+      return (reader.readDateTime(offset)) as P;
+    case 13:
+      return (reader.readStringOrNull(offset)) as P;
+    case 14:
       return (reader.readStringList(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -466,6 +503,14 @@ extension ScreenshotQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'cleanText'),
+      );
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhere> anyTopic() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'topic'),
       );
     });
   }
@@ -1071,6 +1116,162 @@ extension ScreenshotQueryWhere
             ))
             .addWhereClause(IndexWhereClause.lessThan(
               indexName: r'cleanText',
+              upper: [''],
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'topic',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'topic',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicEqualTo(
+      String? topic) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'topic',
+        value: [topic],
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicNotEqualTo(
+      String? topic) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'topic',
+              lower: [],
+              upper: [topic],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'topic',
+              lower: [topic],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'topic',
+              lower: [topic],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'topic',
+              lower: [],
+              upper: [topic],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicGreaterThan(
+    String? topic, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'topic',
+        lower: [topic],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicLessThan(
+    String? topic, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'topic',
+        lower: [],
+        upper: [topic],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicBetween(
+    String? lowerTopic,
+    String? upperTopic, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'topic',
+        lower: [lowerTopic],
+        includeLower: includeLower,
+        upper: [upperTopic],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicStartsWith(
+      String TopicPrefix) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'topic',
+        lower: [TopicPrefix],
+        upper: ['$TopicPrefix\u{FFFFF}'],
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'topic',
+        value: [''],
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterWhereClause> topicIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'topic',
+              upper: [''],
+            ))
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'topic',
+              lower: [''],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'topic',
+              lower: [''],
+            ))
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'topic',
               upper: [''],
             ));
       }
@@ -2307,6 +2508,16 @@ extension ScreenshotQueryFilter
     });
   }
 
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      junkReviewedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'junkReviewed',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> ocrTextIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -3098,6 +3309,153 @@ extension ScreenshotQueryFilter
     });
   }
 
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'topic',
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'topic',
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'topic',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'topic',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'topic',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'topic',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'topic',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'topic',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'topic',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'topic',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> topicIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'topic',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      topicIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'topic',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition> urlsIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -3400,6 +3758,18 @@ extension ScreenshotQuerySortBy
     });
   }
 
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> sortByJunkReviewed() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'junkReviewed', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> sortByJunkReviewedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'junkReviewed', Sort.desc);
+    });
+  }
+
   QueryBuilder<Screenshot, Screenshot, QAfterSortBy> sortByOcrText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ocrText', Sort.asc);
@@ -3421,6 +3791,18 @@ extension ScreenshotQuerySortBy
   QueryBuilder<Screenshot, Screenshot, QAfterSortBy> sortByTimestampDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'timestamp', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> sortByTopic() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'topic', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> sortByTopicDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'topic', Sort.desc);
     });
   }
 }
@@ -3487,6 +3869,18 @@ extension ScreenshotQuerySortThenBy
     });
   }
 
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> thenByJunkReviewed() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'junkReviewed', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> thenByJunkReviewedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'junkReviewed', Sort.desc);
+    });
+  }
+
   QueryBuilder<Screenshot, Screenshot, QAfterSortBy> thenByOcrText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ocrText', Sort.asc);
@@ -3508,6 +3902,18 @@ extension ScreenshotQuerySortThenBy
   QueryBuilder<Screenshot, Screenshot, QAfterSortBy> thenByTimestampDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'timestamp', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> thenByTopic() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'topic', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QAfterSortBy> thenByTopicDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'topic', Sort.desc);
     });
   }
 }
@@ -3559,6 +3965,12 @@ extension ScreenshotQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Screenshot, Screenshot, QDistinct> distinctByJunkReviewed() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'junkReviewed');
+    });
+  }
+
   QueryBuilder<Screenshot, Screenshot, QDistinct> distinctByOcrText(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -3581,6 +3993,13 @@ extension ScreenshotQueryWhereDistinct
   QueryBuilder<Screenshot, Screenshot, QDistinct> distinctByTimestamp() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'timestamp');
+    });
+  }
+
+  QueryBuilder<Screenshot, Screenshot, QDistinct> distinctByTopic(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'topic', caseSensitive: caseSensitive);
     });
   }
 
@@ -3642,6 +4061,12 @@ extension ScreenshotQueryProperty
     });
   }
 
+  QueryBuilder<Screenshot, bool, QQueryOperations> junkReviewedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'junkReviewed');
+    });
+  }
+
   QueryBuilder<Screenshot, String?, QQueryOperations> ocrTextProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ocrText');
@@ -3671,6 +4096,12 @@ extension ScreenshotQueryProperty
   QueryBuilder<Screenshot, DateTime, QQueryOperations> timestampProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'timestamp');
+    });
+  }
+
+  QueryBuilder<Screenshot, String?, QQueryOperations> topicProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'topic');
     });
   }
 

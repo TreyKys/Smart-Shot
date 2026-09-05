@@ -14,6 +14,9 @@ import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
+import 'package:sift/features/junk_review/junk_review_service.dart'
+    show kJunkBatchSize;
+import 'package:sift/services/notification_service.dart';
 import 'package:workmanager/workmanager.dart';
 
 // Name predates this task also covering Live Mode; kept as-is rather than
@@ -178,6 +181,14 @@ Future<bool> _processDeepScanBatch() async {
     }
 
     ocrService.dispose();
+
+    // Detection runs on every scan (cheap — one indexed count query) but the
+    // notification itself is throttled, so a user isn't pinged every 15
+    // minutes just because tagging keeps finding more junk. Fires early if
+    // a full batch has piled up, otherwise waits out the day so it reads as
+    // an occasional tidy-up nudge rather than nagging.
+    await _maybeNotifyJunkBatch(isar);
+
     await isar.close();
     DiagnosticLog.info(
         'Background scan: done — $aiTaggedCount AI-tagged, '
@@ -187,6 +198,46 @@ Future<bool> _processDeepScanBatch() async {
     debugPrint("Background task failed: $e");
     DiagnosticLog.error('Background scan: task failed entirely — $e');
     return false;
+  }
+}
+
+const String _kPrefsLastJunkNotificationAt = 'last_junk_notification_at';
+const Duration _kJunkNotificationMinInterval = Duration(hours: 24);
+
+/// Notifies at most once every [_kJunkNotificationMinInterval] — sooner only
+/// if a full [kJunkBatchSize] worth of unreviewed #Junk has piled up, so a
+/// heavy week doesn't just sit unnoticed until the daily window comes
+/// around. A failure here (notification init, plugin channel, whatever)
+/// must not fail the whole scan — tagging already succeeded by this point
+/// and shouldn't be thrown away over a nudge that didn't fire.
+Future<void> _maybeNotifyJunkBatch(Isar isar) async {
+  try {
+    final unreviewedCount = await isar.screenshots
+        .filter()
+        .tagsElementEqualTo('#Junk')
+        .junkReviewedEqualTo(false)
+        .count();
+    if (unreviewedCount == 0) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastNotifiedMs = prefs.getInt(_kPrefsLastJunkNotificationAt) ?? 0;
+    final sinceLast = DateTime.now()
+        .difference(DateTime.fromMillisecondsSinceEpoch(lastNotifiedMs));
+
+    final dueForDailyNudge = sinceLast >= _kJunkNotificationMinInterval;
+    final batchIsFull = unreviewedCount >= kJunkBatchSize;
+    if (!dueForDailyNudge && !batchIsFull) return;
+
+    // A fresh plugin instance in this isolate, same as SharedKeyService
+    // above — nothing main.dart's own init() set up carries over here.
+    await NotificationService.instance.init();
+    await NotificationService.instance
+        .notifyJunkBatchReady(unreviewedCount.clamp(0, kJunkBatchSize));
+    await prefs.setInt(
+        _kPrefsLastJunkNotificationAt, DateTime.now().millisecondsSinceEpoch);
+  } catch (e) {
+    debugPrint('_maybeNotifyJunkBatch failed: $e');
+    DiagnosticLog.error('Background scan: junk-batch notification failed — $e');
   }
 }
 
