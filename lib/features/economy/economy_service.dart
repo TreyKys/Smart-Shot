@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -9,10 +10,18 @@ part 'economy_service.g.dart';
 
 const int kDailyFreeExtractions = 30;
 const int kAdRewardExtractions = 10;
+const int kAdsRequiredForReward = 2;
 const int kFreeBatchLimit = 3;
 const int kProBatchLimit = 50;
 const int kBackgroundDeepScanChunkSize = 50;
 const double kCostPerExtraction = 0.0005;
+
+/// How many of the [kAdsRequiredForReward] ads the user has watched in the
+/// current refill attempt — plain, non-generated provider (this session's
+/// convention for new providers) so quota_bar.dart can show live progress
+/// instead of the block completing invisibly after a silent second tap.
+/// EconomyService writes to this; nothing else should.
+final adsWatchedInBlockProvider = StateProvider<int>((ref) => 0);
 
 @Riverpod(keepAlive: true)
 class EconomyService extends _$EconomyService {
@@ -151,7 +160,7 @@ class EconomyService extends _$EconomyService {
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _rewardedAd = null;
-        if (_adsWatchedInCurrentBlock < 2) loadRewardedAd();
+        if (_adsWatchedInCurrentBlock < kAdsRequiredForReward) loadRewardedAd();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         debugPrint('Ad failed to show: $error');
@@ -163,10 +172,12 @@ class EconomyService extends _$EconomyService {
 
     _rewardedAd!.show(onUserEarnedReward: (AdWithoutView ad, RewardItem reward) async {
       _adsWatchedInCurrentBlock++;
-      debugPrint('Ad watched: ${_adsWatchedInCurrentBlock}/2');
-      if (_adsWatchedInCurrentBlock >= 2) {
+      debugPrint('Ad watched: $_adsWatchedInCurrentBlock/$kAdsRequiredForReward');
+      ref.read(adsWatchedInBlockProvider.notifier).state = _adsWatchedInCurrentBlock;
+      if (_adsWatchedInCurrentBlock >= kAdsRequiredForReward) {
         await _applyAdRefill();
         _adsWatchedInCurrentBlock = 0;
+        ref.read(adsWatchedInBlockProvider.notifier).state = 0;
         onBlockCompleted();
       }
     });

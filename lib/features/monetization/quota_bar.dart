@@ -75,25 +75,38 @@ class _QuotaBarContent extends ConsumerWidget {
               ),
               const Spacer(),
               if (isDepleted)
-                GestureDetector(
-                  onTap: () => _watchAd(context, ref),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: SiftColors.accent.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: SiftColors.accent.withOpacity(0.5)),
-                    ),
-                    child: const Text(
-                      'Watch Ad',
-                      style: TextStyle(
-                        color: SiftColors.accent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                Builder(builder: (context) {
+                  final adsWatched = ref.watch(adsWatchedInBlockProvider);
+                  // Once the first ad of the block is watched, say so
+                  // explicitly instead of leaving the button reading "Watch
+                  // Ad" again — without this, watching one ad and seeing
+                  // the exact same button a second time reads as "that
+                  // didn't work," not "one more to go."
+                  final label = adsWatched > 0
+                      ? '$adsWatched/$kAdsRequiredForReward watched — 1 more'
+                      : 'Watch $kAdsRequiredForReward ads for +$kAdRewardExtractions';
+                  return GestureDetector(
+                    onTap: () => _watchAd(context, ref),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: SiftColors.accent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border:
+                            Border.all(color: SiftColors.accent.withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: SiftColors.accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
             ],
           ),
           const SizedBox(height: 6),
@@ -152,13 +165,17 @@ class _QuotaBarContent extends ConsumerWidget {
 
   void _watchAd(BuildContext context, WidgetRef ref) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Loading ad... Watch 2 ads to earn +10 scans.')),
+      const SnackBar(
+        content: Text('Loading ad... watch $kAdsRequiredForReward to earn '
+            '+$kAdRewardExtractions scans.'),
+      ),
     );
     ref.read(economyServiceProvider.notifier).showRewardedAd(
       onBlockCompleted: () {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('+10 AI scans unlocked!')),
+            const SnackBar(
+                content: Text('+$kAdRewardExtractions AI scans unlocked!')),
           );
         }
       },
