@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/collections/presentation/collection_picker_sheet.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
@@ -33,20 +32,7 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
     _shot = widget.screenshot;
   }
 
-  Future<void> _togglePin() async {
-    final pinnedIds = ref.read(pinnedIdsProvider);
-    final wasPinned = pinnedIds.contains(_shot.id);
-    final newIds = Set<int>.from(pinnedIds);
-    if (wasPinned) {
-      newIds.remove(_shot.id);
-    } else {
-      newIds.add(_shot.id);
-    }
-    ref.read(pinnedIdsProvider.notifier).state = newIds;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-        'pinned_ids', newIds.map((e) => e.toString()).toList());
-  }
+  Future<void> _togglePin() => togglePinned(ref, _shot.id);
 
   void _showTagEditSheet() {
     showModalBottomSheet(

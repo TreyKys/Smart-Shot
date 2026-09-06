@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 
@@ -50,6 +51,22 @@ Stream<List<String>> uniqueTags(UniqueTagsRef ref) {
 
 /// Persisted set of pinned screenshot IDs. Populated from SharedPreferences on app start.
 final pinnedIdsProvider = StateProvider<Set<int>>((ref) => {});
+
+/// Toggles [screenshotId]'s pinned state and persists it under the same
+/// 'pinned_ids' key every reader of [pinnedIdsProvider] expects — pulled out
+/// so ImageDetailScreen and AssistantScreen's thumbnail hearts don't each
+/// carry their own copy of this read-flip-write.
+Future<void> togglePinned(WidgetRef ref, int screenshotId) async {
+  final pinnedIds = ref.read(pinnedIdsProvider);
+  final newIds = Set<int>.from(pinnedIds);
+  if (!newIds.remove(screenshotId)) {
+    newIds.add(screenshotId);
+  }
+  ref.read(pinnedIdsProvider.notifier).state = newIds;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setStringList(
+      'pinned_ids', newIds.map((e) => e.toString()).toList());
+}
 
 /// Total number of screenshots in the library, independent of any tag
 /// filter — unlike [galleryStreamProvider], which follows

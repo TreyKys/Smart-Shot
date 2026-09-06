@@ -93,19 +93,29 @@ class _JunkReviewScreenState extends ConsumerState<JunkReviewScreen> {
   Widget build(BuildContext context) {
     final batch = _batch;
     return Scaffold(
-      backgroundColor: SiftColors.background,
+      backgroundColor: SiftPillowyColors.surface,
       appBar: AppBar(
-        backgroundColor: SiftColors.background,
-        title: const Text('Review Junk'),
+        backgroundColor: SiftPillowyColors.surfaceContainerLowest,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: SiftPillowyColors.onSurface),
+        title: const Text('Review Junk', style: SiftPillowyText.headlineSm),
         actions: [
           if (batch != null && batch.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Center(
-                child: Text(
-                  '${_totalInBatch - batch.length + 1} of $_totalInBatch',
-                  style: const TextStyle(
-                      color: SiftColors.textTertiary, fontSize: 13),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: SiftPillowyColors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${_totalInBatch - batch.length + 1} of $_totalInBatch',
+                    style: SiftPillowyText.labelMd
+                        .copyWith(color: SiftPillowyColors.onSurfaceVariant),
+                  ),
                 ),
               ),
             ),
@@ -113,7 +123,8 @@ class _JunkReviewScreenState extends ConsumerState<JunkReviewScreen> {
       ),
       body: batch == null
           ? const Center(
-              child: CircularProgressIndicator(color: SiftColors.accent))
+              child: CircularProgressIndicator(
+                  color: SiftPillowyColors.primary))
           : batch.isEmpty
               ? _DoneState(kept: _keptCount, deleted: _deletedCount)
               : _ReviewStack(
@@ -153,13 +164,13 @@ class _ReviewStack extends StatelessWidget {
               direction: DismissDirection.horizontal,
               background: _swipeBackground(
                 alignment: Alignment.centerLeft,
-                color: SiftColors.success,
+                color: SiftPillowyColors.tertiary,
                 icon: Icons.check_circle_outline,
                 label: 'Keep',
               ),
               secondaryBackground: _swipeBackground(
                 alignment: Alignment.centerRight,
-                color: SiftColors.danger,
+                color: SiftPillowyColors.primary,
                 icon: Icons.delete_outline,
                 label: 'Delete',
               ),
@@ -173,20 +184,20 @@ class _ReviewStack extends StatelessWidget {
               child: _JunkCard(shot: top),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _ActionButton(
                 icon: Icons.check_circle_outline,
                 label: 'Keep',
-                color: SiftColors.success,
+                color: SiftPillowyColors.tertiary,
                 onTap: () => onKeep(top),
               ),
               _ActionButton(
                 icon: Icons.delete_outline,
                 label: 'Delete',
-                color: SiftColors.danger,
+                color: SiftPillowyColors.primary,
                 onTap: () => onDelete(top),
               ),
             ],
@@ -204,11 +215,11 @@ class _ReviewStack extends StatelessWidget {
   }) {
     return Container(
       alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.5)),
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: color.withOpacity(0.35)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -228,34 +239,44 @@ class _JunkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: SiftColors.surfaceElevated,
-          border: Border.all(color: SiftColors.border, width: 0.8),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: ScreenshotThumbnail(filePath: shot.filePath),
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: SiftPillowyColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: SiftPillowyColors.primaryContainer.withOpacity(0.12),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: ScreenshotThumbnail(filePath: shot.filePath),
+              ),
             ),
-            if ((shot.topic ?? '').isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    shot.topic!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: SiftColors.textSecondary, fontSize: 13),
-                  ),
+          ),
+          if ((shot.topic ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  shot.topic!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: SiftPillowyText.bodySm,
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -276,25 +297,41 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withOpacity(0.15),
-              border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.35),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.4),
+                    blurRadius: 0,
+                    offset: const Offset(0, 1),
+                    spreadRadius: -1,
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: Colors.white, size: 28),
             ),
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(height: 6),
-          Text(label,
-              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
+            const SizedBox(height: 8),
+            Text(label,
+                style: SiftPillowyText.labelMd.copyWith(color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -313,24 +350,39 @@ class _DoneState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.celebration_outlined,
-                size: 48, color: SiftColors.accent),
-            const SizedBox(height: 16),
-            const Text('All caught up!',
-                style: TextStyle(
-                    color: SiftColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text(
-              'Kept $kept, deleted $deleted.',
-              style: const TextStyle(
-                  color: SiftColors.textSecondary, fontSize: 14),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                gradient: SiftPillowyColors.assistantAvatarGradient,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.celebration_rounded,
+                  size: 36, color: Colors.white),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Done'),
+            const Text('All caught up!', style: SiftPillowyText.headlineMd),
+            const SizedBox(height: 8),
+            Text('Kept $kept, deleted $deleted.',
+                style: SiftPillowyText.bodyMd
+                    .copyWith(color: SiftPillowyColors.onSurfaceVariant)),
+            const SizedBox(height: 24),
+            Material(
+              color: SiftPillowyColors.primary,
+              borderRadius: BorderRadius.circular(999),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () => Navigator.of(context).pop(),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                  child: Text('Done',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Plus Jakarta Sans',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14)),
+                ),
+              ),
             ),
           ],
         ),
