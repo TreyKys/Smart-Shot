@@ -321,10 +321,78 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                       fontStyle: FontStyle.italic),
                 ),
               ),
+
+            // ── Extracted data sections ──────────────────────────────
+            if (_shot.urls != null && _shot.urls!.isNotEmpty)
+              _ExtractedDataSection(
+                icon: Icons.link,
+                label: 'LINKS',
+                items: _shot.urls!,
+                onTap: (url) async {
+                  final uri = Uri.tryParse(url);
+                  if (uri != null) {
+                    await launchUrl(uri,
+                        mode: LaunchMode.externalApplication);
+                  }
+                },
+                onCopy: _copyToClipboard,
+                actionIcon: Icons.open_in_new,
+                actionTooltip: 'Open',
+              ),
+
+            if (_shot.emails != null && _shot.emails!.isNotEmpty)
+              _ExtractedDataSection(
+                icon: Icons.email_outlined,
+                label: 'EMAILS',
+                items: _shot.emails!,
+                onTap: (email) async {
+                  await launchUrl(Uri(scheme: 'mailto', path: email));
+                },
+                onCopy: _copyToClipboard,
+                actionIcon: Icons.send,
+                actionTooltip: 'Email',
+              ),
+
+            if (_shot.phoneNumbers != null && _shot.phoneNumbers!.isNotEmpty)
+              _ExtractedDataSection(
+                icon: Icons.phone_outlined,
+                label: 'PHONE NUMBERS',
+                items: _shot.phoneNumbers!,
+                onTap: (phone) async {
+                  await launchUrl(Uri(scheme: 'tel', path: phone));
+                },
+                onCopy: _copyToClipboard,
+                actionIcon: Icons.call,
+                actionTooltip: 'Call',
+              ),
+
+            if (_shot.cryptoAddresses != null &&
+                _shot.cryptoAddresses!.isNotEmpty)
+              _ExtractedDataSection(
+                icon: Icons.currency_bitcoin,
+                label: 'CRYPTO ADDRESSES',
+                items: _shot.cryptoAddresses!,
+                onTap: _copyToClipboard,
+                onCopy: _copyToClipboard,
+                actionIcon: Icons.copy,
+                actionTooltip: 'Copy',
+              ),
           ],
         ),
       ),
     );
+  }
+
+  void _copyToClipboard(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Copied: ${text.length > 40 ? '${text.substring(0, 37)}…' : text}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Icon? _actionIcon(String? type) {
@@ -719,6 +787,125 @@ class _AppRecommendationCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Extracted data section (URLs, emails, phones, crypto) ────────────────────
+
+class _ExtractedDataSection extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final List<String> items;
+  final void Function(String) onTap;
+  final void Function(String) onCopy;
+  final IconData actionIcon;
+  final String actionTooltip;
+
+  const _ExtractedDataSection({
+    required this.icon,
+    required this.label,
+    required this.items,
+    required this.onTap,
+    required this.onCopy,
+    required this.actionIcon,
+    required this.actionTooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 13, color: SiftColors.textTertiary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: SiftColors.textTertiary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...items.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: SiftColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: SiftColors.border, width: 0.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item,
+                          style: const TextStyle(
+                            color: SiftColors.accent,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _SmallIconButton(
+                        icon: Icons.copy,
+                        tooltip: 'Copy',
+                        onTap: () => onCopy(item),
+                      ),
+                      const SizedBox(width: 4),
+                      _SmallIconButton(
+                        icon: actionIcon,
+                        tooltip: actionTooltip,
+                        onTap: () => onTap(item),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _SmallIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: SiftColors.accent.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 14, color: SiftColors.accent),
       ),
     );
   }

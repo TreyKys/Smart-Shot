@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:sift/core/config/shared_key_service.dart';
+import 'package:sift/core/database/isar_service.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/collections/presentation/collection_picker_sheet.dart';
 import 'package:sift/features/economy/economy_service.dart';
@@ -12,6 +13,7 @@ import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
 import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
+import 'package:sift/features/ingestion/services/tag_engine.dart';
 import 'package:sift/features/monetization/quota_bar.dart';
 import 'package:sift/features/purge/presentation/purge_banner.dart';
 import 'package:sift/features/search/search_provider.dart';
@@ -62,6 +64,31 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
   }
 
   Future<void> _deleteSelected() async {
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: SiftColors.surfaceElevated,
+        title: const Text('Delete screenshots?',
+            style: TextStyle(color: SiftColors.textPrimary)),
+        content: Text(
+          'This will permanently delete $count screenshot${count == 1 ? '' : 's'}.',
+          style: const TextStyle(color: SiftColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete',
+                style: TextStyle(color: SiftColors.danger)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     final ids = List<int>.from(_selectedIds);
     _exitSelectMode();
     final repo = ref.read(galleryRepositoryProvider);
@@ -75,6 +102,41 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
         ),
       );
     }
+  }
+
+  void _tagSelected() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BulkTagSheet(
+        onApply: (tag) async {
+          final ids = List<int>.from(_selectedIds);
+          _exitSelectMode();
+          final repo = ref.read(galleryRepositoryProvider);
+          int updated = 0;
+          for (final id in ids) {
+            final isar = await ref.read(isarProvider.future);
+            final shot = await isar.screenshots.get(id);
+            if (shot != null) {
+              final tags = List<String>.from(shot.tags ?? []);
+              if (!tags.contains(tag)) {
+                tags.add(tag);
+                await repo.updateTags(id, tags);
+                updated++;
+              }
+            }
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Tagged $updated screenshot${updated == 1 ? '' : 's'} with ${tag.startsWith('#') ? tag.substring(1) : tag}'),
+              ),
+            );
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -94,6 +156,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           ? _BulkActionsFab(
               count: _selectedIds.length,
               onDelete: _deleteSelected,
+              onTag: _tagSelected,
               onAddToCollection: () => showCollectionPickerSheet(
                 context,
                 screenshotIds: _selectedIds.toList(),
@@ -134,12 +197,38 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           ),
         ),
         actions: [
-          if (_selectMode)
+          if (_selectMode) ...[
+            TextButton(
+              onPressed: () {
+                // Select all visible screenshots
+                final content = ref.read(
+                  ref.read(searchQueryProvider).isNotEmpty
+                      ? searchResultsProvider
+                      : galleryStreamProvider,
+                );
+                content.whenData((screenshots) {
+                  setState(() {
+                    if (_selectedIds.length == screenshots.length) {
+                      // All selected → deselect all
+                      _selectedIds.clear();
+                      _selectMode = false;
+                    } else {
+                      _selectedIds
+                        ..clear()
+                        ..addAll(screenshots.map((s) => s.id));
+                    }
+                  });
+                });
+              },
+              child: const Text('Select All',
+                  style: TextStyle(color: SiftColors.textSecondary, fontSize: 13)),
+            ),
             TextButton(
               onPressed: _exitSelectMode,
               child: const Text('Cancel',
                   style: TextStyle(color: SiftColors.accent)),
-            )
+            ),
+          ]
           else ...[
             IconButton(
               icon: const Icon(Icons.sync, color: SiftColors.textSecondary),
@@ -545,12 +634,14 @@ class _ScreenshotCard extends ConsumerWidget {
 class _BulkActionsFab extends StatelessWidget {
   final int count;
   final VoidCallback onDelete;
+  final VoidCallback onTag;
   final VoidCallback onAddToCollection;
   final VoidCallback onCancel;
 
   const _BulkActionsFab({
     required this.count,
     required this.onDelete,
+    required this.onTag,
     required this.onAddToCollection,
     required this.onCancel,
   });
@@ -570,6 +661,18 @@ class _BulkActionsFab extends StatelessWidget {
             'Delete $count',
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 10),
+        FloatingActionButton.extended(
+          heroTag: 'bulk_tag',
+          onPressed: onTag,
+          backgroundColor: SiftColors.surfaceElevated,
+          icon: const Icon(Icons.label_outline, color: SiftColors.accent),
+          label: const Text(
+            'Tag Selected',
+            style: TextStyle(
+                color: SiftColors.textPrimary, fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(height: 10),
@@ -751,6 +854,156 @@ class _EmptyState extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ── Bulk tag bottom sheet ────────────────────────────────────────────────────
+
+class _BulkTagSheet extends ConsumerWidget {
+  final Future<void> Function(String tag) onApply;
+
+  const _BulkTagSheet({required this.onApply});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tagsAsync = ref.watch(uniqueTagsProvider);
+    return Container(
+      decoration: const BoxDecoration(
+        color: SiftColors.surfaceElevated,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: SiftColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const Text('Add Tag to Selected',
+              style: TextStyle(
+                  color: SiftColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          _BulkTagInput(onApply: onApply),
+          const SizedBox(height: 16),
+          const Text('Or pick an existing tag:',
+              style: TextStyle(
+                  color: SiftColors.textTertiary, fontSize: 12)),
+          const SizedBox(height: 8),
+          tagsAsync.when(
+            data: (tags) {
+              if (tags.isEmpty) {
+                return const Text('No tags yet.',
+                    style: TextStyle(
+                        color: SiftColors.textTertiary, fontSize: 13));
+              }
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: tags.map((tag) {
+                  final color = SiftColors.forTag(tag);
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      onApply(tag);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: color.withOpacity(0.4), width: 0.8),
+                      ),
+                      child: Text(
+                        tag.startsWith('#') ? tag.substring(1) : tag,
+                        style: TextStyle(
+                            color: color,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BulkTagInput extends StatefulWidget {
+  final Future<void> Function(String tag) onApply;
+  const _BulkTagInput({required this.onApply});
+
+  @override
+  State<_BulkTagInput> createState() => _BulkTagInputState();
+}
+
+class _BulkTagInputState extends State<_BulkTagInput> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final raw = _controller.text.trim();
+    if (raw.isEmpty) return;
+    final tag = TagEngine.normalize(raw);
+    if (tag.isEmpty) return;
+    Navigator.pop(context);
+    widget.onApply(tag);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            style:
+                const TextStyle(color: SiftColors.textPrimary, fontSize: 14),
+            decoration: const InputDecoration(
+              hintText: 'New tag (e.g. Finance)',
+              prefixText: '# ',
+              prefixStyle: TextStyle(color: SiftColors.accent),
+            ),
+            onSubmitted: (_) => _submit(),
+            textInputAction: TextInputAction.done,
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          onPressed: _submit,
+          icon:
+              const Icon(Icons.check_circle, color: SiftColors.accent),
+        ),
+      ],
     );
   }
 }

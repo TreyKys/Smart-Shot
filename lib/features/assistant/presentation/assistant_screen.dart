@@ -51,9 +51,17 @@ const _suggestions = [
       label: 'Find junk to review',
       query: 'find junk screenshots'),
   _Suggestion(
-      icon: Icons.tag_rounded,
-      label: 'Count my screenshots',
-      query: 'how many screenshots do I have'),
+      icon: Icons.content_copy_rounded,
+      label: 'Find duplicates',
+      query: 'find duplicate screenshots'),
+  _Suggestion(
+      icon: Icons.bar_chart_rounded,
+      label: 'Library overview',
+      query: 'give me an overview of my library'),
+  _Suggestion(
+      icon: Icons.label_off_outlined,
+      label: 'Find untagged',
+      query: 'find screenshots that still need tagging'),
   _Suggestion(
       icon: Icons.help_outline_rounded,
       label: 'What can you do?',
@@ -182,6 +190,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
             availableTags: tags,
             availableCollections: collections.map((c) => c.name).toList(),
             byokApiKey: byokKey,
+            findDuplicates: () => repo.findDuplicateClusters(),
           )
           .timeout(
         const Duration(seconds: 90),

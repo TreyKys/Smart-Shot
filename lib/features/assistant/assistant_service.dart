@@ -293,6 +293,55 @@ class AssistantService {
         },
       },
     },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'find_duplicates',
+        'description':
+            'Find groups of visually similar (near-duplicate) screenshots '
+                'using perceptual hashing. Returns clusters of 2+ screenshots '
+                'that look alike — useful for cleanup.',
+        'parameters': {
+          'type': 'object',
+          'properties': {},
+        },
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'library_stats',
+        'description':
+            'Get an overview of the screenshot library — total count, '
+                'breakdown by tag, how many are processed vs unprocessed, and '
+                'date range. Use for "how big is my library" or overview '
+                'questions.',
+        'parameters': {
+          'type': 'object',
+          'properties': {},
+        },
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'find_untagged',
+        'description':
+            'Find screenshots that have no tags or haven\'t been processed '
+                'yet. Useful for "what still needs tagging" questions.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'limit': {
+              'type': 'integer',
+              'description':
+                  'Maximum number of untagged screenshots to return '
+                      '(default 20).',
+            },
+          },
+        },
+      },
+    },
   ];
 
   // ── System prompt ──
@@ -373,6 +422,11 @@ RULES:
   }
 
   // ── Tool executor ──
+
+  /// Callback to find duplicate clusters — supplied by the caller (who has
+  /// access to [GalleryRepository]) so this service doesn't depend on it
+  /// directly. Returns groups of 2+ visually similar screenshots.
+  Future<List<List<Screenshot>>> Function()? _findDuplicates;
 
   /// Executes one tool call from the model, returning the result string
   /// the model will see on the next round. Non-destructive tools (search,
@@ -484,6 +538,109 @@ RULES:
               'collection "$collectionName".',
         });
 
+      case 'find_duplicates':
+        if (_findDuplicates == null) {
+          return jsonEncode({
+            'error': 'Duplicate detection is not available right now.',
+          });
+        }
+        final clusters = await _findDuplicates!();
+        if (clusters.isEmpty) {
+          return jsonEncode({
+            'cluster_count': 0,
+            'message': 'No duplicate screenshots found — your library is clean!',
+          });
+        }
+        // Flatten for thumbnail strip — show all duplicates
+        final allDups = clusters.expand((c) => c).toList();
+        _lastSearchResults = allDups;
+        final summaries = clusters.take(10).map((group) => {
+              'size': group.length,
+              'screenshots': group.take(5).map((s) => {
+                    'id': s.id,
+                    'topic': s.topic ?? 'untitled',
+                    'tags': s.tags ?? <String>[],
+                    'date': s.timestamp.toIso8601String().substring(0, 10),
+                  }).toList(),
+            }).toList();
+        return jsonEncode({
+          'cluster_count': clusters.length,
+          'total_duplicates':
+              clusters.fold<int>(0, (sum, c) => sum + c.length),
+          'showing_clusters': summaries.length,
+          'clusters': summaries,
+        });
+
+      case 'library_stats':
+        final total = allScreenshots.length;
+        final processed =
+            allScreenshots.where((s) => s.isProcessed).length;
+        final unprocessed = total - processed;
+        // Tag breakdown
+        final tagCounts = <String, int>{};
+        for (final s in allScreenshots) {
+          for (final t in s.tags ?? const <String>[]) {
+            tagCounts[t] = (tagCounts[t] ?? 0) + 1;
+          }
+        }
+        final noTags =
+            allScreenshots.where((s) => s.tags == null || s.tags!.isEmpty).length;
+        // Date range
+        DateTime? oldest, newest;
+        for (final s in allScreenshots) {
+          if (oldest == null || s.timestamp.isBefore(oldest)) {
+            oldest = s.timestamp;
+          }
+          if (newest == null || s.timestamp.isAfter(newest)) {
+            newest = s.timestamp;
+          }
+        }
+        // Sort tags by count descending
+        final sortedTags = tagCounts.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        return jsonEncode({
+          'total': total,
+          'processed': processed,
+          'unprocessed': unprocessed,
+          'untagged': noTags,
+          'date_range': {
+            'oldest': oldest?.toIso8601String().substring(0, 10),
+            'newest': newest?.toIso8601String().substring(0, 10),
+          },
+          'tag_breakdown': {
+            for (final e in sortedTags.take(20)) e.key: e.value,
+          },
+          'unique_tag_count': tagCounts.length,
+        });
+
+      case 'find_untagged':
+        final limit = (args['limit'] as int?) ?? 20;
+        final untagged = allScreenshots
+            .where((s) => s.tags == null || s.tags!.isEmpty)
+            .take(limit)
+            .toList();
+        _lastSearchResults = untagged;
+        if (untagged.isEmpty) {
+          return jsonEncode({
+            'count': 0,
+            'message': 'All screenshots have tags — nothing to tag!',
+          });
+        }
+        final summaries = untagged.map((s) => {
+              'id': s.id,
+              'topic': s.topic ?? 'untitled',
+              'date': s.timestamp.toIso8601String().substring(0, 10),
+              'processed': s.isProcessed,
+            }).toList();
+        final totalUntagged = allScreenshots
+            .where((s) => s.tags == null || s.tags!.isEmpty)
+            .length;
+        return jsonEncode({
+          'count': totalUntagged,
+          'showing': summaries.length,
+          'screenshots': summaries,
+        });
+
       default:
         return jsonEncode({'error': 'Unknown tool: $name'});
     }
@@ -502,6 +659,7 @@ RULES:
     required List<String> availableTags,
     required List<String> availableCollections,
     String? byokApiKey,
+    Future<List<List<Screenshot>>> Function()? findDuplicates,
   }) async {
     final hasByok = byokApiKey != null &&
         byokApiKey.isNotEmpty &&
@@ -511,6 +669,9 @@ RULES:
       DiagnosticLog.warn('AssistantService: no API key available — skipping.');
       return AssistantResult.unavailable;
     }
+
+    // Store the duplicate-finder callback for this turn
+    _findDuplicates = findDuplicates;
 
     // Reset per-turn state
     _lastSearchResults = null;
