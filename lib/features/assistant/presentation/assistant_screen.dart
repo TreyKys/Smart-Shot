@@ -13,23 +13,13 @@ import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:sift/features/gallery/presentation/widgets/screenshot_thumbnail.dart';
 
-enum _PendingActionType { delete, addToCollection, createCollection }
-
-class _PendingAction {
-  final _PendingActionType type;
-  final List<Screenshot> targets;
-  final String? collectionName;
-  bool resolved = false;
-  _PendingAction(
-      {required this.type, required this.targets, this.collectionName});
-}
-
 class _ChatMessage {
   final bool isUser;
   final String text;
   final List<Screenshot> matches;
   final List<String> matchedTags;
-  final _PendingAction? pendingAction;
+  final PendingAction? pendingAction;
+  bool actionResolved = false;
   _ChatMessage({
     required this.isUser,
     required this.text,
@@ -178,34 +168,39 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         },
       );
       final byokKey = ref.read(economyServiceProvider.notifier).getByokKey();
-
-      DiagnosticLog.info('AssistantScreen: calling AssistantService.plan()…');
-      // A real ceiling so a genuine hang — anywhere in plan(), not just a
-      // slow AI response, which already has its own 45s HTTP timeout —
-      // surfaces as "something went wrong" instead of a spinner that never
-      // resolves. That's the actual bug report this guards against: no
-      // failure message ever arrived at all.
       final all = await repo.allScreenshots();
-      final plan = await _service
-          .plan(
+
+      DiagnosticLog.info('AssistantScreen: calling AssistantService.chat()…');
+      // A real ceiling so a genuine hang — anywhere in chat(), not just a
+      // slow AI response (each round has its own 45s HTTP timeout) —
+      // surfaces as "something went wrong" instead of a spinner that never
+      // resolves. 90s allows for a multi-round tool loop (up to 5 rounds).
+      final result = await _service
+          .chat(
             text,
+            allScreenshots: all,
             availableTags: tags,
             availableCollections: collections.map((c) => c.name).toList(),
-            totalScreenshots: all.length,
             byokApiKey: byokKey,
           )
           .timeout(
-        const Duration(seconds: 60),
+        const Duration(seconds: 90),
         onTimeout: () {
           DiagnosticLog.error(
-              'AssistantScreen: AssistantService.plan() did not return '
-              'within 60s.');
-          return AssistantPlan.failed;
+              'AssistantScreen: AssistantService.chat() did not return '
+              'within 90s.');
+          return AssistantResult.failedResult;
         },
       );
 
-      final matched = _match(all, plan);
-      _respond(plan, matched);
+      if (!mounted) return;
+      setState(() => _messages.add(_ChatMessage(
+            isUser: false,
+            text: result.reply,
+            matches: result.screenshots,
+            matchedTags: result.highlightTags,
+            pendingAction: result.pendingAction,
+          )));
     } finally {
       _stopBusyMessages();
       if (mounted) setState(() => _busy = false);
@@ -213,143 +208,13 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     }
   }
 
-  void _respond(AssistantPlan plan, List<Screenshot> matched) {
-    if (!mounted) return;
-    switch (plan.intent) {
-      case AssistantIntent.search:
-        setState(() => _messages.add(_ChatMessage(
-              isUser: false,
-              text: matched.isEmpty
-                  ? "${plan.reply}\n\nNothing actually matched, though."
-                  : plan.reply,
-              matches: matched,
-              matchedTags: plan.tags,
-            )));
-        break;
-      case AssistantIntent.count:
-        setState(() => _messages.add(_ChatMessage(
-              isUser: false,
-              text: 'Found ${matched.length} screenshot'
-                  '${matched.length == 1 ? '' : 's'}. ${plan.reply}',
-              matches: matched.take(8).toList(),
-              matchedTags: plan.tags,
-            )));
-        break;
-      case AssistantIntent.delete:
-        if (matched.isEmpty) {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: "I couldn't find anything matching that to delete.",
-              )));
-        } else {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: 'Found ${matched.length} screenshot'
-                    '${matched.length == 1 ? '' : 's'} matching that. '
-                    'Delete ${matched.length == 1 ? 'it' : 'them all'}? '
-                    "This can't be undone.",
-                matches: matched,
-                pendingAction: _PendingAction(
-                    type: _PendingActionType.delete, targets: matched),
-              )));
-        }
-        break;
-      case AssistantIntent.addToCollection:
-        final name = plan.collectionName?.trim();
-        if (matched.isEmpty) {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: "I couldn't find anything matching that to add.",
-              )));
-        } else if (name == null || name.isEmpty) {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: 'Found ${matched.length} screenshot'
-                    '${matched.length == 1 ? '' : 's'}, but which '
-                    'collection? Try naming one, e.g. "put these in Taxes."',
-                matches: matched,
-              )));
-        } else {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: 'Add ${matched.length} screenshot'
-                    '${matched.length == 1 ? '' : 's'} to "$name"?',
-                matches: matched,
-                pendingAction: _PendingAction(
-                  type: _PendingActionType.addToCollection,
-                  targets: matched,
-                  collectionName: name,
-                ),
-              )));
-        }
-        break;
-      case AssistantIntent.createCollection:
-        final name = plan.collectionName?.trim();
-        if (name == null || name.isEmpty) {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: 'What should the new collection be called?',
-              )));
-        } else {
-          setState(() => _messages.add(_ChatMessage(
-                isUser: false,
-                text: 'Create an empty collection called "$name"?',
-                pendingAction: _PendingAction(
-                  type: _PendingActionType.createCollection,
-                  targets: const [],
-                  collectionName: name,
-                ),
-              )));
-        }
-        break;
-      case AssistantIntent.help:
-      case AssistantIntent.unclear:
-        setState(
-            () => _messages.add(_ChatMessage(isUser: false, text: plan.reply)));
-        break;
-    }
-  }
-
-  /// Runs entirely on-device against fields every screenshot already has —
-  /// the same tags/topic/cleanText/ocrText/timestamp the normal tagging
-  /// pipeline populates. Mirrors search_provider.dart's in-memory filtering
-  /// approach rather than inventing a new matching strategy.
-  List<Screenshot> _match(List<Screenshot> all, AssistantPlan plan) {
-    Iterable<Screenshot> pool = all;
-    if (plan.tags.isNotEmpty) {
-      final wanted =
-          plan.tags.map((t) => t.toLowerCase().replaceFirst('#', '')).toSet();
-      pool = pool.where((s) => (s.tags ?? const []).any(
-          (t) => wanted.contains(t.toLowerCase().replaceFirst('#', ''))));
-    }
-    if (plan.keywords.isNotEmpty) {
-      pool = pool.where((s) {
-        final combined = [
-          s.topic ?? '',
-          s.cleanText ?? '',
-          s.ocrText ?? '',
-          ...(s.tags ?? const []),
-        ].join(' ').toLowerCase();
-        return plan.keywords.any((k) => combined.contains(k.toLowerCase()));
-      });
-    }
-    if (plan.dateFrom != null) {
-      final from = plan.dateFrom!;
-      pool = pool.where((s) => !s.timestamp.isBefore(from));
-    }
-    if (plan.dateTo != null) {
-      final to = plan.dateTo!.add(const Duration(days: 1));
-      pool = pool.where((s) => s.timestamp.isBefore(to));
-    }
-    return pool.toList();
-  }
-
-  Future<void> _confirm(_PendingAction action) async {
-    if (action.resolved) return;
-    setState(() => action.resolved = true);
+  Future<void> _confirm(_ChatMessage msg) async {
+    if (msg.actionResolved || msg.pendingAction == null) return;
+    final action = msg.pendingAction!;
+    setState(() => msg.actionResolved = true);
 
     switch (action.type) {
-      case _PendingActionType.delete:
+      case PendingActionType.delete:
         final repo = ref.read(galleryRepositoryProvider);
         for (final s in action.targets) {
           await repo.deleteScreenshot(s.id);
@@ -361,7 +226,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                   '${action.targets.length == 1 ? '' : 's'}.',
             )));
         break;
-      case _PendingActionType.addToCollection:
+      case PendingActionType.addToCollection:
         final service = ref.read(collectionsServiceProvider.notifier);
         var collection = service.findByName(action.collectionName!);
         collection ??= await service.create(action.collectionName!);
@@ -374,7 +239,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                   '"${action.collectionName}".',
             )));
         break;
-      case _PendingActionType.createCollection:
+      case PendingActionType.createCollection:
         await ref
             .read(collectionsServiceProvider.notifier)
             .create(action.collectionName!);
@@ -386,10 +251,10 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     _scrollToEnd();
   }
 
-  void _cancel(_PendingAction action) {
-    if (action.resolved) return;
+  void _cancel(_ChatMessage msg) {
+    if (msg.actionResolved) return;
     setState(() {
-      action.resolved = true;
+      msg.actionResolved = true;
       _messages.add(_ChatMessage(isUser: false, text: 'Cancelled.'));
     });
     _scrollToEnd();
@@ -420,12 +285,12 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                 final message = _messages[index - (showIntro ? 1 : 0)];
                 return _MessageBubble(
                   message: message,
-                  onConfirm: message.pendingAction == null
-                      ? null
-                      : () => _confirm(message.pendingAction!),
-                  onCancel: message.pendingAction == null
-                      ? null
-                      : () => _cancel(message.pendingAction!),
+                  onConfirm: message.pendingAction != null
+                      ? () => _confirm(message)
+                      : null,
+                  onCancel: message.pendingAction != null
+                      ? () => _cancel(message)
+                      : null,
                 );
               },
             ),
@@ -727,11 +592,11 @@ class _MessageBubble extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isUser = message.isUser;
     final action = message.pendingAction;
-    final showActions = action != null && !action.resolved;
+    final showActions = action != null && !message.actionResolved;
     // Captured as a plain bool rather than reading action.type directly
     // below — action stays nullable to the analyzer inside the conditional
     // widget tree even though showActions already ruled that out.
-    final isDelete = action?.type == _PendingActionType.delete;
+    final isDelete = action?.type == PendingActionType.delete;
     final pinnedIds = ref.watch(pinnedIdsProvider);
 
     return Align(

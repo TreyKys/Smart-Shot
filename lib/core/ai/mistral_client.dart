@@ -6,6 +6,46 @@ import 'package:sift/core/ai/mistral_rate_limits.dart';
 import 'package:sift/core/ai/rate_limited_queue.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
+/// One tool execution the model requested and the caller fulfilled.
+@immutable
+class ToolExecution {
+  final String name;
+  final Map<String, dynamic> arguments;
+  final String result;
+  const ToolExecution({
+    required this.name,
+    required this.arguments,
+    required this.result,
+  });
+}
+
+/// Result of a multi-round tool-calling conversation — carries the model's
+/// final text reply plus every tool it called along the way.
+@immutable
+class ChatResult {
+  /// The model's final text reply after all tool calls are resolved.
+  final String reply;
+
+  /// Every tool the model called during this conversation, in order.
+  final List<ToolExecution> executions;
+
+  /// True if the conversation failed (network, parse error, max rounds).
+  final bool failed;
+
+  const ChatResult({
+    required this.reply,
+    this.executions = const [],
+    this.failed = false,
+  });
+
+  static const empty = ChatResult(reply: '', failed: true);
+}
+
+/// Callback that executes a tool call and returns the result string the
+/// model will see on the next round.
+typedef ToolExecutor = Future<String> Function(
+    String name, Map<String, dynamic> arguments);
+
 /// Shared low-level transport for Mistral AI's OpenAI-compatible chat
 /// completions API — used by both LLMService (screenshot tagging) and
 /// AssistantService (chat), so auth/retry/rate-limiting/JSON-parsing logic
@@ -232,5 +272,222 @@ class MistralClient {
     final fenced = RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$');
     final match = fenced.firstMatch(text);
     return match != null ? match.group(1)!.trim() : text;
+  }
+
+  // ── Tool-calling conversation loop ──
+
+  /// Multi-round tool-calling conversation — sends messages with tool
+  /// definitions, executes tool calls the model requests via [executor],
+  /// feeds results back, and loops until the model responds with text or
+  /// [maxRounds] is hit. Each round is independently rate-limited.
+  ///
+  /// Unlike [completeJson], this does NOT force JSON output mode — the model
+  /// replies in free-form text when it's done calling tools, which is what a
+  /// conversational assistant needs.
+  static Future<ChatResult> chatWithTools({
+    required String apiKey,
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+    required ToolExecutor executor,
+    RequestPriority priority = RequestPriority.interactive,
+    int maxRounds = 5,
+  }) async {
+    final executions = <ToolExecution>[];
+    final conversation = List<Map<String, dynamic>>.from(messages);
+
+    for (var round = 0; round < maxRounds; round++) {
+      final estimatedTokens =
+          _estimateMessagesTokens(conversation, tools);
+      final rawResponse = await _queueFor(model).run(
+        estimatedTokens,
+        () => _chatRoundNow(
+          apiKey: apiKey,
+          model: model,
+          messages: conversation,
+          tools: tools,
+        ),
+        priority: priority,
+      );
+
+      if (rawResponse == null) {
+        return ChatResult(
+          reply: 'Something went wrong reaching the AI — try again in '
+              'a moment.',
+          executions: executions,
+          failed: true,
+        );
+      }
+
+      final message = _extractAssistantMessage(rawResponse);
+      if (message == null) {
+        return ChatResult(
+          reply: 'Got an unexpected response from the AI.',
+          executions: executions,
+          failed: true,
+        );
+      }
+
+      final toolCalls = message['tool_calls'] as List?;
+      if (toolCalls == null || toolCalls.isEmpty) {
+        // Model responded with text — conversation is done.
+        final content = (message['content'] as String?)?.trim() ?? '';
+        return ChatResult(
+          reply: content.isEmpty ? "Here's what I found." : content,
+          executions: executions,
+        );
+      }
+
+      // Append the assistant's tool-calling message to the conversation
+      conversation.add(Map<String, dynamic>.from(message));
+
+      // Execute each tool call and feed results back
+      for (final call in toolCalls) {
+        final callMap = call as Map<String, dynamic>;
+        final id = callMap['id'] as String? ?? '';
+        final function =
+            callMap['function'] as Map<String, dynamic>? ?? {};
+        final name = function['name'] as String? ?? '';
+        final argsStr = function['arguments'] as String? ?? '{}';
+
+        Map<String, dynamic> args;
+        try {
+          args = jsonDecode(argsStr) as Map<String, dynamic>;
+        } catch (_) {
+          args = {};
+        }
+
+        String result;
+        try {
+          result = await executor(name, args);
+        } catch (e) {
+          debugPrint('MistralClient: tool executor failed for $name: $e');
+          DiagnosticLog.error(
+              'MistralClient: tool "$name" execution failed — $e');
+          result = jsonEncode({'error': 'Tool execution failed: $e'});
+        }
+
+        executions.add(
+            ToolExecution(name: name, arguments: args, result: result));
+        conversation.add({
+          'role': 'tool',
+          'tool_call_id': id,
+          'name': name,
+          'content': result,
+        });
+      }
+    }
+
+    // Exhausted maxRounds — model kept calling tools without a final reply.
+    return ChatResult(
+      reply: 'I took too many steps trying to answer that — here\'s '
+          'what I found so far.',
+      executions: executions,
+      failed: true,
+    );
+  }
+
+  /// One HTTP round-trip for tool calling — no response_format constraint,
+  /// tools included in the payload. Returns the raw parsed response body,
+  /// or null on failure.
+  static Future<Map<String, dynamic>?> _chatRoundNow({
+    required String apiKey,
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+  }) async {
+    const maxAttempts = 3;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final body = <String, dynamic>{
+          'model': model,
+          'messages': messages,
+        };
+        if (tools.isNotEmpty) {
+          body['tools'] = tools;
+          body['tool_choice'] = 'auto';
+        }
+
+        final response = await http
+            .post(
+              Uri.parse(_endpoint),
+              headers: {
+                'Authorization': 'Bearer $apiKey',
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 45));
+
+        if (response.statusCode == 429 && attempt < maxAttempts) {
+          final wait = Duration(seconds: 5 * attempt);
+          debugPrint('MistralClient: rate-limited (attempt $attempt/'
+              '$maxAttempts) — retrying in ${wait.inSeconds}s.');
+          DiagnosticLog.warn(
+              'MistralClient: rate-limited despite queueing — retrying '
+              'in ${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
+          await Future.delayed(wait);
+          continue;
+        }
+
+        if (response.statusCode != 200) {
+          final bodySnippet = response.body.length > 300
+              ? '${response.body.substring(0, 300)}…'
+              : response.body;
+          debugPrint(
+              'MistralClient: HTTP ${response.statusCode}: $bodySnippet');
+          DiagnosticLog.error(
+              'MistralClient: HTTP ${response.statusCode} — $bodySnippet');
+          return null;
+        }
+
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) return decoded;
+        DiagnosticLog.warn(
+            'MistralClient: chat round response was not an object.');
+        return null;
+      } catch (e) {
+        debugPrint('MistralClient: chat round failed: $e');
+        DiagnosticLog.error('MistralClient: chat round failed — $e');
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// Extracts the assistant message from a raw chat-completions response.
+  static Map<String, dynamic>? _extractAssistantMessage(
+      Map<String, dynamic> response) {
+    final choices = response['choices'];
+    if (choices is! List || choices.isEmpty) return null;
+    final firstChoice = choices.first;
+    if (firstChoice is! Map) return null;
+    final message = firstChoice['message'];
+    if (message is! Map) return null;
+    return Map<String, dynamic>.from(message);
+  }
+
+  /// Rough token estimate for a full message list + tool definitions —
+  /// used to gate admission through the rate-limiting queue.
+  static int _estimateMessagesTokens(
+    List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>> tools,
+  ) {
+    var chars = 0;
+    for (final m in messages) {
+      final content = m['content'];
+      if (content is String) {
+        chars += content.length;
+      } else if (content is List) {
+        for (final part in content) {
+          if (part is Map && part['type'] == 'text') {
+            chars += (part['text'] as String? ?? '').length;
+          }
+        }
+      }
+    }
+    // Tool definitions add ~200 tokens worth of schema overhead each.
+    chars += tools.length * 800;
+    return (chars / 4).ceil();
   }
 }
