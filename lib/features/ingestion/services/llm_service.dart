@@ -80,12 +80,14 @@ class LLMService {
     String? byokApiKey,
     required OcrResult ocr,
     AnalysisRoute? route,
+    String? learningHint,
   }) async {
     if (!_usable(byokApiKey)) return {};
     final effective = route ?? ocr.route;
 
+    final hintBlock = learningHint == null ? '' : '\n\n$learningHint';
     final prompt =
-        '${_promptFor(effective, ocr.text)}\n\n${_jsonShapeInstructions()}';
+        '${_promptFor(effective, ocr.text)}$hintBlock\n\n${_jsonShapeInstructions()}';
 
     Uint8List? imageBytes;
     String? imageMime;
@@ -113,10 +115,16 @@ class LLMService {
   Future<Map<int, Map<String, dynamic>>> analyzeTextBatch(
     List<TextAnalysisItem> items, {
     String? byokApiKey,
+    String? learningHint,
   }) async {
     if (items.isEmpty || !_usable(byokApiKey)) return {};
 
     final buffer = StringBuffer(_kPromptBatch);
+    if (learningHint != null) {
+      buffer
+        ..writeln()
+        ..writeln(learningHint);
+    }
     for (final item in items) {
       buffer
         ..writeln()

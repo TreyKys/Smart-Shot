@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/collections/presentation/collection_picker_sheet.dart';
+import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
+import 'package:sift/features/learning/tag_correction_service.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -42,6 +44,7 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
       builder: (_) => _TagEditSheet(
         initialTags: _shot.tags ?? [],
         onSave: (newTags) async {
+          final oldTags = List<String>.from(_shot.tags ?? []);
           await ref
               .read(galleryRepositoryProvider)
               .updateTags(_shot.id, newTags);
@@ -49,6 +52,21 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
             setState(() {
               _shot.tags = newTags.isEmpty ? null : newTags;
             });
+          }
+          final rewarded =
+              await ref.read(tagCorrectionServiceProvider).recordCorrection(
+                    textForKeywords: _shot.cleanText ?? _shot.ocrText ?? '',
+                    fromTags: oldTags,
+                    toTags: newTags,
+                  );
+          if (rewarded && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Thanks for the correction — +$kCorrectionRewardEnergy energy'),
+                duration: Duration(seconds: 2),
+              ),
+            );
           }
         },
       ),

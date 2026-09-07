@@ -14,6 +14,7 @@ import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
 import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
+import 'package:sift/features/learning/tag_correction_service.dart';
 import 'package:sift/features/monetization/quota_bar.dart';
 import 'package:sift/features/purge/presentation/purge_banner.dart';
 import 'package:sift/features/search/search_provider.dart';
@@ -114,23 +115,36 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           final ids = List<int>.from(_selectedIds);
           _exitSelectMode();
           final repo = ref.read(galleryRepositoryProvider);
+          final correctionService = ref.read(tagCorrectionServiceProvider);
           int updated = 0;
+          int rewardEnergy = 0;
           for (final id in ids) {
             final isar = await ref.read(isarProvider.future);
             final shot = await isar.screenshots.get(id);
             if (shot != null) {
-              final tags = List<String>.from(shot.tags ?? []);
-              if (!tags.contains(tag)) {
-                tags.add(tag);
-                await repo.updateTags(id, tags);
+              final oldTags = List<String>.from(shot.tags ?? []);
+              if (!oldTags.contains(tag)) {
+                final newTags = [...oldTags, tag];
+                await repo.updateTags(id, newTags);
                 updated++;
+                final rewarded = await correctionService.recordCorrection(
+                  textForKeywords: shot.cleanText ?? shot.ocrText ?? '',
+                  fromTags: oldTags,
+                  toTags: newTags,
+                );
+                if (rewarded) rewardEnergy += kCorrectionRewardEnergy;
               }
             }
           }
           if (mounted) {
+            final label = tag.startsWith('#') ? tag.substring(1) : tag;
+            final base =
+                'Tagged $updated screenshot${updated == 1 ? '' : 's'} with $label';
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Tagged $updated screenshot${updated == 1 ? '' : 's'} with ${tag.startsWith('#') ? tag.substring(1) : tag}'),
+                content: Text(rewardEnergy > 0
+                    ? '$base (+$rewardEnergy energy)'
+                    : base),
               ),
             );
           }

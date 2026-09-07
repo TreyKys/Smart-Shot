@@ -124,6 +124,17 @@ class TagEngine {
     ],
   };
 
+  /// Read-only view of the keyword vocabulary, keyed by category tag.
+  ///
+  /// Exposed so [TagCorrectionService] can scan a screenshot's text for
+  /// which of these *already-shipped, fixed* keywords appear — never
+  /// arbitrary substrings of the user's actual text — before recording a
+  /// correction locally or mirroring it to the shared Firestore database.
+  /// Because the vocabulary is fixed and generic ("invoice", "netflix",
+  /// "boarding pass"), matching against it can never leak something like an
+  /// email address, balance, or name that happened to be on the screen.
+  static Map<String, List<String>> get categoryKeywords => _categories;
+
   /// Score OCR text against all categories and return best-matching tags.
   static List<String> suggestFromOcr(String ocrText) {
     if (ocrText.trim().isEmpty) return [];

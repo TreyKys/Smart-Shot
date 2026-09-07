@@ -58,28 +58,38 @@
 <h2>8. Companion Apps</h2>
 <p>Sift may occasionally suggest opening one of our other apps (Pulse, Context, or Magnum Opus) when a screenshot's content looks like a good fit for one of them — for example, a calendar-worthy event. Tapping that suggestion only opens a link to that app; it does not automatically transmit the screenshot or any of its content to the other app.</p>
 
-<h2>9. Information We Do Not Collect</h2>
-<p>Sift does not require an account or login, does not collect your name or email address, does not access your contacts or location, and does not run any analytics or tracking beyond what's described in Sections 3–6 above.</p>
+<h2>9. Tag Correction Learning (Community Database)</h2>
+<p>When you manually change the tags Sift's AI assigned to a screenshot, Sift treats that as a correction and uses it to make future tagging better, in two ways:</p>
+<ul>
+  <li><strong>On-device correction log.</strong> Sift keeps a local record on your device of your corrections — which tags were replaced with which — and uses it to remind the AI of your own past corrections the next time it tags a screenshot with similar wording.</li>
+  <li><strong>Shared correction database (Firebase Firestore).</strong> Sift also mirrors a redacted version of each correction to a shared database so that other users' corrections can help improve tagging for everyone, and vice versa. What's sent is deliberately limited to: a small set of generic keywords drawn from a fixed, built-in vocabulary Sift already ships with (words like "invoice", "netflix", or "boarding pass" — categories, not your actual words), plus the "from" and "to" tags themselves. Sift does not send your screenshot's extracted text, topic, URLs, emails, phone numbers, dates, crypto addresses, the image itself, or any device or account identifier to this database.</li>
+  <li><strong>How it's used.</strong> When tagging a new screenshot, Sift checks your own local correction log first; only when that log finds something relevant does it also query the shared database for similar corrections from other users, and folds a short summary of any pattern it finds into the request sent to Mistral AI (Section&nbsp;2) as a hint — Mistral AI's model still makes the final tagging decision.</li>
+  <li><strong>Reward.</strong> Correcting a tag also credits a small amount of bonus AI usage to your daily allowance, capped per day, as a thank-you for helping.</li>
+  <li><strong>Not personal to you.</strong> Entries in the shared database carry no identifier tying them back to you or your device, so we cannot look up, edit, or delete an individual entry on request; uninstalling the App stops any further entries from being sent, but does not retroactively remove keyword/tag records already shared.</li>
+</ul>
 
-<h2>10. Data Retention and Deletion</h2>
-<p>Your screenshots, extracted text, and tags remain on your device until you delete them (including via the App's built-in Purge feature, which is entirely local) or uninstall the App — uninstalling removes the App's entire local database. You can revoke Sift's photo/media permission at any time in your device's system settings. Data that has already been sent to Google (Section&nbsp;2), Firebase (Section&nbsp;3–4), AdMob (Section&nbsp;5), or RevenueCat (Section&nbsp;6) is retained according to each of those providers' own policies, linked above — we don't control those retention periods and can't delete data on those providers' systems on your behalf beyond what their own tools allow.</p>
+<h2>10. Information We Do Not Collect</h2>
+<p>Sift does not require an account or login, does not collect your name or email address, does not access your contacts or location, and does not run any analytics or tracking beyond what's described in Sections 3–6 and 9 above.</p>
 
-<h2>11. International Data Transfers</h2>
+<h2>11. Data Retention and Deletion</h2>
+<p>Your screenshots, extracted text, and tags remain on your device until you delete them (including via the App's built-in Purge feature, which is entirely local) or uninstall the App — uninstalling removes the App's entire local database. You can revoke Sift's photo/media permission at any time in your device's system settings. Data that has already been sent to Google (Section&nbsp;2), Firebase (Sections&nbsp;3–4, 9), AdMob (Section&nbsp;5), or RevenueCat (Section&nbsp;6) is retained according to each of those providers' own policies, linked above — we don't control those retention periods and can't delete data on those providers' systems on your behalf beyond what their own tools allow.</p>
+
+<h2>12. International Data Transfers</h2>
 <p>Google, Firebase, AdMob, Mistral AI, and RevenueCat operate infrastructure across multiple countries, which may be outside your own country or Nigeria. Where content or data is transmitted to these providers as described above, it may be processed on servers located outside the country you're using Sift in — the AI tagging traffic described in Section&nbsp;2 is routed to Mistral AI's infrastructure (Mistral is headquartered in France and processes data under EU/GDPR data protection standards). Each provider maintains its own legal safeguards for these transfers under its respective privacy policy, linked throughout this document.</p>
 
-<h2>12. Security</h2>
+<h2>13. Security</h2>
 <p>All network traffic between the App and the services described above is encrypted in transit (TLS). Your local database is sandboxed to the App by your device's operating system. We recommend protecting your device with a screen lock, since your local Sift data is only as private as the device it lives on.</p>
 
-<h2>13. Children's Privacy</h2>
+<h2>14. Children's Privacy</h2>
 <p>Sift is not directed at children under 13 (or the relevant minimum age of digital consent in your country), and we do not knowingly collect data from children. If you believe a child has used the App in a way that concerns you, contact us at the address below and we will help.</p>
 
-<h2>14. Your Rights</h2>
+<h2>15. Your Rights</h2>
 <p>We operate under the Nigeria Data Protection Act 2023 (NDPA). You may request access to, correction of, or deletion of any personal data we hold about you, and you may object to or withdraw consent for processing at any time — in most cases simply by uninstalling the App, since your content lives on your device rather than on our servers. To exercise any of these rights, or to lodge a complaint, email us at the address below; Nigerian residents may also contact the <a href="https://ndpc.gov.ng" target="_blank" rel="noopener">Nigeria Data Protection Commission (NDPC)</a>. If you are located in the European Economic Area, the UK, or Switzerland, you have equivalent rights under the GDPR/UK GDPR with respect to our own processing, in addition to whatever rights you can exercise directly with Google, Firebase, AdMob, or RevenueCat as independent data controllers for their own processing. If you are a California resident, you have equivalent rights under the CCPA; Sift does not sell personal information.</p>
 
-<h2>15. Changes to This Policy</h2>
+<h2>16. Changes to This Policy</h2>
 <p>We may update this policy as the App evolves. Material changes will be reflected by updating the "Last updated" date above, and where a change is significant, we'll also make reasonable efforts to flag it inside the App.</p>
 
-<h2>16. Contact</h2>
+<h2>17. Contact</h2>
 <p>Questions about this policy, or a request relating to your data? Contact us at <a href="mailto:support@neurodevlabs.cloud">support@neurodevlabs.cloud</a>.<br>NeuroDev Labs — Lagos, Nigeria.</p>
 
 </body>

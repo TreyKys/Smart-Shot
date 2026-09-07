@@ -19,6 +19,7 @@ import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
+import 'package:sift/features/learning/tag_correction_service.dart';
 import 'package:sift/services/notification_service.dart';
 
 part 'gallery_repository.g.dart';
@@ -633,14 +634,22 @@ class GalleryRepository {
 
     final results = <int, Map<String, dynamic>>{};
     final byId = {for (final s in toAnalyze) s.id: s};
+    final correctionService = _ref.read(tagCorrectionServiceProvider);
 
     // Text-only screenshots, batched.
     for (var i = 0; i < textItems.length; i += kTextBatchSize) {
       final slice =
           textItems.sublist(i, math.min(i + kTextBatchSize, textItems.length));
+      // One hint per batch, built from the combined text of everything in
+      // it — cheaper than a per-item lookup and the local-log gate inside
+      // buildLearningHint() means this is usually a fast no-op anyway (see
+      // TagCorrectionService's doc).
+      final hint = await correctionService
+          .buildLearningHint(slice.map((it) => it.ocrText).join('\n'));
       Map<int, Map<String, dynamic>> batch = {};
       try {
-        batch = await llmService.analyzeTextBatch(slice, byokApiKey: byokKey);
+        batch = await llmService.analyzeTextBatch(slice,
+            byokApiKey: byokKey, learningHint: hint);
       } catch (e) {
         debugPrint('Text batch failed ($e) - retrying individually.');
       }
@@ -654,10 +663,13 @@ class GalleryRepository {
         final shot = byId[item.id];
         if (shot == null) return;
         try {
+          final itemHint =
+              await correctionService.buildLearningHint(item.ocrText);
           results[item.id] = await llmService.analyze(
             File(shot.filePath),
             byokApiKey: byokKey,
             ocr: ocrByShot[item.id]!,
+            learningHint: itemHint,
           );
         } catch (e) {
           debugPrint('Single retry failed for ${item.id}: $e');
@@ -669,10 +681,13 @@ class GalleryRepository {
     // network-bound rather than CPU-bound.
     await _runBounded(visionShots, _kVisionConcurrency, (shot) async {
       try {
+        final ocrText = ocrByShot[shot.id]?.text ?? '';
+        final hint = await correctionService.buildLearningHint(ocrText);
         results[shot.id] = await llmService.analyze(
           File(shot.filePath),
           byokApiKey: byokKey,
           ocr: ocrByShot[shot.id]!,
+          learningHint: hint,
         );
       } catch (e) {
         debugPrint('Vision analysis failed for ${shot.id}: $e');

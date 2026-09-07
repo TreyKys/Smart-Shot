@@ -16,6 +16,13 @@ const int kProBatchLimit = 50;
 const int kBackgroundDeepScanChunkSize = 50;
 const double kCostPerExtraction = 0.0005;
 
+/// Energy granted for each tag correction a user makes (see
+/// [TagCorrectionService]), and the daily ceiling on that reward — the cap
+/// exists so editing one screenshot's tags back and forth, or bulk-tagging a
+/// large selection, can't be used to farm free energy.
+const int kCorrectionRewardEnergy = 2;
+const int kMaxCorrectionRewardPerDay = 10;
+
 /// How many of the [kAdsRequiredForReward] ads the user has watched in the
 /// current refill attempt — plain, non-generated provider (this session's
 /// convention for new providers) so quota_bar.dart can show live progress
@@ -46,6 +53,7 @@ class EconomyService extends _$EconomyService {
       await _prefs.setString('last_reset_date', todayStr);
       await _prefs.setInt('ai_energy', kDailyFreeExtractions);
       await _prefs.setInt('refills_today', 0);
+      await _prefs.setInt('correction_reward_today', 0);
       debugPrint('Midnight reset: energy restored to $kDailyFreeExtractions.');
     }
   }
@@ -194,4 +202,33 @@ class EconomyService extends _$EconomyService {
   }
 
   int getBatchLimit(bool isPro) => isPro ? kProBatchLimit : kFreeBatchLimit;
+
+  // ── Tag-correction reward ────────────────────────────────────────────────
+
+  /// Grants [kCorrectionRewardEnergy] for a genuine tag correction, up to
+  /// [kMaxCorrectionRewardPerDay] worth of energy per day. Returns whether a
+  /// reward was actually granted, so the caller can decide whether to show a
+  /// "+2 energy" confirmation.
+  ///
+  /// A no-op for Pro/BYOK users — they already have unlimited energy, so
+  /// there is nothing meaningful to grant. [TagCorrectionService] still
+  /// records and shares the correction itself regardless of this return
+  /// value; only the reward is gated here.
+  Future<bool> rewardTagCorrection() async {
+    if (await _isUnlimited()) return false;
+    await _checkMidnightReset();
+    final grantedToday = _prefs.getInt('correction_reward_today') ?? 0;
+    if (grantedToday >= kMaxCorrectionRewardPerDay) return false;
+
+    final current = _getCurrentEnergy();
+    final newEnergy = current + kCorrectionRewardEnergy;
+    final write = _prefs.setInt('ai_energy', newEnergy);
+    await _prefs.setInt(
+        'correction_reward_today', grantedToday + kCorrectionRewardEnergy);
+    state = AsyncValue.data(newEnergy);
+    await write;
+    debugPrint(
+        'Tag correction reward: +$kCorrectionRewardEnergy energy. Total: $newEnergy');
+    return true;
+  }
 }

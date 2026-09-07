@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Rules for Sift's shared tag-correction learning database (see
+// lib/features/learning/tag_correction_service.dart). This project has no
+// firebase.json / Firebase CLI config checked in — Firestore itself and
+// these rules are managed by hand in the Firebase Console, same as the
+// mistral_api_key Remote Config parameter is. Paste this file's contents
+// into Console → Firestore Database → Rules and Publish.
+//
+// Shape being enforced, matching exactly what TagCorrectionService writes:
+//   { keywords: [string, ...] (<=12), fromTags: [string, ...] (<=5),
+//     toTags: [string, ...] (<=5), timestamp: server timestamp }
+// No screenshot text, image data, or device/account identifier is ever
+// part of this document — see TagCorrection's doc comment for why that's
+// safe to enforce at the client and additionally check for here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tag_corrections/{correctionId} {
+      // Every device reads this collection to build tagging hints — no
+      // per-user data lives here, so there's nothing to restrict reads by.
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly(
+                        ['keywords', 'fromTags', 'toTags', 'timestamp'])
+                    && request.resource.data.keywords is list
+                    && request.resource.data.keywords.size() <= 12
+                    && request.resource.data.fromTags is list
+                    && request.resource.data.fromTags.size() <= 5
+                    && request.resource.data.toTags is list
+                    && request.resource.data.toTags.size() <= 5
+                    && request.resource.data.toTags.size() > 0
+                    && request.resource.data.timestamp == request.time;
+
+      // Entries are append-only — once written, a correction record is
+      // never edited or removed by a client.
+      allow update, delete: if false;
+    }
+  }
+}
