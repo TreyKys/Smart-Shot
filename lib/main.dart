@@ -14,11 +14,11 @@ import 'package:sift/core/navigation.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
-import 'package:sift/features/gallery/presentation/gallery_screen.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/monetization/consent_service.dart';
 import 'package:sift/features/onboarding/onboarding_screen.dart';
 import 'package:sift/features/economy/economy_service.dart';
+import 'package:sift/features/shell/main_shell.dart';
 import 'package:sift/services/notification_service.dart';
 
 // Set once Firebase is up. Guards every reporting call, so a failed init
@@ -209,7 +209,7 @@ class _SiftAppState extends ConsumerState<SiftApp> {
       darkTheme: buildSiftTheme(),
       themeMode: themeMode,
       home: _onboardingComplete
-          ? const GalleryScreen()
+          ? MainShell(key: mainShellKey)
           : const OnboardingScreen(),
     );
   }

@@ -16,6 +16,7 @@ import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/services/tag_engine.dart';
 import 'package:sift/features/junk_review/junk_review_service.dart'
     show kJunkBatchSize;
+import 'package:sift/features/memories/memories_service.dart' show findMemories;
 import 'package:sift/services/notification_service.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -188,6 +189,7 @@ Future<bool> _processDeepScanBatch() async {
     // a full batch has piled up, otherwise waits out the day so it reads as
     // an occasional tidy-up nudge rather than nagging.
     await _maybeNotifyJunkBatch(isar);
+    await _maybeNotifyMemories(isar);
 
     await isar.close();
     DiagnosticLog.info(
@@ -249,6 +251,40 @@ Future<void> _maybeNotifyJunkBatch(Isar isar) async {
   } catch (e) {
     debugPrint('_maybeNotifyJunkBatch failed: $e');
     DiagnosticLog.error('Background scan: junk-batch notification failed — $e');
+  }
+}
+
+const String _kPrefsLastMemoriesNotifiedDate = 'last_memories_notified_date';
+
+/// Fires at most once per calendar day, tracked by date string rather than
+/// a rolling duration — unlike junk (a count that only grows until
+/// reviewed), whether there's anything new to say here flips at midnight
+/// regardless of how many 15-minute scans ran in between, so a straight
+/// "hours since last notified" floor could drift and either skip a day or
+/// double-fire near a boundary. Same failure isolation as
+/// _maybeNotifyJunkBatch: tagging already succeeded by this point and must
+/// not be thrown away over a nudge that didn't fire.
+Future<void> _maybeNotifyMemories(Isar isar) async {
+  try {
+    final memories = await findMemories(isar);
+    if (memories.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now();
+    final todayKey = '${today.year}-${today.month}-${today.day}';
+    if (prefs.getString(_kPrefsLastMemoriesNotifiedDate) == todayKey) return;
+
+    final nearest = memories.first; // groupMemories sorts ascending by yearsAgo.
+    final totalShots =
+        memories.fold<int>(0, (sum, m) => sum + m.shots.length);
+
+    await NotificationService.instance.init();
+    await NotificationService.instance
+        .notifyMemoriesReady(yearsAgo: nearest.yearsAgo, count: totalShots);
+    await prefs.setString(_kPrefsLastMemoriesNotifiedDate, todayKey);
+  } catch (e) {
+    debugPrint('_maybeNotifyMemories failed: $e');
+    DiagnosticLog.error('Background scan: memories notification failed — $e');
   }
 }
 

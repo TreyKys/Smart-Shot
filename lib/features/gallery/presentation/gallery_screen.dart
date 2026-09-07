@@ -2,10 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/theme/app_theme.dart';
-import 'package:sift/features/assistant/presentation/assistant_screen.dart';
 import 'package:sift/features/collections/presentation/collection_picker_sheet.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
@@ -14,12 +12,11 @@ import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
 import 'package:sift/features/gallery/presentation/widgets/gallery_drawer.dart';
-import 'package:sift/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
-import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/monetization/quota_bar.dart';
 import 'package:sift/features/purge/presentation/purge_banner.dart';
 import 'package:sift/features/search/search_provider.dart';
 import 'package:sift/features/settings/settings_screen.dart';
+import 'package:sift/features/shell/main_shell.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
@@ -32,58 +29,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
   bool _selectMode = false;
   final Set<int> _selectedIds = {};
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _checkSmartIndexingConsent();
-      ref.read(economyServiceProvider.notifier).loadRewardedAd();
-      ref.read(galleryRepositoryProvider).reprocessGarbageTags();
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getStringList('pinned_ids') ?? [];
-      final ids = raw.map((e) => int.tryParse(e)).whereType<int>().toSet();
-      if (mounted) ref.read(pinnedIdsProvider.notifier).state = ids;
-    });
-  }
-
-  Future<void> _checkSmartIndexingConsent() async {
-    final prefs = await SharedPreferences.getInstance();
-    final mode = prefs.getString('smart_indexing_mode');
-
-    if (mode == null) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => SmartIndexingDialog(
-          onLiveMode: () async {
-            Navigator.of(context).pop();
-            await prefs.setString('smart_indexing_mode', 'live');
-            await prefs.setInt(
-                'live_mode_timestamp', DateTime.now().millisecondsSinceEpoch);
-            // Live Mode's promise is "new screenshots get indexed" — without
-            // this, that only happens while the app is open. See
-            // background_service.dart's discoverNewScreenshots call.
-            await scheduleBackgroundSync();
-            ref.read(galleryRepositoryProvider).syncGallery();
-          },
-          onDeepScan: () async {
-            Navigator.of(context).pop();
-            await prefs.setString('smart_indexing_mode', 'deep');
-            await scheduleBackgroundSync();
-            ref.read(galleryRepositoryProvider).syncGallery();
-          },
-        ),
-      );
-    } else {
-      // Covers users who picked a mode before background sync applied to
-      // both — re-registering is idempotent (WorkManager keeps one task per
-      // unique name), so this just backfills Live Mode users who are still
-      // foreground-only from an earlier version.
-      await scheduleBackgroundSync();
-      ref.read(galleryRepositoryProvider).syncGallery();
-    }
-  }
+  // First-run indexing consent, garbage-tag cleanup, and pin restoration
+  // used to run from here — moved to MainShellState.initState() when
+  // MainShell replaced this screen as main.dart's home. GalleryScreen is now
+  // reached only by pushing from the Organize tab, so those startup-only
+  // steps belong to whatever's actually shown at launch, not to a screen a
+  // session might never open.
 
   void _enterSelectMode(int id) {
     setState(() {
@@ -151,9 +102,16 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
             )
           : FloatingActionButton(
               heroTag: 'ask_sift',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AssistantScreen()),
-              ),
+              // GalleryScreen is reached by pushing on top of MainShell (from
+              // the Organize tab), so Sift AI is already alive underneath as
+              // a persistent shell tab with its own chat history — pushing a
+              // second, fresh AssistantScreen here would silently fork that
+              // conversation into two disconnected instances. Pop back to
+              // the shell and switch tabs instead of pushing a new route.
+              onPressed: () {
+                Navigator.of(context).pop();
+                mainShellKey.currentState?.selectTab(kAssistantTabIndex);
+              },
               backgroundColor: SiftColors.accent,
               child: const Icon(Icons.auto_awesome, color: Colors.black),
             ),

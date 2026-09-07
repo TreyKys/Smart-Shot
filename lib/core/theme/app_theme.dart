@@ -56,6 +56,65 @@ class SiftColors {
   }
 }
 
+/// Was GalleryDrawer's own private _getIconForTag — pulled out here once the
+/// Organize hub needed the exact same tag -> icon mapping for its cluster
+/// cards, rather than that logic existing twice.
+IconData iconForTag(String tag) {
+  final lower = tag.toLowerCase().replaceAll('#', '');
+  if (lower.contains('finance') ||
+      lower.contains('receipt') ||
+      lower.contains('money')) return CupertinoIcons.money_dollar;
+  if (lower.contains('travel') || lower.contains('flight')) {
+    return CupertinoIcons.airplane;
+  }
+  if (lower.contains('web3') ||
+      lower.contains('crypto') ||
+      lower.contains('btc') ||
+      lower.contains('eth')) return CupertinoIcons.bitcoin;
+  if (lower.contains('code') ||
+      lower.contains('dev') ||
+      lower.contains('git')) {
+    return CupertinoIcons.chevron_left_slash_chevron_right;
+  }
+  if (lower.contains('social') ||
+      lower.contains('instagram') ||
+      lower.contains('twitter')) return CupertinoIcons.person_2;
+  if (lower.contains('meme') || lower.contains('funny')) {
+    return CupertinoIcons.smiley;
+  }
+  if (lower.contains('chem') ||
+      lower.contains('science') ||
+      lower.contains('lab')) return CupertinoIcons.lab_flask;
+  if (lower.contains('date') ||
+      lower.contains('calendar') ||
+      lower.contains('schedule')) return CupertinoIcons.calendar;
+  if (lower.contains('chart') ||
+      lower.contains('trading') ||
+      lower.contains('stock')) return CupertinoIcons.graph_circle;
+  if (lower.contains('news') || lower.contains('article')) {
+    return CupertinoIcons.news;
+  }
+  if (lower.contains('shop') || lower.contains('buy')) {
+    return CupertinoIcons.shopping_cart;
+  }
+  if (lower.contains('music') || lower.contains('song')) {
+    return CupertinoIcons.music_note;
+  }
+  if (lower.contains('video') || lower.contains('movie')) {
+    return CupertinoIcons.film;
+  }
+  if (lower.contains('book') ||
+      lower.contains('read') ||
+      lower.contains('edu')) return CupertinoIcons.book;
+  if (lower.contains('sport') ||
+      lower.contains('football') ||
+      lower.contains('soccer')) return CupertinoIcons.sportscourt;
+  if (lower.contains('food') || lower.contains('restaurant')) {
+    return CupertinoIcons.cart;
+  }
+  return CupertinoIcons.tag;
+}
+
 // ── Candy Pillowy palette ────────────────────────────────────────────────────
 //
 // A second, self-contained palette — not wired into buildSiftTheme()/

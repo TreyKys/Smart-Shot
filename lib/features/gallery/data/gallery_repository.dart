@@ -432,6 +432,44 @@ class GalleryRepository {
     return isar.screenshots.where().sortByTimestampDesc().findAll();
   }
 
+  /// Groups near-perceptually-identical screenshots using the same dHash
+  /// index and Hamming threshold that already keep re-ingested duplicates
+  /// out at scan time (see [_DedupIndex]/[DedupService]) — no new hashing,
+  /// no AI call, just grouping fingerprints that were already computed.
+  ///
+  /// Each group has 2+ members, newest first. Singletons (nothing else in
+  /// the library looks like it) aren't returned — there's nothing to review.
+  Future<List<List<Screenshot>>> findDuplicateClusters() async {
+    final dedup = await _DedupIndex.load();
+    if (dedup.entries.isEmpty) return const [];
+    // The O(n^2) pairwise comparison below is cheap per pair (a couple of
+    // XORs and a popcount) but a library with several thousand screenshots
+    // still adds up to tens of millions of comparisons — real int math, not
+    // I/O, so it's exactly the kind of work compute() exists for: keeps it
+    // off the UI isolate instead of janking whatever screen triggered this.
+    final pathGroups = await compute(clusterDuplicateHashes, dedup.entries);
+    if (pathGroups.isEmpty) return const [];
+
+    final isar = await _ref.read(isarProvider.future);
+    final clusters = <List<Screenshot>>[];
+    for (final paths in pathGroups) {
+      final shots = <Screenshot>[];
+      for (final path in paths) {
+        final shot = await isar.screenshots.where().filePathEqualTo(path).findFirst();
+        // A hash can outlive its screenshot between a deletion and the next
+        // _DedupIndex.forget() call finishing — skip rather than surface a
+        // cluster member that no longer actually exists.
+        if (shot != null) shots.add(shot);
+      }
+      if (shots.length >= 2) {
+        shots.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        clusters.add(shots);
+      }
+    }
+    clusters.sort((a, b) => b.length.compareTo(a.length));
+    return clusters;
+  }
+
   /// Overwrites the tags list for a given screenshot.
   Future<void> updateTags(int id, List<String> tags) async {
     final isar = await _ref.read(isarProvider.future);
@@ -941,6 +979,11 @@ class _DedupIndex {
     return false;
   }
 
+  /// Every indexed filePath -> dHash pair — the raw material for finding
+  /// duplicate *clusters* across the whole library, as opposed to
+  /// [isDuplicate]'s one-new-hash-against-the-index check at ingest time.
+  Map<String, String> get entries => Map.unmodifiable(_byPath);
+
   void add(String filePath, String hash) {
     final p = DedupService.pack(hash);
     if (p == null) return;
@@ -970,4 +1013,54 @@ class _DedupIndex {
       debugPrint('_DedupIndex.forget: $e');
     }
   }
+}
+
+/// Union-Find over dHash entries, grouping any two whose Hamming distance is
+/// under [DedupService]'s existing duplicate threshold. Pure int math over
+/// plain strings — no Isar, no file I/O — specifically so this can run
+/// inside [compute]'s separate isolate: [GalleryRepository.findDuplicateClusters]
+/// is the only real caller, and it resolves the returned file paths back to
+/// real Screenshot records afterward, in the isolate that actually has Isar
+/// open. Public (not test-file-inaccessible) only so a real test can drive
+/// its union-find logic directly — [compute] also needs a top-level
+/// function, not a private one scoped oddly to work around that.
+@visibleForTesting
+List<List<String>> clusterDuplicateHashes(Map<String, String> pathToHash) {
+  final entries = pathToHash.entries.toList();
+  final packed = entries.map((e) => DedupService.pack(e.value)).toList();
+  final n = entries.length;
+  final parent = List<int>.generate(n, (i) => i);
+
+  int find(int x) {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]]; // path halving, keeps find() near O(1)
+      x = parent[x];
+    }
+    return x;
+  }
+
+  void union(int a, int b) {
+    final rootA = find(a);
+    final rootB = find(b);
+    if (rootA != rootB) parent[rootA] = rootB;
+  }
+
+  for (var i = 0; i < n; i++) {
+    final hashI = packed[i];
+    if (hashI == null) continue;
+    for (var j = i + 1; j < n; j++) {
+      final hashJ = packed[j];
+      if (hashJ == null) continue;
+      if (DedupService.areDuplicatesPacked(hashI, hashJ)) union(i, j);
+    }
+  }
+
+  final groups = <int, List<int>>{};
+  for (var i = 0; i < n; i++) {
+    groups.putIfAbsent(find(i), () => []).add(i);
+  }
+  return groups.values
+      .where((group) => group.length >= 2)
+      .map((group) => group.map((i) => entries[i].key).toList())
+      .toList();
 }

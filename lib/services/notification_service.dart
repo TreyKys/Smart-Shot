@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:sift/core/navigation.dart';
 import 'package:sift/features/junk_review/presentation/junk_review_screen.dart';
+import 'package:sift/features/shell/main_shell.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -10,6 +11,12 @@ import 'package:timezone/timezone.dart' as tz;
 /// crosses the plugin's platform channel as one either way and this is the
 /// only place that ever reads it back.
 const String _kPayloadJunkReview = 'junk_review';
+
+/// Memories live inside the Discover tab rather than their own pushed route
+/// — unlike junk review, there's no dedicated full-screen flow to land on,
+/// just a tab to switch to (see MemoryGridScreen, reached from within
+/// Discover itself for a specific year).
+const String _kPayloadMemories = 'memories';
 
 /// Engagement notification service.
 /// Handles: processing complete, storage pressure, daily digest,
@@ -81,6 +88,14 @@ class NotificationService {
           MaterialPageRoute(builder: (_) => const JunkReviewScreen()),
         );
       });
+    } else if (payload == _kPayloadMemories) {
+      // Same cold-start caveat as above, but there's no route to push here
+      // — Discover is a persistent shell tab, so this just switches to it.
+      // A null currentState (shell not mounted yet, or the user hasn't
+      // finished onboarding) is a harmless no-op rather than a crash.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        mainShellKey.currentState?.selectTab(kDiscoverTabIndex);
+      });
     }
   }
 
@@ -126,6 +141,23 @@ class NotificationService {
       body: '$count screenshot${count == 1 ? '' : 's'} look like junk — '
           'swipe through and clear them out.',
       payload: _kPayloadJunkReview,
+    );
+  }
+
+  /// At most one fires per calendar day — background_service.dart's
+  /// _maybeNotifyMemories tracks that, not this method, since "is there
+  /// something new to say" here is a date check, not a count threshold.
+  /// [yearsAgo] is the nearest anniversary found (1 year beats 3, so a user
+  /// with both gets the more immediately-recognizable one in the copy).
+  Future<void> notifyMemoriesReady(
+      {required int yearsAgo, required int count}) async {
+    await _show(
+      id: 1005,
+      title: 'On this day',
+      body: count == 1
+          ? 'You have a screenshot from $yearsAgo year${yearsAgo == 1 ? '' : 's'} ago today.'
+          : '$count screenshots from $yearsAgo year${yearsAgo == 1 ? '' : 's'} ago (and maybe more) — take a look.',
+      payload: _kPayloadMemories,
     );
   }
 
