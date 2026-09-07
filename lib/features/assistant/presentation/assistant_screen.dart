@@ -185,11 +185,13 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       // surfaces as "something went wrong" instead of a spinner that never
       // resolves. That's the actual bug report this guards against: no
       // failure message ever arrived at all.
+      final all = await repo.allScreenshots();
       final plan = await _service
           .plan(
             text,
             availableTags: tags,
             availableCollections: collections.map((c) => c.name).toList(),
+            totalScreenshots: all.length,
             byokApiKey: byokKey,
           )
           .timeout(
@@ -202,7 +204,6 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         },
       );
 
-      final all = await repo.allScreenshots();
       final matched = _match(all, plan);
       _respond(plan, matched);
     } finally {
@@ -301,6 +302,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
               )));
         }
         break;
+      case AssistantIntent.help:
       case AssistantIntent.unclear:
         setState(
             () => _messages.add(_ChatMessage(isUser: false, text: plan.reply)));

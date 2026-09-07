@@ -61,20 +61,38 @@ class MistralClient {
   ///
   /// [imageBytes]/[imageMime] attach one image as a base64 data URI, in the
   /// same vision message shape OpenAI-compatible APIs use.
+  ///
+  /// [history] carries previous conversation turns as
+  /// `[{'role': 'user'|'assistant', 'content': '...'}]` maps — the Mistral
+  /// chat-completions API sends them as-is ahead of the current turn, giving
+  /// the model multi-turn memory. Each entry is a plain {role, content}
+  /// object; system messages use `systemPrompt` instead.
+  ///
+  /// [systemPrompt] becomes a `role: 'system'` message prepended to the
+  /// conversation — separate from user/assistant turns, which is how the
+  /// OpenAI-compatible API expects persistent instructions.
   static Future<Map<String, dynamic>> completeJson({
     required String apiKey,
     required String model,
     required String prompt,
     Uint8List? imageBytes,
     String? imageMime,
+    List<Map<String, String>>? history,
+    String? systemPrompt,
     // Defaults to background (bulk screenshot tagging) — callers waiting on
     // a person in the UI, like the chat assistant, should pass interactive
     // so they don't queue behind a big tagging backlog. See
     // RequestPriority's doc for why this doesn't risk the real rate limit.
     RequestPriority priority = RequestPriority.background,
   }) {
-    final estimatedTokens =
-        _estimateTokens(prompt, hasImage: imageBytes != null);
+    final historyTokens = history
+            ?.fold<int>(0, (sum, m) => sum + (m['content']?.length ?? 0)) ??
+        0;
+    final systemTokens = systemPrompt?.length ?? 0;
+    final estimatedTokens = _estimateTokens(prompt,
+            hasImage: imageBytes != null) +
+        (historyTokens / 4).ceil() +
+        (systemTokens / 4).ceil();
     return _queueFor(model).run(
       estimatedTokens,
       () => _completeJsonNow(
@@ -83,6 +101,8 @@ class MistralClient {
         prompt: prompt,
         imageBytes: imageBytes,
         imageMime: imageMime,
+        history: history,
+        systemPrompt: systemPrompt,
       ),
       priority: priority,
     );
@@ -94,6 +114,8 @@ class MistralClient {
     required String prompt,
     Uint8List? imageBytes,
     String? imageMime,
+    List<Map<String, String>>? history,
+    String? systemPrompt,
   }) async {
     const maxAttempts = 3;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -110,6 +132,15 @@ class MistralClient {
           });
         }
 
+        final messages = <Map<String, dynamic>>[];
+        if (systemPrompt != null && systemPrompt.isNotEmpty) {
+          messages.add({'role': 'system', 'content': systemPrompt});
+        }
+        if (history != null) {
+          messages.addAll(history);
+        }
+        messages.add({'role': 'user', 'content': content});
+
         final response = await http
             .post(
               Uri.parse(_endpoint),
@@ -119,9 +150,7 @@ class MistralClient {
               },
               body: jsonEncode({
                 'model': model,
-                'messages': [
-                  {'role': 'user', 'content': content},
-                ],
+                'messages': messages,
                 'response_format': {'type': 'json_object'},
               }),
             )

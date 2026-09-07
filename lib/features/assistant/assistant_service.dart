@@ -4,11 +4,14 @@ import 'package:sift/core/ai/rate_limited_queue.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 
-// Same model as LLMService's screenshot tagging — one fewer thing to keep in
-// sync if Mistral changes naming, and this call is small (a sentence plus a
-// short tag/collection list) so the vision-capable tier costs nothing extra
-// here even though no image is ever sent.
-const String _kAssistantModel = 'ministral-8b-2512';
+// Upgraded from ministral-8b-2512 to mistral-small-2603: a much more capable
+// model that understands compound requests ("find my receipts from March and
+// delete the junk ones"), follows up on previous conversation context, and
+// produces better replies. At 0.83 rps (1.2s between requests) this is still
+// fast enough for interactive chat — the 8B model was faster but couldn't
+// reason through anything beyond single-step intent mapping. Tagging stays on
+// ministral-8b-2512 (bulk throughput matters there, reasoning doesn't).
+const String _kAssistantModel = 'mistral-small-2603';
 
 enum AssistantIntent {
   search,
@@ -16,6 +19,7 @@ enum AssistantIntent {
   delete,
   addToCollection,
   createCollection,
+  help,
   unclear,
 }
 
@@ -31,6 +35,8 @@ AssistantIntent _parseIntent(String? raw) {
       return AssistantIntent.addToCollection;
     case 'create_collection':
       return AssistantIntent.createCollection;
+    case 'help':
+      return AssistantIntent.help;
     default:
       return AssistantIntent.unclear;
   }
@@ -82,7 +88,9 @@ class AssistantPlan {
   );
 }
 
-/// Turns one chat message into a structured [AssistantPlan].
+/// Turns one chat message into a structured [AssistantPlan], with full
+/// conversation history so the model can handle follow-ups ("now delete
+/// those", "add them to Taxes").
 ///
 /// Deliberately never sees screenshot images or full OCR text — only the
 /// message plus the tag/collection names already in use — so this call stays
@@ -91,84 +99,114 @@ class AssistantPlan {
 /// pipeline (tags, topic, cleanText, dates); this service's only job is
 /// mapping a sentence onto that filter shape.
 class AssistantService {
+  /// Conversation history for multi-turn context — each entry is a user or
+  /// assistant message from the current chat session. Capped at the most
+  /// recent turns to keep the prompt within token limits.
+  final List<Map<String, String>> _history = [];
+
+  /// Maximum number of history turns (user + assistant pairs) to keep — each
+  /// pair is two entries. 10 pairs = 20 messages, which is plenty of
+  /// conversational context without blowing up token costs.
+  static const int _maxHistoryPairs = 10;
+
+  void _addToHistory(String role, String content) {
+    _history.add({'role': role, 'content': content});
+    // Trim to most recent turns, keeping pairs intact
+    while (_history.length > _maxHistoryPairs * 2) {
+      _history.removeAt(0);
+    }
+  }
+
+  /// Clears conversation history — call when the chat is reset.
+  void clearHistory() => _history.clear();
+
   Future<AssistantPlan> plan(
     String message, {
     required List<String> availableTags,
     required List<String> availableCollections,
+    required int totalScreenshots,
     String? byokApiKey,
   }) async {
     final hasByok = byokApiKey != null &&
         byokApiKey.isNotEmpty &&
         byokApiKey != 'INSERT_API_KEY_HERE';
-    // Dart's flow analysis promotes byokApiKey to String here — hasByok was
-    // assigned directly from a `byokApiKey != null && ...` expression, which
-    // it tracks through the ternary condition below.
     final apiKey = hasByok ? byokApiKey : SharedKeyService.apiKey;
     if (apiKey.isEmpty) {
       DiagnosticLog.warn('AssistantService: no API key available — skipping.');
       return AssistantPlan.unavailable;
     }
 
-    final prompt = '''
-You are Sift's gallery assistant. The user is talking to you about
-screenshots already organised in their phone gallery app. Turn their message
-into ONE structured action.
+    // System prompt — persistent instructions separated from the
+    // conversation, which the OpenAI-compatible API handles as a
+    // role: 'system' message ahead of the user/assistant turns.
+    final systemPrompt = '''
+You are Sift AI, the smart assistant inside Sift — a screenshot gallery app. You help users find, organise, count, and clean up their screenshot library using natural language.
 
-Tags already in use: ${availableTags.isEmpty ? '(none yet)' : availableTags.join(', ')}
-Collections already created: ${availableCollections.isEmpty ? '(none yet)' : availableCollections.join(', ')}
+You're conversational, helpful, and concise. You can reference what was discussed earlier in the conversation to understand follow-up requests like "now delete those" or "put them in a collection called Work."
 
-Pick "search" to find screenshots, "count" to just report how many match,
-"delete" to remove matching screenshots, "add_to_collection" to file matching
-screenshots into a named collection, "create_collection" to make a new empty
-collection with no screenshots yet, or "unclear" if the request doesn't map
-to any of these — deleting and adding to a collection are always confirmed by
-the app before anything happens, so pick them whenever that is what the user
-is asking for.
+CAPABILITIES:
+- "search" — find screenshots matching a description
+- "count" — report how many screenshots match
+- "delete" — remove matching screenshots (the app always confirms first)
+- "add_to_collection" — file matching screenshots into a named collection
+- "create_collection" — make a new empty collection
+- "help" — explain what you can do
 
-Only use tag names from the list above in "tags" — never invent one that
-isn't already in use. Put anything else the user described (a receipt, a
-name, a place, a topic) in "keywords" instead.
+CONTEXT:
+- Library has $totalScreenshots screenshot${totalScreenshots == 1 ? '' : 's'}
+- Tags in use: ${availableTags.isEmpty ? '(none yet — screenshots haven\'t been tagged)' : availableTags.join(', ')}
+- Collections: ${availableCollections.isEmpty ? '(none yet)' : availableCollections.join(', ')}
 
-Respond with ONLY a single JSON object — no markdown, no code fences, no text
-before or after it. Use exactly this shape:
+RULES:
+1. Only use tag names from the tags list above — NEVER invent tags. Put freeform descriptions in "keywords" instead.
+2. For follow-ups referencing earlier results ("those", "them", "the ones you found"), use the same tags/keywords from your previous response so the app finds the same screenshots.
+3. Think about what the user actually wants. "Show me receipts" → search. "How many memes?" → count. "Get rid of junk" → delete. "Put receipts in Taxes" → add_to_collection.
+4. If the user asks something conversational ("thanks", "hello", "what can you do?"), use intent "help" and write a friendly reply.
+5. The "reply" field should be natural and conversational — not a restatement of the JSON fields. Be brief but warm.
+
+Respond with ONLY a single JSON object:
 {
-  "intent": "search" or "count" or "delete" or "add_to_collection" or "create_collection" or "unclear",
-  "tags": [<strings, from the tags list above>] or null,
-  "keywords": [<free-text strings>] or null,
-  "collectionName": <string, or null>,
-  "dateFrom": <"YYYY-MM-DD", or null — only if a time range was mentioned>,
-  "dateTo": <"YYYY-MM-DD", or null>,
-  "reply": <a short, friendly reply to show the user — plain language, not the raw criteria>
-}
+  "intent": "search" | "count" | "delete" | "add_to_collection" | "create_collection" | "help",
+  "tags": ["#Tag1", "#Tag2"] or null,
+  "keywords": ["receipt", "uber"] or null,
+  "collectionName": "Taxes" or null,
+  "dateFrom": "YYYY-MM-DD" or null,
+  "dateTo": "YYYY-MM-DD" or null,
+  "reply": "Here are your receipts from March!"
+}''';
 
-User: $message
-''';
+    // Add the user's message to history BEFORE sending, so the model sees
+    // its own prior responses leading up to this new message.
+    _addToHistory('user', message);
 
     final callStarted = DateTime.now();
     final map = await MistralClient.completeJson(
       apiKey: apiKey,
       model: _kAssistantModel,
-      prompt: prompt,
-      // A person is waiting on this one — it must not queue behind a big
-      // background tagging batch on the same model's shared queue.
+      systemPrompt: systemPrompt,
+      prompt: message,
+      history: _history.length > 1
+          ? _history.sublist(0, _history.length - 1)
+          : null,
       priority: RequestPriority.interactive,
     );
     final elapsed = DateTime.now().difference(callStarted);
     if (elapsed > const Duration(seconds: 5)) {
-      // Anything past a couple seconds here is worth knowing about even on
-      // success — RateLimitedQueue only logs a slow *wait*, so a call that
-      // cleared admission quickly but the HTTP round trip itself was slow
-      // wouldn't otherwise show up anywhere.
       DiagnosticLog.warn(
           'AssistantService: MistralClient.completeJson took '
           '${elapsed.inSeconds}s (model=$_kAssistantModel).');
     }
-    if (map.isEmpty) return AssistantPlan.failed;
+    if (map.isEmpty) {
+      // Remove the user message from history if the call failed — the model
+      // never saw it, so keeping it would create a gap.
+      _history.removeLast();
+      return AssistantPlan.failed;
+    }
 
     final intent = _parseIntent(map['intent'] as String?);
     DiagnosticLog.info('AssistantService: intent="${map['intent']}"');
     final replyText = (map['reply'] as String?)?.trim();
-    return AssistantPlan(
+    final plan = AssistantPlan(
       intent: intent,
       tags: (map['tags'] as List?)?.whereType<String>().toList() ?? const [],
       keywords:
@@ -180,5 +218,11 @@ User: $message
           ? replyText!
           : "Here's what I found.",
     );
+
+    // Add the assistant's response to history — the reply is the
+    // conversational part the model should remember, not the raw JSON.
+    _addToHistory('assistant', plan.reply);
+
+    return plan;
   }
 }
