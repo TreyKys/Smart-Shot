@@ -23,14 +23,17 @@ const int kAssistantTabIndex = 2;
 const int kCollectionsTabIndex = 3;
 
 /// Root navigation shell — Discover / Organize / Sift AI / Collections as
-/// persistent tabs, replacing GalleryScreen as main.dart's home. Each tab
-/// keeps its existing Scaffold/AppBar exactly as it already had it: Flutter
-/// only shows a back button when there's actually somewhere to pop back to
-/// (Navigator.canPop), so a tab embedded here with nothing pushed below it
-/// renders with no back arrow automatically, and the same screen still
-/// works completely unchanged wherever else it's independently pushed
-/// (e.g. JunkReviewScreen and DuplicateReviewScreen push from Discover;
-/// GalleryScreen pushes from Organize).
+/// persistent tabs, and the app's only real UI: there is no separate
+/// full-screen gallery route anymore — Organize's own grid mode (see
+/// organize_screen.dart's `_OrganizeView`) is the entire browsing
+/// experience, not a stepping-stone into another screen. Each tab keeps
+/// its own Scaffold/AppBar: Flutter only shows a back button when there's
+/// actually somewhere to pop back to (Navigator.canPop), so a tab embedded
+/// here with nothing pushed below it renders with no back arrow
+/// automatically, and the same screen still works completely unchanged
+/// wherever else it's independently pushed (e.g. JunkReviewScreen and
+/// DuplicateReviewScreen push from Discover; ImageDetailScreen pushes from
+/// Organize's grid mode, the assistant, and memory grids alike).
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -52,13 +55,12 @@ class MainShellState extends ConsumerState<MainShell> {
   /// to land on (e.g. a Memories notification routes here to Discover).
   void selectTab(int index) => setState(() => _index = index);
 
-  // Formerly ran from GalleryScreen.initState — moved here when MainShell
-  // replaced GalleryScreen as main.dart's home. GalleryScreen is now reached
-  // only by pushing from the Organize tab, so a user who stays on
-  // Discover/Organize/Sift AI/Collections for an entire session would never
-  // trigger these otherwise, silently losing first-run indexing consent,
-  // garbage-tag cleanup, and pin restoration (the last of which Sift AI's own
-  // tab reads via pinnedIdsProvider).
+  // Runs once here rather than in any individual tab, since a user could
+  // spend an entire session on Discover/Sift AI/Collections and never
+  // trigger these otherwise — first-run indexing consent, garbage-tag
+  // cleanup, and pin restoration (the last of which Sift AI's own tab reads
+  // via pinnedIdsProvider) all need to happen exactly once, at the app's
+  // real entry point, not deferred to whichever tab happens to need them.
   @override
   void initState() {
     super.initState();

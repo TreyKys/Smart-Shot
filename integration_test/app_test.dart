@@ -7,14 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:patrol_finders/patrol_finders.dart';
-import 'package:sift/features/gallery/presentation/gallery_screen.dart';
+import 'package:sift/features/shell/main_shell.dart';
 import 'package:sift/main.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   patrolWidgetTest(
-    'fresh install: skip onboarding via Live Mode reaches the gallery',
+    'fresh install: skip onboarding via Live Mode reaches the main shell',
     ($) async {
       await $.pumpWidgetAndSettle(const ProviderScope(child: SiftApp()));
 
@@ -24,7 +24,7 @@ void main() {
       await $('Live Mode').tap();
       await $.pumpAndSettle();
 
-      expect($(GalleryScreen), findsOneWidget);
+      expect($(MainShell), findsOneWidget);
     },
   );
 }

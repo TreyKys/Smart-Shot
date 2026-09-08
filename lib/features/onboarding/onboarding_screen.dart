@@ -3,8 +3,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sift/core/theme/app_theme.dart';
-import 'package:sift/features/gallery/presentation/gallery_screen.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
+import 'package:sift/features/shell/main_shell.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -159,7 +159,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _navigateToGallery() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const GalleryScreen()),
+      MaterialPageRoute(builder: (_) => MainShell(key: mainShellKey)),
     );
   }
 }

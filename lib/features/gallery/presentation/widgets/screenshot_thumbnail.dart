@@ -5,8 +5,8 @@ import 'package:sift/core/theme/app_theme.dart';
 
 /// A single screenshot's image, clipped and with a broken-image fallback —
 /// shared by the collection grid and the Gallery Assistant's result strips
-/// so both get the same load-failure handling `gallery_screen.dart`'s own
-/// card already has, without copy-pasting it a third time.
+/// so both get the same load-failure handling `organize_screen.dart`'s own
+/// grid card already has, without copy-pasting it a third time.
 ///
 /// Deliberately unsized — the caller controls dimensions (a GridView cell, a
 /// fixed SizedBox in a horizontal chat strip, etc.) via its own constraints.

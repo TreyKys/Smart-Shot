@@ -13,8 +13,9 @@ import 'package:sift/features/collections/domain/gallery_collection.dart';
 /// build_runner build`, which isn't guaranteed to be available in every
 /// environment this app gets built from. SharedPreferences already holds two
 /// other pieces of exactly this shape of state for the same reason — pinned
-/// screenshot ids (gallery_screen.dart) and the perceptual-dedup index
-/// (gallery_repository.dart's `_DedupIndex`) — so this follows an established
+/// screenshot ids (gallery_provider.dart's `pinnedIdsProvider`) and the
+/// perceptual-dedup index (gallery_repository.dart's `_DedupIndex`) — so
+/// this follows an established
 /// pattern rather than inventing a new one. At Sift's realistic library sizes
 /// (hundreds to low thousands of screenshots) a JSON blob per collection is
 /// plenty fast; `_DedupIndex`'s own doc comment makes the same argument.
