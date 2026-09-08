@@ -346,7 +346,6 @@ class _ClusterTile extends StatelessWidget {
                       : (isNewest ? 'Newest' : 'Keep'),
                   style: const TextStyle(
                       color: Colors.white,
-                      fontFamily: 'Plus Jakarta Sans',
                       fontSize: 10,
                       fontWeight: FontWeight.w700),
                 ),
@@ -367,7 +366,6 @@ class _ClusterTile extends StatelessWidget {
                     sizeLabel!,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontFamily: 'Plus Jakarta Sans',
                         fontSize: 10,
                         fontWeight: FontWeight.w600),
                   ),
@@ -481,7 +479,6 @@ class _DoneState extends StatelessWidget {
                   child: Text('Done',
                       style: TextStyle(
                           color: Colors.white,
-                          fontFamily: 'Plus Jakarta Sans',
                           fontWeight: FontWeight.w700,
                           fontSize: 14)),
                 ),

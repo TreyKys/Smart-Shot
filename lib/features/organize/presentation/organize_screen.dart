@@ -4,6 +4,7 @@ import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/gallery_screen.dart';
 import 'package:sift/features/gallery/presentation/widgets/screenshot_thumbnail.dart';
+import 'package:sift/features/settings/settings_screen.dart';
 
 /// Real tag clusters — [tagClustersProvider]'s count and cover thumbnail per
 /// tag, the same aggregation the drawer's plain list already computes, laid
@@ -27,7 +28,7 @@ class OrganizeScreen extends ConsumerWidget {
         title: const Text('Organize', style: SiftPillowyText.headlineSm),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 4),
             child: Center(
               child: _AllGalleryButton(
                 onTap: () {
@@ -37,6 +38,14 @@ class OrganizeScreen extends ConsumerWidget {
                   );
                 },
               ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined,
+                color: SiftPillowyColors.onSurfaceVariant),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
           ),
         ],
@@ -151,7 +160,6 @@ class _ClusterCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontFamily: 'Plus Jakarta Sans',
                         fontWeight: FontWeight.w700,
                         fontSize: 14),
                   ),
@@ -159,7 +167,6 @@ class _ClusterCard extends StatelessWidget {
                     '${cluster.count} screenshot${cluster.count == 1 ? '' : 's'}',
                     style: TextStyle(
                         color: Colors.white.withOpacity(0.85),
-                        fontFamily: 'Plus Jakarta Sans',
                         fontSize: 11),
                   ),
                 ],

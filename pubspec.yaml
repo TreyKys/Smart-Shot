@@ -62,22 +62,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  fonts:
-    # Bundled rather than fetched at runtime via a font-loading package —
-    # this app ships to Play Store, so the assistant/junk-review "Candy
-    # Pillowy" redesign shouldn't have a first-launch network dependency or
-    # a fallback-font flash if that fetch is slow or fails. Real weights
-    # pulled from Google Fonts' own CDN, same files google_fonts would
-    # eventually cache anyway.
-    - family: Plus Jakarta Sans
-      fonts:
-        - asset: assets/fonts/PlusJakartaSans-400.ttf
-          weight: 400
-        - asset: assets/fonts/PlusJakartaSans-500.ttf
-          weight: 500
-        - asset: assets/fonts/PlusJakartaSans-600.ttf
-          weight: 600
-        - asset: assets/fonts/PlusJakartaSans-700.ttf
-          weight: 700
-        - asset: assets/fonts/PlusJakartaSans-800.ttf
-          weight: 800
+  # No custom `fonts:` block — the short-lived "Candy Pillowy" redesign
+  # (Discover/Organize/assistant/junk-review/duplicate-review) that pinned
+  # Plus Jakarta Sans has been folded back into the rest of the app's
+  # single dark theme and default system font; see SiftPillowyColors'/
+  # SiftPillowyText's doc comments in core/theme/app_theme.dart.

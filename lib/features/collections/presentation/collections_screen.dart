@@ -4,6 +4,7 @@ import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/collections/collections_service.dart';
 import 'package:sift/features/collections/domain/gallery_collection.dart';
 import 'package:sift/features/collections/presentation/collection_detail_screen.dart';
+import 'package:sift/features/settings/settings_screen.dart';
 
 class CollectionsScreen extends ConsumerStatefulWidget {
   const CollectionsScreen({super.key});
@@ -110,6 +111,13 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
         actions: [
           IconButton(
               icon: const Icon(Icons.add), onPressed: _createCollection),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
         ],
       ),
       body: collectionsAsync.when(

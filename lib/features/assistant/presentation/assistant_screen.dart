@@ -12,6 +12,7 @@ import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/image_detail_screen.dart';
 import 'package:sift/features/gallery/presentation/widgets/screenshot_thumbnail.dart';
+import 'package:sift/features/settings/settings_screen.dart';
 
 class _ChatMessage {
   final bool isUser;
@@ -279,6 +280,15 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: SiftPillowyColors.onSurface),
         title: const Text('Ask Sift', style: SiftPillowyText.headlineSm),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

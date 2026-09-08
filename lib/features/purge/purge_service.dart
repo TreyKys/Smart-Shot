@@ -23,7 +23,13 @@ class PurgeResult {
   }
 }
 
-const List<String> _purgeableTags = ['#Junk', '#Memes', '#To-Do', '#Meme', '#Junk', '#Todo'];
+// Must match TagVocabulary's actual canonical tags — a screenshot can never
+// be stored with '#To-Do', '#Todo', or '#Meme' (singular): TagVocabulary
+// normalizes all of those onto '#Productivity' / '#Memes' before anything
+// reaches Isar (see tag_vocabulary.dart's alias map). The previous version
+// of this list used those never-actually-stored variants, so the purge
+// banner's own promise to clear out "to-do items" silently matched nothing.
+const List<String> _purgeableTags = ['#Junk', '#Memes', '#Productivity'];
 const int _purgeAgeDays = 30;
 
 @riverpod

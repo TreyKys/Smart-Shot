@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -84,6 +85,68 @@ class MistralClient {
     });
   }
 
+  static final math.Random _random = math.Random();
+
+  /// How long to wait before the next attempt after a 429 that got through
+  /// despite [RateLimitedQueue] admitting the call.
+  ///
+  /// The queue only throttles *this device* — every other install of the
+  /// app shares the exact same API key and the exact same account-wide
+  /// requests-per-second budget (some of these models allow under 1
+  /// request/second total, see [kMistralRateLimits]'s doc comment), so a
+  /// 429 here most often means some other device's request landed in the
+  /// same instant, not that this device's own pacing was wrong. That's
+  /// contention between many independent clients, and it's inherently
+  /// bursty — a short, fixed retry delay has a good chance of landing in
+  /// the very same busy window again.
+  ///
+  /// Two things follow from that: prefer the server's own `Retry-After`
+  /// header when it sends one (an authoritative answer beats any local
+  /// guess), and when it doesn't, back off exponentially with real jitter —
+  /// deterministic backoff (a flat 5s, 10s, 15s ladder) means every device
+  /// that got 429'd in the same burst retries at the exact same offsets
+  /// again, which just re-creates the collision that caused the 429 in the
+  /// first place instead of spreading retries out.
+  static Duration _backoffFor(
+    http.Response response,
+    int attempt, {
+    required int baseSeconds,
+    required int capSeconds,
+  }) {
+    final retryAfterHeader = response.headers['retry-after'];
+    final retryAfterSeconds =
+        retryAfterHeader != null ? int.tryParse(retryAfterHeader.trim()) : null;
+    if (retryAfterSeconds != null && retryAfterSeconds > 0) {
+      final jitterMs = _random.nextInt(1500);
+      return Duration(seconds: retryAfterSeconds, milliseconds: jitterMs);
+    }
+    final exponential = baseSeconds * math.pow(2, attempt - 1);
+    final jitterFactor = 0.6 + _random.nextDouble() * 0.8; // 0.6x – 1.4x
+    final seconds =
+        (exponential * jitterFactor).round().clamp(1, capSeconds);
+    return Duration(seconds: seconds);
+  }
+
+  /// Waits out one 429 and logs it — shared by [_completeJsonNow] and
+  /// [_chatRoundNow] so the two retry loops can't drift out of sync with
+  /// each other.
+  static Future<void> _waitBeforeRetry(
+    http.Response response,
+    int attempt,
+    int maxAttempts, {
+    required int baseSeconds,
+    required int capSeconds,
+  }) async {
+    final wait = _backoffFor(response, attempt,
+        baseSeconds: baseSeconds, capSeconds: capSeconds);
+    debugPrint('MistralClient: rate-limited (attempt $attempt/'
+        '$maxAttempts) — retrying in ${wait.inSeconds}s.');
+    DiagnosticLog.warn(
+        'MistralClient: rate-limited despite queueing — retrying in '
+        '${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
+    await Future.delayed(wait);
+  }
+
   /// ~4 characters per token for English-ish text, plus a fixed allowance
   /// for image tokens. Both are approximations pending a real call to see
   /// actual usage in the response — overestimating just makes the queue
@@ -157,7 +220,12 @@ class MistralClient {
     List<Map<String, String>>? history,
     String? systemPrompt,
   }) async {
-    const maxAttempts = 3;
+    // Background calls (screenshot tagging) have no one watching a spinner,
+    // so this can afford to be patient about shared-key contention — more
+    // attempts, a longer cap — rather than giving up in under 20 seconds.
+    const maxAttempts = 5;
+    const baseBackoffSeconds = 5;
+    const capBackoffSeconds = 60;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         final content = <Map<String, dynamic>>[
@@ -198,16 +266,12 @@ class MistralClient {
 
         // The queue should mean this rarely fires — a genuine safety net
         // (clock drift, a second isolate's queue running independently,
-        // the token estimate above being wrong) rather than the primary
-        // defence.
+        // the token estimate above being wrong, or — most often in
+        // practice — some other device sharing this same API key landing a
+        // request in the same instant) rather than the primary defence.
         if (response.statusCode == 429 && attempt < maxAttempts) {
-          final wait = Duration(seconds: 5 * attempt);
-          debugPrint('MistralClient: rate-limited (attempt $attempt/'
-              '$maxAttempts) — retrying in ${wait.inSeconds}s.');
-          DiagnosticLog.warn(
-              'MistralClient: rate-limited despite queueing — retrying in '
-              '${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
-          await Future.delayed(wait);
+          await _waitBeforeRetry(response, attempt, maxAttempts,
+              baseSeconds: baseBackoffSeconds, capSeconds: capBackoffSeconds);
           continue;
         }
 
@@ -299,7 +363,7 @@ class MistralClient {
     for (var round = 0; round < maxRounds; round++) {
       final estimatedTokens =
           _estimateMessagesTokens(conversation, tools);
-      final rawResponse = await _queueFor(model).run(
+      final result = await _queueFor(model).run(
         estimatedTokens,
         () => _chatRoundNow(
           apiKey: apiKey,
@@ -310,10 +374,16 @@ class MistralClient {
         priority: priority,
       );
 
+      final rawResponse = result.data;
       if (rawResponse == null) {
         return ChatResult(
-          reply: 'Something went wrong reaching the AI — try again in '
-              'a moment.',
+          reply: result.wasRateLimited
+              ? "Sift's shared AI is getting hit hard by everyone using it "
+                  'right now — please try again in a minute. Adding your '
+                  'own free Mistral key in Settings gives you a private, '
+                  'uncontended quota instead of sharing this one.'
+              : 'Something went wrong reaching the AI — try again in '
+                  'a moment.',
           executions: executions,
           failed: true,
         );
@@ -388,15 +458,27 @@ class MistralClient {
   }
 
   /// One HTTP round-trip for tool calling — no response_format constraint,
-  /// tools included in the payload. Returns the raw parsed response body,
-  /// or null on failure.
-  static Future<Map<String, dynamic>?> _chatRoundNow({
+  /// tools included in the payload. `data` is the raw parsed response body,
+  /// or null on failure; `wasRateLimited` distinguishes "every attempt got
+  /// a 429" from every other failure mode (network error, malformed
+  /// response, non-429 HTTP error), so the caller can give the user an
+  /// accurate reason instead of one generic "something went wrong."
+  static Future<({Map<String, dynamic>? data, bool wasRateLimited})>
+      _chatRoundNow({
     required String apiKey,
     required String model,
     required List<Map<String, dynamic>> messages,
     required List<Map<String, dynamic>> tools,
   }) async {
-    const maxAttempts = 3;
+    // Interactive calls (chat) share a single 90s end-to-end budget across
+    // up to 5 tool-calling rounds (see AssistantScreen), so this schedule is
+    // deliberately tighter than _completeJsonNow's background one — a few
+    // more attempts than before, but each wait capped low enough that
+    // several rounds can each get a retry or two without blowing the
+    // overall budget on its own.
+    const maxAttempts = 4;
+    const baseBackoffSeconds = 3;
+    const capBackoffSeconds = 20;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         final body = <String, dynamic>{
@@ -420,13 +502,8 @@ class MistralClient {
             .timeout(const Duration(seconds: 45));
 
         if (response.statusCode == 429 && attempt < maxAttempts) {
-          final wait = Duration(seconds: 5 * attempt);
-          debugPrint('MistralClient: rate-limited (attempt $attempt/'
-              '$maxAttempts) — retrying in ${wait.inSeconds}s.');
-          DiagnosticLog.warn(
-              'MistralClient: rate-limited despite queueing — retrying '
-              'in ${wait.inSeconds}s (attempt $attempt/$maxAttempts).');
-          await Future.delayed(wait);
+          await _waitBeforeRetry(response, attempt, maxAttempts,
+              baseSeconds: baseBackoffSeconds, capSeconds: capBackoffSeconds);
           continue;
         }
 
@@ -438,21 +515,26 @@ class MistralClient {
               'MistralClient: HTTP ${response.statusCode}: $bodySnippet');
           DiagnosticLog.error(
               'MistralClient: HTTP ${response.statusCode} — $bodySnippet');
-          return null;
+          return (
+            data: null,
+            wasRateLimited: response.statusCode == 429,
+          );
         }
 
         final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) return decoded;
+        if (decoded is Map<String, dynamic>) {
+          return (data: decoded, wasRateLimited: false);
+        }
         DiagnosticLog.warn(
             'MistralClient: chat round response was not an object.');
-        return null;
+        return (data: null, wasRateLimited: false);
       } catch (e) {
         debugPrint('MistralClient: chat round failed: $e');
         DiagnosticLog.error('MistralClient: chat round failed — $e');
-        return null;
+        return (data: null, wasRateLimited: false);
       }
     }
-    return null;
+    return (data: null, wasRateLimited: true);
   }
 
   /// Extracts the assistant message from a raw chat-completions response.

@@ -378,7 +378,6 @@ class _DoneState extends StatelessWidget {
                   child: Text('Done',
                       style: TextStyle(
                           color: Colors.white,
-                          fontFamily: 'Plus Jakarta Sans',
                           fontWeight: FontWeight.w700,
                           fontSize: 14)),
                 ),

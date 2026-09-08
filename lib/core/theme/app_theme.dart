@@ -115,84 +115,94 @@ IconData iconForTag(String tag) {
   return CupertinoIcons.tag;
 }
 
-// ── Candy Pillowy palette ────────────────────────────────────────────────────
+// ── Candy Pillowy palette — RETIRED, now an alias for SiftColors ───────────
 //
-// A second, self-contained palette — not wired into buildSiftTheme()/
-// buildSiftLightTheme() below, so it doesn't change any screen that isn't
-// explicitly rebuilt against it. Real tokens from the "Candy Pillowy UI"
-// design system (Plus Jakarta Sans, warm-cream ground, coral/violet/aqua
-// accents), reused verbatim rather than approximated — including the
-// Material-You-style split between `primary` (a darker, WCAG-safe tone for
-// text/icons on light surfaces) and `primaryContainer` (the vibrant brand
-// coral, reserved for fills and gradients) — currently applied to the
-// assistant and junk-review screens only.
+// This used to be a second, self-contained light palette ("Candy Pillowy
+// UI": Plus Jakarta Sans, warm-cream ground, coral/violet/aqua accents),
+// wired into Discover, Organize, Collections' bottom-nav bar, the assistant,
+// duplicate review, junk review, and the memory grid — while every other
+// screen (the gallery grid, image detail, Settings, onboarding, the paywall,
+// Collections' own list) ran on the dark [SiftColors] palette instead. Two
+// unrelated palettes active in the same app is exactly what read as "two
+// different apps" to anyone tapping from one tab to the next — a jarring
+// light/dark seam with a second typography voice on top of it.
+//
+// Every field below now just points at the real [SiftColors] dark palette
+// instead of an independent light one. That fixes every screen that
+// references `SiftPillowyColors`/`SiftPillowyText` without having to touch
+// each screen's actual layout code — same widgets, same shadows, real
+// tokens. New code should reach for [SiftColors] directly; these aliases
+// exist only so the screens still written against the old names keep
+// working, and can be deleted once nothing references them anymore.
 class SiftPillowyColors {
   SiftPillowyColors._();
 
-  static const surface = Color(0xFFFDF9F5);
-  static const surfaceContainerLowest = Color(0xFFFFFFFF);
-  static const surfaceContainerLow = Color(0xFFF7F3EF);
-  static const surfaceContainer = Color(0xFFF1EDE9);
-  static const surfaceContainerHigh = Color(0xFFEBE7E4);
-  static const surfaceContainerHighest = Color(0xFFE5E2DE);
-  static const surfaceVariant = Color(0xFFE5E2DE);
-  static const surfaceDim = Color(0xFFDDD9D6);
-  static const outline = Color(0xFF8C706F);
-  static const outlineVariant = Color(0xFFE0BFBD);
+  static const surface = SiftColors.background;
+  static const surfaceContainerLowest = SiftColors.surface;
+  static const surfaceContainerLow = SiftColors.surfaceElevated;
+  static const surfaceContainer = SiftColors.surfaceElevated;
+  static const surfaceContainerHigh = SiftColors.surfaceElevated;
+  static const surfaceContainerHighest = SiftColors.border;
+  static const surfaceVariant = SiftColors.surfaceElevated;
+  static const surfaceDim = SiftColors.border;
+  static const outline = SiftColors.border;
+  static const outlineVariant = SiftColors.border;
 
-  static const onSurface = Color(0xFF1C1C19);
-  static const onSurfaceVariant = Color(0xFF584140);
+  static const onSurface = SiftColors.textPrimary;
+  static const onSurfaceVariant = SiftColors.textSecondary;
 
-  static const primary = Color(0xFFAE2F34); // text/icon-safe deep red
-  static const onPrimary = Color(0xFFFFFFFF);
-  static const primaryContainer = Color(0xFFFF6B6B); // vibrant brand coral
-  static const onPrimaryContainer = Color(0xFF6D0010);
+  static const primary = SiftColors.accent;
+  static const onPrimary = SiftColors.background;
+  static const primaryContainer = SiftColors.accentDim;
+  static const onPrimaryContainer = SiftColors.background;
 
-  static const secondary = Color(0xFF6F4AAC); // electric violet
-  static const onSecondary = Color(0xFFFFFFFF);
-  static const secondaryContainer = Color(0xFFBD95FE);
-  static const onSecondaryContainer = Color(0xFF4D2589);
-  static const secondaryFixed = Color(0xFFECDCFF);
-  static const onSecondaryFixed = Color(0xFF270057);
+  static const secondary = SiftColors.tagMemes;
+  static const onSecondary = SiftColors.background;
+  static const secondaryContainer = SiftColors.tagMemes;
+  static const onSecondaryContainer = SiftColors.background;
+  static const secondaryFixed = SiftColors.surfaceElevated;
+  static const onSecondaryFixed = SiftColors.tagMemes;
 
-  static const tertiary = Color(0xFF006B58); // bright aqua, text-safe
-  static const onTertiary = Color(0xFFFFFFFF);
-  static const tertiaryContainer = Color(0xFF00AF91);
-  static const tertiaryFixed = Color(0xFF5FFBD6);
+  static const tertiary = SiftColors.success;
+  static const onTertiary = SiftColors.background;
+  static const tertiaryContainer = SiftColors.success;
+  static const tertiaryFixed = SiftColors.success;
 
-  static const error = Color(0xFFBA1A1A);
-  static const onError = Color(0xFFFFFFFF);
+  static const error = SiftColors.danger;
+  static const onError = SiftColors.textPrimary;
 
-  /// The primary send-button / user-bubble gradient — `from-primary
-  /// to-primary-container` in the source design.
+  /// The primary send-button / user-bubble gradient — both stops are now
+  /// the app's real blue accent rather than the old red-to-coral pair.
   static const primaryGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
     colors: [primary, primaryContainer],
   );
 
-  /// The assistant-avatar gradient — `from-secondary to-primary-container`.
+  /// The assistant-avatar gradient — violet to blue, both drawn from
+  /// [SiftColors] instead of the old violet-to-coral pair.
   static const assistantAvatarGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [secondary, primaryContainer],
+    colors: [secondary, primary],
   );
 }
 
 class SiftPillowyText {
   SiftPillowyText._();
 
-  static const _family = 'Plus Jakarta Sans';
-
+  // No fontFamily override anymore — this used to pin every Pillowy screen
+  // to Plus Jakarta Sans while the rest of the app used the system default,
+  // which was its own quiet "two interfaces" tell alongside the color
+  // mismatch. Falling through to the default lines these screens up
+  // typographically with everything else.
   static const headlineSm = TextStyle(
-    fontFamily: _family,
     fontSize: 18,
     height: 24 / 18,
     fontWeight: FontWeight.w600,
     color: SiftPillowyColors.onSurface,
   );
   static const headlineMd = TextStyle(
-    fontFamily: _family,
     fontSize: 22,
     height: 28 / 22,
     fontWeight: FontWeight.w700,
@@ -200,35 +210,30 @@ class SiftPillowyText {
     color: SiftPillowyColors.onSurface,
   );
   static const bodyMd = TextStyle(
-    fontFamily: _family,
     fontSize: 14,
     height: 20 / 14,
     fontWeight: FontWeight.w400,
     color: SiftPillowyColors.onSurface,
   );
   static const bodySm = TextStyle(
-    fontFamily: _family,
     fontSize: 12,
     height: 16 / 12,
     fontWeight: FontWeight.w400,
     color: SiftPillowyColors.onSurfaceVariant,
   );
   static const labelLg = TextStyle(
-    fontFamily: _family,
     fontSize: 14,
     height: 18 / 14,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.1,
   );
   static const labelMd = TextStyle(
-    fontFamily: _family,
     fontSize: 12,
     height: 16 / 12,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.2,
   );
   static const labelSm = TextStyle(
-    fontFamily: _family,
     fontSize: 10,
     height: 12 / 10,
     fontWeight: FontWeight.w700,

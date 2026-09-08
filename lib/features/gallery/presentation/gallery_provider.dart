@@ -33,14 +33,31 @@ class TagCluster {
       {required this.tag, required this.count, required this.cover});
 }
 
-/// Single source of truth for both — one watchScreenshots() subscription
-/// covers the drawer's plain (tag, count) list (tagCountsProvider, derived
-/// below) and the Organize hub's cluster cards (which also need a cover
-/// image) instead of each maintaining its own separate Isar watch over the
-/// same underlying data.
-final tagClustersProvider = StreamProvider<List<TagCluster>>((ref) {
+/// The one unfiltered, full-library watch — every provider below that needs
+/// "all screenshots regardless of tag" derives from this instead of calling
+/// `watchScreenshots()` again itself.
+///
+/// `watchScreenshots()` re-runs a full-table query + sort on *every* write
+/// to the collection, not just ones relevant to whatever's watching it —
+/// so three independent unfiltered subscriptions (this used to be
+/// [tagClustersProvider] and [totalScreenshotCountProvider] each opening
+/// their own) meant one write during a sync did three full-table rescans
+/// instead of one. That's real, measurable Isar load stacking up right when
+/// the app is already busiest — a batch sync or tagging run — which is
+/// exactly when something else reading the same database (the assistant's
+/// `uniqueTagsProvider.future` lookup, notably) is most likely to get stuck
+/// behind it and time out.
+final _allScreenshotsStreamProvider =
+    StreamProvider<List<Screenshot>>((ref) {
   final repository = ref.watch(galleryRepositoryProvider);
-  return repository.watchScreenshots().map((screenshots) {
+  return repository.watchScreenshots();
+});
+
+/// One tag-grouping pass over [_allScreenshotsStreamProvider] — covers the
+/// drawer's plain (tag, count) list (tagCountsProvider, derived below) and
+/// the Organize hub's cluster cards (which also need a cover image).
+final tagClustersProvider = StreamProvider<List<TagCluster>>((ref) {
+  return ref.watch(_allScreenshotsStreamProvider.stream).map((screenshots) {
     final counts = <String, int>{};
     final covers = <String, Screenshot>{};
     for (final s in screenshots) {
@@ -101,8 +118,12 @@ Future<void> togglePinned(WidgetRef ref, int screenshotId) async {
 /// Total number of screenshots in the library, independent of any tag
 /// filter — unlike [galleryStreamProvider], which follows
 /// [selectedTagProvider] and therefore reflects the filtered count once a
-/// tag is selected.
+/// tag is selected. Derived from the same shared watch
+/// [tagClustersProvider] uses rather than opening a second one — see that
+/// provider's doc for why a duplicate unfiltered watch here was real,
+/// unnecessary Isar load.
 final totalScreenshotCountProvider = StreamProvider<int>((ref) {
-  final repository = ref.watch(galleryRepositoryProvider);
-  return repository.watchScreenshots().map((list) => list.length);
+  return ref
+      .watch(_allScreenshotsStreamProvider.stream)
+      .map((list) => list.length);
 });

@@ -9,6 +9,7 @@ import 'package:sift/features/duplicates/presentation/duplicate_review_screen.da
 import 'package:sift/features/junk_review/junk_review_service.dart';
 import 'package:sift/features/junk_review/presentation/junk_review_screen.dart';
 import 'package:sift/features/memories/memories_service.dart';
+import 'package:sift/features/settings/settings_screen.dart';
 
 /// Home tab — real, already-computed signals surfaced in one place instead
 /// of requiring the drawer or a notification to find them: today's "on this
@@ -43,6 +44,16 @@ class DiscoverScreen extends ConsumerWidget {
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text('Discover', style: SiftPillowyText.headlineSm),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined,
+                color: SiftPillowyColors.onSurfaceVariant),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: hasNothingToShow
@@ -195,7 +206,6 @@ class _MemoryCard extends StatelessWidget {
                     '${_formatDate(cover.timestamp)}',
                     style: const TextStyle(
                         color: Colors.white,
-                        fontFamily: 'Plus Jakarta Sans',
                         fontWeight: FontWeight.w600,
                         fontSize: 13),
                   ),
