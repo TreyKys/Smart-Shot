@@ -7,15 +7,18 @@ import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 
-// Upgraded from ministral-8b-2512 to mistral-small-2603: a much more capable
-// model that supports function/tool calling, understands compound requests
-// ("find my receipts from March and delete the junk ones"), and can reason
-// through multi-step plans. Each turn can involve multiple tool calls — the
-// model searches, counts, or proposes actions, sees the results, and decides
-// what to do next — instead of being limited to single-shot intent mapping.
-// Tagging stays on ministral-8b-2512 (bulk throughput matters there, not
-// multi-step reasoning).
-const String _kAssistantModel = 'mistral-small-2603';
+// Back on ministral-8b-2512 — the same model tagging already uses — after
+// mistral-small-2603 turned out to be the actual bottleneck behind the
+// assistant's repeated 429s and dropped connections. Look at the two
+// models' entries in mistral_rate_limits.dart: mistral-small-2603 allows
+// 0.83 requests/sec and 50k tokens/min on the shared key; ministral-8b-2512
+// allows 3.13 requests/sec and 625k tokens/min — roughly 4x and 12x more
+// headroom on the exact same shared key every install of this app draws
+// from. An 8B model is a real, current, tool-calling-capable model, not a
+// toy — this isn't a quality downgrade to fix a reliability problem, it's
+// the same model this app already trusts for every screenshot's tagging,
+// now also handling chat.
+const String _kAssistantModel = 'ministral-8b-2512';
 
 /// Types of actions that require explicit user confirmation before executing.
 enum PendingActionType { delete, addToCollection, createCollection }
