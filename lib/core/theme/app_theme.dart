@@ -22,15 +22,6 @@ class SiftColors {
   static const success = Color(0xFF2ED573);
   static const proGold = Color(0xFFFFD700);
 
-  // Light theme — soft, cool blue-tinted surfaces rather than stark white.
-  static const lightBackground = Color(0xFFEFF4FC);
-  static const lightSurface = Color(0xFFFFFFFF);
-  static const lightBorder = Color(0xFFD9E3F5);
-  static const lightPrimary = Color(0xFF2563EB);
-  static const lightSecondary = Color(0xFF3B82F6);
-  static const lightTextPrimary = Color(0xFF0F172A);
-  static const lightTextSecondary = Color(0xFF5B6B85);
-
   // Tag palette
   static const tagFinance = Color(0xFF2ED573);
   static const tagMemes = Color(0xFFAE6EFD);
@@ -252,80 +243,14 @@ final _fluidPageTransitions = PageTransitionsTheme(
   },
 );
 
-// ── Theme builders ────────────────────────────────────────────────────────────
-
-ThemeData buildSiftLightTheme() {
-  const colorScheme = ColorScheme(
-    brightness: Brightness.light,
-    primary: SiftColors.lightPrimary,
-    onPrimary: Colors.white,
-    secondary: SiftColors.lightSecondary,
-    onSecondary: Colors.white,
-    error: SiftColors.danger,
-    onError: Colors.white,
-    surface: SiftColors.lightSurface,
-    onSurface: SiftColors.lightTextPrimary,
-  );
-
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: colorScheme,
-    scaffoldBackgroundColor: SiftColors.lightBackground,
-    canvasColor: SiftColors.lightBackground,
-    pageTransitionsTheme: _fluidPageTransitions,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: SiftColors.lightBackground,
-      foregroundColor: SiftColors.lightTextPrimary,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      titleTextStyle: TextStyle(
-        color: SiftColors.lightTextPrimary,
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.5,
-      ),
-      systemOverlayStyle: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: SiftColors.lightBackground,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-    ),
-    cardTheme: CardThemeData(
-      color: SiftColors.lightSurface,
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: SiftColors.lightBorder, width: 0.5),
-      ),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: SiftColors.lightPrimary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      ),
-    ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        foregroundColor: SiftColors.lightPrimary,
-        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
-    ),
-    dividerTheme: const DividerThemeData(color: SiftColors.lightBorder, thickness: 0.5, space: 1),
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: SiftColors.lightTextPrimary,
-      contentTextStyle: const TextStyle(color: Colors.white),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
-}
+// ── Theme builder ────────────────────────────────────────────────────────────
+//
+// One theme, not a light/dark pair behind a toggle — see main.dart's
+// MaterialApp for why. A previous buildSiftLightTheme() lived here; it was
+// the ambient default nothing in the UI ever actually switched away from,
+// which is exactly how Settings, the Diagnostics Log, and the first-run
+// indexing dialog ended up silently rendering light while every other
+// screen in the app hardcodes this dark palette directly.
 
 ThemeData buildSiftTheme() {
   const colorScheme = ColorScheme(

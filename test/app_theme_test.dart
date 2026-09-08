@@ -25,17 +25,11 @@ void main() {
     });
   });
 
-  group('buildSiftTheme / buildSiftLightTheme', () {
-    test('dark theme uses Material 3 and a dark color scheme', () {
+  group('buildSiftTheme', () {
+    test('uses Material 3 and a dark color scheme', () {
       final theme = buildSiftTheme();
       expect(theme.useMaterial3, isTrue);
       expect(theme.colorScheme.brightness, Brightness.dark);
-    });
-
-    test('light theme uses Material 3 and a light color scheme', () {
-      final theme = buildSiftLightTheme();
-      expect(theme.useMaterial3, isTrue);
-      expect(theme.colorScheme.brightness, Brightness.light);
     });
   });
 }

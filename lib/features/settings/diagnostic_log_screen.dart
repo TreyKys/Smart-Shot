@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
+import 'package:sift/core/theme/app_theme.dart';
 
 /// Shows the persisted AI diagnostic log and lets the user copy it.
 ///
@@ -30,11 +31,13 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: SiftColors.background,
       appBar: AppBar(
+        backgroundColor: SiftColors.background,
         title: const Text('Diagnostics Log'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: SiftColors.textSecondary),
             tooltip: 'Refresh',
             onPressed: _reload,
           ),
@@ -43,7 +46,8 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
             builder: (context, snapshot) {
               final entries = snapshot.data ?? const [];
               return IconButton(
-                icon: const Icon(Icons.copy_all_outlined),
+                icon: const Icon(Icons.copy_all_outlined,
+                    color: SiftColors.textSecondary),
                 tooltip: 'Copy log',
                 onPressed:
                     entries.isEmpty ? null : () => _copyLog(entries),
@@ -51,7 +55,8 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline),
+            icon: const Icon(Icons.delete_outline,
+                color: SiftColors.textSecondary),
             tooltip: 'Clear log',
             onPressed: () async {
               await DiagnosticLog.clear();
@@ -65,14 +70,14 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            color: SiftColors.surfaceElevated,
             child: const Text(
               'This is a record of what happened the last few times Sift '
               'tried to tag a screenshot with AI — whether a shared key or '
               'your own key was used, whether the call succeeded, and why it '
               'didn\'t when it fails. Tap the copy icon and paste it '
               'somewhere to share it.',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(color: SiftColors.textSecondary, fontSize: 13),
             ),
           ),
           Expanded(
@@ -80,7 +85,9 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                      child: CircularProgressIndicator(
+                          color: SiftColors.accent));
                 }
                 final entries = snapshot.data ?? const [];
                 if (entries.isEmpty) {
@@ -92,7 +99,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                         'Import or reopen a screenshot to generate some, '
                         'then come back here and hit refresh.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(color: SiftColors.textTertiary),
                       ),
                     ),
                   );
@@ -107,13 +114,13 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                     final Color color;
                     switch (entry.level) {
                       case AiLogLevel.error:
-                        color = Colors.red;
+                        color = SiftColors.danger;
                         break;
                       case AiLogLevel.warn:
-                        color = Colors.orange;
+                        color = SiftColors.warning;
                         break;
                       case AiLogLevel.info:
-                        color = Colors.green;
+                        color = SiftColors.success;
                         break;
                     }
                     return Padding(
@@ -127,6 +134,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                             child: Text(
                               entry.toString(),
                               style: const TextStyle(
+                                color: SiftColors.textPrimary,
                                 fontFamily: 'monospace',
                                 fontSize: 12,
                               ),

@@ -12,7 +12,6 @@ import 'package:workmanager/workmanager.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/navigation.dart';
 import 'package:sift/core/theme/app_theme.dart';
-import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/monetization/consent_service.dart';
@@ -199,15 +198,20 @@ class _SiftAppState extends ConsumerState<SiftApp> {
       );
     }
 
-    final themeMode = ref.watch(themeModeNotifierProvider);
-
     return MaterialApp(
       title: 'Sift',
       navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
-      theme: buildSiftLightTheme(),
-      darkTheme: buildSiftTheme(),
-      themeMode: themeMode,
+      // One theme, not a light/dark pair behind a toggle — every screen in
+      // the app already hardcodes this same dark palette directly rather
+      // than reading it from the ambient Theme, and nothing in the UI ever
+      // switches ThemeMode. A light `theme:` here used to be default-active
+      // and silently caught anything that DIDN'T hardcode its own colors
+      // (Settings, the Diagnostics Log, the first-run indexing dialog all
+      // rendered light while everything else was dark) — the real fix for
+      // that class of bug is making the one theme this app actually runs
+      // on match what every screen already assumes.
+      theme: buildSiftTheme(),
       home: _onboardingComplete
           ? MainShell(key: mainShellKey)
           : const OnboardingScreen(),
