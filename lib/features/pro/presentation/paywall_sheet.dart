@@ -130,7 +130,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                   if (widget.triggerFeature != null) ...[
                     Text(
                       '${widget.triggerFeature} is a Pro feature',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: SiftColors.textSecondary,
                         fontSize: 14,
                       ),
@@ -138,7 +138,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  const Text(
+                  Text(
                     'Unlimited AI. Zero Ads.\nOwn your data.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -234,7 +234,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                 await ref.read(proServiceProvider.notifier).restorePurchases();
                 if (context.mounted) Navigator.pop(context);
               },
-              child: const Text(
+              child: Text(
                 'Restore Purchases',
                 style: TextStyle(color: SiftColors.textSecondary, fontSize: 13),
               ),
@@ -358,7 +358,7 @@ class _FeatureRow extends StatelessWidget {
           Icon(icon, color: SiftColors.accent, size: 18),
           const SizedBox(width: 12),
           Text(text,
-              style: const TextStyle(
+              style: TextStyle(
                 color: SiftColors.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,

@@ -7,16 +7,40 @@ import 'package:flutter/services.dart';
 class SiftColors {
   SiftColors._();
 
-  // Dark theme — deep navy, not pure black, so the blue accent has room to breathe.
-  static const background = Color(0xFF0A0F1E);
-  static const surface = Color(0xFF111827);
-  static const surfaceElevated = Color(0xFF1A2436);
-  static const border = Color(0xFF243044);
+  /// The one thing that decides which half of every getter below is
+  /// returned. Set by [setBrightness] — main.dart calls that once per
+  /// rebuild, before building anything else, whenever the user's Settings
+  /// choice (or the OS, in "System" mode) changes. Defaults dark so any
+  /// code that reads a color before the app has actually set this once
+  /// (a stray top-level `const` elsewhere, a test) gets the same navy this
+  /// app has always shipped rather than an arbitrary default.
+  static Brightness _brightness = Brightness.dark;
+  static Brightness get currentBrightness => _brightness;
+  static bool get isDark => _brightness == Brightness.dark;
+  static void setBrightness(Brightness value) => _brightness = value;
+
+  // Structural tokens are genuinely different per mode, so these are
+  // getters, not `static const` — see ThemeModeNotifier/SiftThemeMode for
+  // why a real toggle needs that. Brand/semantic colors (accent, danger,
+  // warning, success, the tag palette) stay flat `const Color`s below:
+  // they're deliberately the *same* hue in both modes, the same way a
+  // brand's logo color doesn't change between a light and dark website.
+  static Color get background =>
+      isDark ? const Color(0xFF0A0F1E) : const Color(0xFFF6F8FC);
+  static Color get surface =>
+      isDark ? const Color(0xFF111827) : const Color(0xFFFFFFFF);
+  static Color get surfaceElevated =>
+      isDark ? const Color(0xFF1A2436) : const Color(0xFFEEF2F8);
+  static Color get border =>
+      isDark ? const Color(0xFF243044) : const Color(0xFFDDE3ED);
   static const accent = Color(0xFF4C8DFF); // electric blue
   static const accentDim = Color(0xFF2F6FED);
-  static const textPrimary = Color(0xFFF5F7FC);
-  static const textSecondary = Color(0xFF8C9BB5);
-  static const textTertiary = Color(0xFF4E5C74);
+  static Color get textPrimary =>
+      isDark ? const Color(0xFFF5F7FC) : const Color(0xFF0F1626);
+  static Color get textSecondary =>
+      isDark ? const Color(0xFF8C9BB5) : const Color(0xFF4C5A72);
+  static Color get textTertiary =>
+      isDark ? const Color(0xFF4E5C74) : const Color(0xFF94A1B8);
   static const danger = Color(0xFFFF4757);
   static const warning = Color(0xFFFFA502);
   static const success = Color(0xFF2ED573);
@@ -128,55 +152,55 @@ IconData iconForTag(String tag) {
 class SiftPillowyColors {
   SiftPillowyColors._();
 
-  static const surface = SiftColors.background;
-  static const surfaceContainerLowest = SiftColors.surface;
-  static const surfaceContainerLow = SiftColors.surfaceElevated;
-  static const surfaceContainer = SiftColors.surfaceElevated;
-  static const surfaceContainerHigh = SiftColors.surfaceElevated;
-  static const surfaceContainerHighest = SiftColors.border;
-  static const surfaceVariant = SiftColors.surfaceElevated;
-  static const surfaceDim = SiftColors.border;
-  static const outline = SiftColors.border;
-  static const outlineVariant = SiftColors.border;
+  static Color get surface => SiftColors.background;
+  static Color get surfaceContainerLowest => SiftColors.surface;
+  static Color get surfaceContainerLow => SiftColors.surfaceElevated;
+  static Color get surfaceContainer => SiftColors.surfaceElevated;
+  static Color get surfaceContainerHigh => SiftColors.surfaceElevated;
+  static Color get surfaceContainerHighest => SiftColors.border;
+  static Color get surfaceVariant => SiftColors.surfaceElevated;
+  static Color get surfaceDim => SiftColors.border;
+  static Color get outline => SiftColors.border;
+  static Color get outlineVariant => SiftColors.border;
 
-  static const onSurface = SiftColors.textPrimary;
-  static const onSurfaceVariant = SiftColors.textSecondary;
+  static Color get onSurface => SiftColors.textPrimary;
+  static Color get onSurfaceVariant => SiftColors.textSecondary;
 
   static const primary = SiftColors.accent;
-  static const onPrimary = SiftColors.background;
+  static Color get onPrimary => SiftColors.background;
   static const primaryContainer = SiftColors.accentDim;
-  static const onPrimaryContainer = SiftColors.background;
+  static Color get onPrimaryContainer => SiftColors.background;
 
   static const secondary = SiftColors.tagMemes;
-  static const onSecondary = SiftColors.background;
+  static Color get onSecondary => SiftColors.background;
   static const secondaryContainer = SiftColors.tagMemes;
-  static const onSecondaryContainer = SiftColors.background;
-  static const secondaryFixed = SiftColors.surfaceElevated;
+  static Color get onSecondaryContainer => SiftColors.background;
+  static Color get secondaryFixed => SiftColors.surfaceElevated;
   static const onSecondaryFixed = SiftColors.tagMemes;
 
   static const tertiary = SiftColors.success;
-  static const onTertiary = SiftColors.background;
+  static Color get onTertiary => SiftColors.background;
   static const tertiaryContainer = SiftColors.success;
   static const tertiaryFixed = SiftColors.success;
 
   static const error = SiftColors.danger;
-  static const onError = SiftColors.textPrimary;
+  static Color get onError => SiftColors.textPrimary;
 
   /// The primary send-button / user-bubble gradient — both stops are now
   /// the app's real blue accent rather than the old red-to-coral pair.
-  static const primaryGradient = LinearGradient(
-    begin: Alignment.centerLeft,
-    end: Alignment.centerRight,
-    colors: [primary, primaryContainer],
-  );
+  static LinearGradient get primaryGradient => const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [primary, primaryContainer],
+      );
 
   /// The assistant-avatar gradient — violet to blue, both drawn from
   /// [SiftColors] instead of the old violet-to-coral pair.
-  static const assistantAvatarGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [secondary, primary],
-  );
+  static LinearGradient get assistantAvatarGradient => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [secondary, primary],
+      );
 }
 
 class SiftPillowyText {
@@ -187,31 +211,35 @@ class SiftPillowyText {
   // which was its own quiet "two interfaces" tell alongside the color
   // mismatch. Falling through to the default lines these screens up
   // typographically with everything else.
-  static const headlineSm = TextStyle(
-    fontSize: 18,
-    height: 24 / 18,
-    fontWeight: FontWeight.w600,
-    color: SiftPillowyColors.onSurface,
-  );
-  static const headlineMd = TextStyle(
-    fontSize: 22,
-    height: 28 / 22,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.2,
-    color: SiftPillowyColors.onSurface,
-  );
-  static const bodyMd = TextStyle(
-    fontSize: 14,
-    height: 20 / 14,
-    fontWeight: FontWeight.w400,
-    color: SiftPillowyColors.onSurface,
-  );
-  static const bodySm = TextStyle(
-    fontSize: 12,
-    height: 16 / 12,
-    fontWeight: FontWeight.w400,
-    color: SiftPillowyColors.onSurfaceVariant,
-  );
+  //
+  // Getters, not `static const` — headlineSm/Md and bodyMd/Sm carry a color
+  // that now depends on the active brightness, so a compile-time constant
+  // can no longer represent them.
+  static TextStyle get headlineSm => TextStyle(
+        fontSize: 18,
+        height: 24 / 18,
+        fontWeight: FontWeight.w600,
+        color: SiftPillowyColors.onSurface,
+      );
+  static TextStyle get headlineMd => TextStyle(
+        fontSize: 22,
+        height: 28 / 22,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+        color: SiftPillowyColors.onSurface,
+      );
+  static TextStyle get bodyMd => TextStyle(
+        fontSize: 14,
+        height: 20 / 14,
+        fontWeight: FontWeight.w400,
+        color: SiftPillowyColors.onSurface,
+      );
+  static TextStyle get bodySm => TextStyle(
+        fontSize: 12,
+        height: 16 / 12,
+        fontWeight: FontWeight.w400,
+        color: SiftPillowyColors.onSurfaceVariant,
+      );
   static const labelLg = TextStyle(
     fontSize: 14,
     height: 18 / 14,
@@ -245,16 +273,18 @@ final _fluidPageTransitions = PageTransitionsTheme(
 
 // ── Theme builder ────────────────────────────────────────────────────────────
 //
-// One theme, not a light/dark pair behind a toggle — see main.dart's
-// MaterialApp for why. A previous buildSiftLightTheme() lived here; it was
-// the ambient default nothing in the UI ever actually switched away from,
-// which is exactly how Settings, the Diagnostics Log, and the first-run
-// indexing dialog ended up silently rendering light while every other
-// screen in the app hardcodes this dark palette directly.
+// One builder, not a light/dark pair picked by ThemeMode — it reads
+// SiftColors' current brightness (set by main.dart from the user's Settings
+// choice, or the OS in "System" mode) and produces the matching ThemeData.
+// Every screen in the app hardcodes SiftColors tokens directly rather than
+// reading Theme.of(context) for its real styling, so this ThemeData mostly
+// covers the handful of things that don't: default AppBar back-button color,
+// status/nav bar icon brightness, text-field/snackbar/bottom-sheet defaults
+// for any widget that doesn't set its own.
 
 ThemeData buildSiftTheme() {
-  const colorScheme = ColorScheme(
-    brightness: Brightness.dark,
+  final colorScheme = ColorScheme(
+    brightness: SiftColors.currentBrightness,
     primary: SiftColors.accent,
     onPrimary: SiftColors.background,
     secondary: SiftColors.accentDim,
@@ -265,6 +295,9 @@ ThemeData buildSiftTheme() {
     onSurface: SiftColors.textPrimary,
   );
 
+  final iconBrightness =
+      SiftColors.isDark ? Brightness.light : Brightness.dark;
+
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
@@ -273,7 +306,7 @@ ThemeData buildSiftTheme() {
     pageTransitionsTheme: _fluidPageTransitions,
 
     // AppBar
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: SiftColors.background,
       foregroundColor: SiftColors.textPrimary,
       elevation: 0,
@@ -287,9 +320,9 @@ ThemeData buildSiftTheme() {
       ),
       systemOverlayStyle: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
+        statusBarIconBrightness: iconBrightness,
         systemNavigationBarColor: SiftColors.background,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: iconBrightness,
       ),
     ),
 
@@ -300,20 +333,20 @@ ThemeData buildSiftTheme() {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: SiftColors.border, width: 0.5),
+        side: BorderSide(color: SiftColors.border, width: 0.5),
       ),
     ),
 
     // Chips
     chipTheme: ChipThemeData(
       backgroundColor: SiftColors.surfaceElevated,
-      labelStyle: const TextStyle(
+      labelStyle: TextStyle(
         color: SiftColors.textPrimary,
         fontSize: 11,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.2,
       ),
-      side: const BorderSide(color: SiftColors.border, width: 0.5),
+      side: BorderSide(color: SiftColors.border, width: 0.5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
     ),
@@ -323,15 +356,15 @@ ThemeData buildSiftTheme() {
       backgroundColor: WidgetStateProperty.all(SiftColors.surfaceElevated),
       elevation: WidgetStateProperty.all(0),
       textStyle: WidgetStateProperty.all(
-        const TextStyle(color: SiftColors.textPrimary, fontSize: 15),
+        TextStyle(color: SiftColors.textPrimary, fontSize: 15),
       ),
       hintStyle: WidgetStateProperty.all(
-        const TextStyle(color: SiftColors.textSecondary, fontSize: 15),
+        TextStyle(color: SiftColors.textSecondary, fontSize: 15),
       ),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: SiftColors.border),
+          side: BorderSide(color: SiftColors.border),
         ),
       ),
     ),
@@ -365,14 +398,14 @@ ThemeData buildSiftTheme() {
     ),
 
     // Divider
-    dividerTheme: const DividerThemeData(
+    dividerTheme: DividerThemeData(
       color: SiftColors.border,
       thickness: 0.5,
       space: 1,
     ),
 
     // Icon
-    iconTheme: const IconThemeData(color: SiftColors.textSecondary, size: 22),
+    iconTheme: IconThemeData(color: SiftColors.textSecondary, size: 22),
 
     // Input decoration
     inputDecorationTheme: InputDecorationTheme(
@@ -380,22 +413,22 @@ ThemeData buildSiftTheme() {
       fillColor: SiftColors.surfaceElevated,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: SiftColors.border),
+        borderSide: BorderSide(color: SiftColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: SiftColors.border),
+        borderSide: BorderSide(color: SiftColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: SiftColors.accent, width: 1.5),
       ),
-      labelStyle: const TextStyle(color: SiftColors.textSecondary),
-      hintStyle: const TextStyle(color: SiftColors.textTertiary),
+      labelStyle: TextStyle(color: SiftColors.textSecondary),
+      hintStyle: TextStyle(color: SiftColors.textTertiary),
     ),
 
     // List tile
-    listTileTheme: const ListTileThemeData(
+    listTileTheme: ListTileThemeData(
       textColor: SiftColors.textPrimary,
       iconColor: SiftColors.textSecondary,
       tileColor: Colors.transparent,
@@ -408,7 +441,7 @@ ThemeData buildSiftTheme() {
     ),
 
     // Progress indicator
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
+    progressIndicatorTheme: ProgressIndicatorThemeData(
       color: SiftColors.accent,
       linearTrackColor: SiftColors.border,
     ),
@@ -416,7 +449,7 @@ ThemeData buildSiftTheme() {
     // Snack bar
     snackBarTheme: SnackBarThemeData(
       backgroundColor: SiftColors.surfaceElevated,
-      contentTextStyle: const TextStyle(color: SiftColors.textPrimary),
+      contentTextStyle: TextStyle(color: SiftColors.textPrimary),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       behavior: SnackBarBehavior.floating,
     ),

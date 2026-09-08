@@ -41,12 +41,12 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: SiftColors.surface,
-        title: const Text('New Collection',
+        title: Text('New Collection',
             style: TextStyle(color: SiftColors.textPrimary)),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: SiftColors.textPrimary),
+          style: TextStyle(color: SiftColors.textPrimary),
           decoration:
               const InputDecoration(hintText: 'e.g. Apartment hunting'),
           onSubmitted: (v) => Navigator.pop(ctx, v),
@@ -73,12 +73,12 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: SiftColors.surface,
-        title: const Text('Delete Collection?',
+        title: Text('Delete Collection?',
             style: TextStyle(color: SiftColors.textPrimary)),
         content: Text(
           'This removes "${c.name}" — the screenshots inside it are not '
           'deleted, just no longer grouped.',
-          style: const TextStyle(color: SiftColors.textSecondary),
+          style: TextStyle(color: SiftColors.textSecondary),
         ),
         actions: [
           TextButton(
@@ -129,14 +129,14 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.folder_outlined,
+                    Icon(Icons.folder_outlined,
                         size: 52, color: SiftColors.textTertiary),
                     const SizedBox(height: 12),
-                    const Text('No collections yet.',
+                    Text('No collections yet.',
                         style: TextStyle(
                             color: SiftColors.textSecondary, fontSize: 15)),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Group screenshots by whatever matters to you — '
                       'trips, projects, gift ideas.',
                       textAlign: TextAlign.center,
@@ -176,17 +176,17 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
                         color: Color(c.colorValue), size: 20),
                   ),
                   title: Text(c.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: SiftColors.textPrimary,
                           fontWeight: FontWeight.w600)),
                   subtitle: Text(
                     '${_counts[c.id] ?? '…'} screenshot'
                     '${_counts[c.id] == 1 ? '' : 's'}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: SiftColors.textTertiary, fontSize: 12),
                   ),
                   trailing: PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert,
+                    icon: Icon(Icons.more_vert,
                         color: SiftColors.textTertiary),
                     color: SiftColors.surfaceElevated,
                     onSelected: (value) {

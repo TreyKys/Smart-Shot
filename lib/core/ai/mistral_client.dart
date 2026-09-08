@@ -378,10 +378,9 @@ class MistralClient {
       if (rawResponse == null) {
         return ChatResult(
           reply: result.wasRateLimited
-              ? "Sift's shared AI is getting hit hard by everyone using it "
-                  'right now — please try again in a minute. Adding your '
-                  'own free Mistral key in Settings gives you a private, '
-                  'uncontended quota instead of sharing this one.'
+              ? 'The AI is busy right now — please try again in a minute. '
+                  'Adding your own free Mistral key in Settings gives you '
+                  'faster, unlimited access any time.'
               : 'Something went wrong reaching the AI — try again in '
                   'a moment.',
           executions: executions,

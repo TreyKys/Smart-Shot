@@ -37,7 +37,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
         title: const Text('Diagnostics Log'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: SiftColors.textSecondary),
+            icon: Icon(Icons.refresh, color: SiftColors.textSecondary),
             tooltip: 'Refresh',
             onPressed: _reload,
           ),
@@ -46,7 +46,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
             builder: (context, snapshot) {
               final entries = snapshot.data ?? const [];
               return IconButton(
-                icon: const Icon(Icons.copy_all_outlined,
+                icon: Icon(Icons.copy_all_outlined,
                     color: SiftColors.textSecondary),
                 tooltip: 'Copy log',
                 onPressed:
@@ -55,7 +55,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline,
+            icon: Icon(Icons.delete_outline,
                 color: SiftColors.textSecondary),
             tooltip: 'Clear log',
             onPressed: () async {
@@ -71,7 +71,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             color: SiftColors.surfaceElevated,
-            child: const Text(
+            child: Text(
               'This is a record of what happened the last few times Sift '
               'tried to tag a screenshot with AI — whether a shared key or '
               'your own key was used, whether the call succeeded, and why it '
@@ -91,9 +91,9 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                 }
                 final entries = snapshot.data ?? const [];
                 if (entries.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
                       child: Text(
                         'No AI events recorded yet.\n\n'
                         'Import or reopen a screenshot to generate some, '
@@ -133,7 +133,7 @@ class _DiagnosticLogScreenState extends State<DiagnosticLogScreen> {
                           Expanded(
                             child: Text(
                               entry.toString(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: SiftColors.textPrimary,
                                 fontFamily: 'monospace',
                                 fontSize: 12,

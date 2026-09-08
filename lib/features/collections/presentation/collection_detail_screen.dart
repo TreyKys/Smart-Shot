@@ -53,9 +53,9 @@ class _CollectionDetailScreenState
         child: ListTile(
           leading:
               const Icon(Icons.remove_circle_outline, color: SiftColors.danger),
-          title: const Text('Remove from collection',
+          title: Text('Remove from collection',
               style: TextStyle(color: SiftColors.textPrimary)),
-          subtitle: const Text('The screenshot itself is not deleted.',
+          subtitle: Text('The screenshot itself is not deleted.',
               style: TextStyle(color: SiftColors.textTertiary, fontSize: 12)),
           onTap: () {
             Navigator.pop(ctx);
@@ -79,20 +79,20 @@ class _CollectionDetailScreenState
           ? const Center(
               child: CircularProgressIndicator(color: SiftColors.accent))
           : shots.isEmpty
-              ? const Center(
+              ? Center(
                   child: Padding(
-                    padding: EdgeInsets.all(32),
+                    padding: const EdgeInsets.all(32),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.photo_outlined,
                             size: 48, color: SiftColors.textTertiary),
-                        SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Text('Nothing here yet.',
                             style: TextStyle(
                                 color: SiftColors.textSecondary, fontSize: 15)),
                         const SizedBox(height: 6),
-                        const Text(
+                        Text(
                           'Long-press a screenshot in the gallery, or ask '
                           'the assistant, to add it here.',
                           textAlign: TextAlign.center,

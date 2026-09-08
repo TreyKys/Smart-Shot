@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
@@ -83,7 +84,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (!isPro) ...[
-                  const Text(
+                  Text(
                     'Unlock infinite AI fuel, deep backlog sweeping, custom vaults, and advanced exports.',
                     style: TextStyle(
                         color: SiftColors.textSecondary, fontSize: 13),
@@ -95,7 +96,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     child: const Text('Upgrade to Pro'),
                   )
                 ] else ...[
-                  const Text(
+                  Text(
                     'Thank you for supporting Sift! You have unlimited access to all features.',
                     style: TextStyle(
                         color: SiftColors.textSecondary, fontSize: 13),
@@ -106,52 +107,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ENERGY STATE
+          // APPEARANCE
+          _SettingsTile(
+            leading: Icon(Icons.palette_outlined,
+                color: SiftColors.textSecondary),
+            title: 'Appearance',
+            subtitle: 'Dark, light, or match your device.',
+          ),
+          const SizedBox(height: 8),
+          const _ThemeModeSelector(),
+          const SizedBox(height: 16),
+          Divider(color: SiftColors.border, height: 1),
+          const SizedBox(height: 8),
+
+          // ENERGY STATE — same watch-ads-for-energy pattern QuotaBar
+          // already uses elsewhere in the app (live "N/2 watched" progress,
+          // not a static button label), so this doesn't feel like a
+          // different feature just because it's reached from Settings.
           if (!isPro && !hasByok) ...[
-            _SettingsTile(
-              leading: const Icon(Icons.bolt, color: SiftColors.accent),
-              title: 'AI Energy',
-              subtitle: energyState.when(
-                data: (energy) => 'Remaining: $energy',
-                loading: () => 'Loading...',
-                error: (e, s) => 'Error loading energy',
+            energyState.when(
+              data: (energy) => _EnergyTile(energy: energy),
+              loading: () => const _SettingsTile(
+                leading: Icon(Icons.bolt, color: SiftColors.accent),
+                title: 'AI Energy',
+                subtitle: 'Loading...',
               ),
-              trailing: ElevatedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Row(
-                        children: [
-                          SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2)),
-                          SizedBox(width: 16),
-                          Text('Loading high-value ad...'),
-                        ],
-                      ),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                  ref
-                      .read(economyServiceProvider.notifier)
-                      .showRewardedAd(onBlockCompleted: () {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('+10 AI scans unlocked!')));
-                    }
-                  });
-                },
-                child: const Text('Refill (2 Ads)'),
+              error: (e, s) => const _SettingsTile(
+                leading: Icon(Icons.bolt, color: SiftColors.accent),
+                title: 'AI Energy',
+                subtitle: 'Error loading energy',
               ),
             ),
-            const Divider(color: SiftColors.border, height: 24),
+            Divider(color: SiftColors.border, height: 24),
           ],
 
           // BYOK
-          const _SettingsTile(
+          _SettingsTile(
             leading: Icon(Icons.vpn_key, color: SiftColors.textSecondary),
             title: 'Bring Your Own Key (Mistral)',
             subtitle:
@@ -165,7 +156,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Expanded(
                   child: TextField(
                     controller: _byokController,
-                    style: const TextStyle(color: SiftColors.textPrimary),
+                    style: TextStyle(color: SiftColors.textPrimary),
                     decoration: const InputDecoration(
                       hintText: 'Enter Mistral API Key',
                     ),
@@ -188,38 +179,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Divider(color: SiftColors.border, height: 1),
+          Divider(color: SiftColors.border, height: 1),
           const SizedBox(height: 8),
 
           // DIAGNOSTICS
           _SettingsTile(
-            leading: const Icon(Icons.bug_report_outlined,
+            leading: Icon(Icons.bug_report_outlined,
                 color: SiftColors.textSecondary),
             title: 'Diagnostics Log',
             subtitle:
                 'See whether AI tagging is actually succeeding on this device.',
-            trailing: const Icon(Icons.chevron_right,
+            trailing: Icon(Icons.chevron_right,
                 color: SiftColors.textTertiary),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const DiagnosticLogScreen()),
             ),
           ),
-          const Divider(color: SiftColors.border, height: 24),
+          Divider(color: SiftColors.border, height: 24),
 
           // LEGAL
           _SettingsTile(
-            leading: const Icon(Icons.privacy_tip_outlined,
+            leading: Icon(Icons.privacy_tip_outlined,
                 color: SiftColors.textSecondary),
             title: 'Privacy Policy',
-            trailing: const Icon(Icons.open_in_new,
+            trailing: Icon(Icons.open_in_new,
                 size: 18, color: SiftColors.textTertiary),
             onTap: () => _openUrl(context, kPrivacyPolicyUrl),
           ),
           _SettingsTile(
-            leading: const Icon(Icons.description_outlined,
+            leading: Icon(Icons.description_outlined,
                 color: SiftColors.textSecondary),
             title: 'Terms of Service',
-            trailing: const Icon(Icons.open_in_new,
+            trailing: Icon(Icons.open_in_new,
                 size: 18, color: SiftColors.textTertiary),
             onTap: () => _openUrl(context, kTermsOfServiceUrl),
           ),
@@ -277,7 +268,7 @@ class _SettingsTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: SiftColors.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -287,7 +278,7 @@ class _SettingsTile extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       subtitle!,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: SiftColors.textSecondary, fontSize: 12),
                     ),
                   ],
@@ -298,6 +289,184 @@ class _SettingsTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// AI Energy row with a live progress bar and watch-ads button — the same
+/// pattern QuotaBar shows on the gallery grid, adapted for a settings row
+/// instead of a banner. Reusing the exact same "N/2 watched" live count
+/// (adsWatchedInBlockProvider) means watching an ad from here or from the
+/// grid feels like the same feature, not two different ones that happen to
+/// do the same thing.
+class _EnergyTile extends ConsumerWidget {
+  final int energy;
+  const _EnergyTile({required this.energy});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fraction = (energy / kDailyFreeExtractions).clamp(0.0, 1.0);
+    final isDepleted = energy <= 0;
+    final adsWatched = ref.watch(adsWatchedInBlockProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              isDepleted ? Icons.bolt_outlined : Icons.bolt,
+              color: isDepleted ? SiftColors.textTertiary : SiftColors.accent,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AI Energy',
+                    style: TextStyle(
+                      color: SiftColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    isDepleted
+                        ? 'Depleted for today'
+                        : '$energy / $kDailyFreeExtractions remaining today',
+                    style: TextStyle(
+                        color: SiftColors.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: fraction,
+            backgroundColor: SiftColors.border,
+            valueColor: AlwaysStoppedAnimation<Color>(
+                isDepleted ? SiftColors.textTertiary : SiftColors.accent),
+            minHeight: 3,
+          ),
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: () => _watchAd(context, ref),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: SiftColors.accent.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: SiftColors.accent.withOpacity(0.4)),
+            ),
+            child: Center(
+              child: Text(
+                adsWatched > 0
+                    ? '$adsWatched/$kAdsRequiredForReward watched — 1 more'
+                    : 'Watch $kAdsRequiredForReward ads for +$kAdRewardExtractions',
+                style: const TextStyle(
+                  color: SiftColors.accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _watchAd(BuildContext context, WidgetRef ref) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Loading ad... watch $kAdsRequiredForReward to earn '
+            '+$kAdRewardExtractions scans.'),
+      ),
+    );
+    ref.read(economyServiceProvider.notifier).showRewardedAd(
+      onBlockCompleted: () {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('+$kAdRewardExtractions AI scans unlocked!')),
+          );
+        }
+      },
+    );
+  }
+}
+
+/// Three-way Dark / Light / System picker for [themeModeProvider] — a
+/// segmented row rather than a dropdown, so all three options (and which
+/// one is active) are visible at a glance without an extra tap to open
+/// anything.
+class _ThemeModeSelector extends ConsumerWidget {
+  const _ThemeModeSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(themeModeProvider);
+
+    Widget segment(SiftThemeMode mode, IconData icon, String label) {
+      final selected = current == mode;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => ref.read(themeModeProvider.notifier).setMode(mode),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: selected
+                  ? SiftColors.accent.withOpacity(0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? SiftColors.accent : SiftColors.border,
+                width: selected ? 1.2 : 0.5,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon,
+                    size: 18,
+                    color: selected
+                        ? SiftColors.accent
+                        : SiftColors.textSecondary),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected
+                        ? SiftColors.accent
+                        : SiftColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        segment(SiftThemeMode.dark, Icons.dark_mode_outlined, 'Dark'),
+        const SizedBox(width: 8),
+        segment(SiftThemeMode.light, Icons.light_mode_outlined, 'Light'),
+        const SizedBox(width: 8),
+        segment(SiftThemeMode.system, Icons.brightness_auto_outlined,
+            'System'),
+      ],
     );
   }
 }

@@ -278,8 +278,8 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       appBar: AppBar(
         backgroundColor: SiftPillowyColors.surfaceContainerLowest,
         elevation: 0,
-        iconTheme: const IconThemeData(color: SiftPillowyColors.onSurface),
-        title: const Text('Ask Sift', style: SiftPillowyText.headlineSm),
+        iconTheme: IconThemeData(color: SiftPillowyColors.onSurface),
+        title: Text('Ask Sift', style: SiftPillowyText.headlineSm),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -470,7 +470,7 @@ class _IntroCard extends ConsumerWidget {
                   Container(
                     width: 52,
                     height: 52,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: SiftPillowyColors.assistantAvatarGradient,
                       shape: BoxShape.circle,
                     ),
@@ -482,7 +482,7 @@ class _IntroCard extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Ask Sift', style: SiftPillowyText.headlineMd),
+                        Text('Ask Sift', style: SiftPillowyText.headlineMd),
                         const SizedBox(height: 2),
                         Text(
                           'Find, count, delete, or collect screenshots — '

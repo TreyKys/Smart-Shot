@@ -60,7 +60,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               alignment: Alignment.topRight,
               child: TextButton(
                 onPressed: () => _showModeSelector(context),
-                child: const Text(
+                child: Text(
                   'Skip',
                   style: TextStyle(color: SiftColors.textSecondary, fontSize: 14),
                 ),
@@ -101,7 +101,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   SmoothPageIndicator(
                     controller: _controller,
                     count: _pages.length + 1,
-                    effect: const WormEffect(
+                    effect: WormEffect(
                       dotColor: SiftColors.border,
                       activeDotColor: SiftColors.accent,
                       dotHeight: 6,
@@ -217,7 +217,7 @@ class _PageContent extends StatelessWidget {
             Text(
               page.title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: SiftColors.textPrimary,
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
@@ -232,7 +232,7 @@ class _PageContent extends StatelessWidget {
             Text(
               page.subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: SiftColors.textSecondary,
                 fontSize: 16,
                 height: 1.5,
@@ -260,7 +260,7 @@ class _ChoosePathPage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
+          Text(
             'Choose Your\nSifting Mode',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -272,7 +272,7 @@ class _ChoosePathPage extends StatelessWidget {
             ),
           ).animate().fadeIn(duration: 400.ms),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'You can change this later in Settings.',
             style: TextStyle(color: SiftColors.textSecondary, fontSize: 14),
           ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
@@ -359,7 +359,7 @@ class _ModeCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: SiftColors.textPrimary,
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
@@ -388,7 +388,7 @@ class _ModeCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: SiftColors.textSecondary,
                       fontSize: 13,
                       height: 1.4,
@@ -397,7 +397,7 @@ class _ModeCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
+            Icon(Icons.chevron_right,
                 color: SiftColors.textTertiary, size: 20),
           ],
         ),

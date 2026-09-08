@@ -145,9 +145,9 @@ class _DuplicateReviewScreenState
       appBar: AppBar(
         backgroundColor: SiftPillowyColors.surfaceContainerLowest,
         elevation: 0,
-        iconTheme: const IconThemeData(color: SiftPillowyColors.onSurface),
+        iconTheme: IconThemeData(color: SiftPillowyColors.onSurface),
         title:
-            const Text('Duplicates', style: SiftPillowyText.headlineSm),
+            Text('Duplicates', style: SiftPillowyText.headlineSm),
         actions: [
           if (clusters != null && _index < clusters.length)
             Padding(
@@ -447,7 +447,7 @@ class _DoneState extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: SiftPillowyColors.assistantAvatarGradient,
                 shape: BoxShape.circle,
               ),
@@ -455,7 +455,7 @@ class _DoneState extends StatelessWidget {
                   size: 36, color: Colors.white),
             ),
             const SizedBox(height: 20),
-            const Text('All clear!', style: SiftPillowyText.headlineMd),
+            Text('All clear!', style: SiftPillowyText.headlineMd),
             const SizedBox(height: 8),
             Text(
               deletedCount == 0

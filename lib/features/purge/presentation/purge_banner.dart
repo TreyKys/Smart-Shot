@@ -47,7 +47,7 @@ class _BannerContent extends ConsumerWidget {
           Expanded(
             child: Text(
               'You have ${result.count} useless screenshots taking up ${result.formattedSize}. Delete?',
-              style: const TextStyle(
+              style: TextStyle(
                 color: SiftColors.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
@@ -83,15 +83,15 @@ class _BannerContent extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: SiftColors.surface,
-        title: const Text('Confirm Delete', style: TextStyle(color: SiftColors.textPrimary)),
+        title: Text('Confirm Delete', style: TextStyle(color: SiftColors.textPrimary)),
         content: Text(
           'This will permanently delete ${result.count} screenshots tagged as junk, memes, or to-do items older than 30 days (${result.formattedSize} freed).',
-          style: const TextStyle(color: SiftColors.textSecondary),
+          style: TextStyle(color: SiftColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: SiftColors.textSecondary)),
+            child: Text('Cancel', style: TextStyle(color: SiftColors.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(

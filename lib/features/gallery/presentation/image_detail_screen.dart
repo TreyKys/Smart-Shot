@@ -113,7 +113,7 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
         backgroundColor: SiftColors.background,
         title: Text(
           _cleanTag(_shot.tags?.firstOrNull ?? 'Detail'),
-          style: const TextStyle(
+          style: TextStyle(
             color: SiftColors.textPrimary,
             fontSize: 17,
             fontWeight: FontWeight.w600,
@@ -129,14 +129,14 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
             tooltip: isPinned ? 'Unpin' : 'Pin',
           ),
           IconButton(
-            icon: const Icon(Icons.folder_outlined,
+            icon: Icon(Icons.folder_outlined,
                 color: SiftColors.textSecondary),
             tooltip: 'Add to Collection',
             onPressed: () => showCollectionPickerSheet(context,
                 screenshotIds: [_shot.id]),
           ),
           IconButton(
-            icon: const Icon(Icons.ios_share, color: SiftColors.textSecondary),
+            icon: Icon(Icons.ios_share, color: SiftColors.textSecondary),
             onPressed: () => Share.shareXFiles([XFile(_shot.filePath)]),
           ),
           if (isPro)
@@ -161,7 +161,7 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                 child: Image.file(
                   File(_shot.filePath),
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Center(
+                  errorBuilder: (_, __, ___) => Center(
                     child: Icon(Icons.broken_image,
                         size: 64, color: SiftColors.textTertiary),
                   ),
@@ -186,9 +186,9 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                             avatar: _actionIcon(action.intentType),
                             label: Text(action.label ?? 'Action'),
                             backgroundColor: SiftColors.surfaceElevated,
-                            labelStyle: const TextStyle(
+                            labelStyle: TextStyle(
                                 color: SiftColors.textPrimary, fontSize: 12),
-                            side: const BorderSide(
+                            side: BorderSide(
                                 color: SiftColors.border, width: 0.5),
                             onPressed: () => _handleAction(context, action),
                           ))
@@ -230,7 +230,7 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     'TAGS',
                     style: TextStyle(
                       color: SiftColors.textTertiary,
@@ -251,12 +251,12 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                         border: Border.all(
                             color: SiftColors.border, width: 0.5),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.edit_outlined,
                               size: 12, color: SiftColors.textSecondary),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text('Edit',
                               style: TextStyle(
                                   color: SiftColors.textSecondary,
@@ -304,7 +304,7 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: GestureDetector(
                   onTap: _showTagEditSheet,
-                  child: const Text(
+                  child: Text(
                     'No tags yet — tap Edit to add some.',
                     style: TextStyle(
                         color: SiftColors.textTertiary,
@@ -322,15 +322,15 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SelectableText(
                   _shot.cleanText ?? _shot.ocrText ?? '',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: SiftColors.textSecondary,
                       fontSize: 14,
                       height: 1.6),
                 ),
               )
             else
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
                   'No text detected.',
                   style: TextStyle(
@@ -594,7 +594,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: SiftColors.surfaceElevated,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -619,7 +619,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
               ),
             ),
           ),
-          const Text('Edit Tags',
+          Text('Edit Tags',
               style: TextStyle(
                   color: SiftColors.textPrimary,
                   fontSize: 17,
@@ -660,7 +660,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
               }).toList(),
             )
           else
-            const Text('No tags — add some below.',
+            Text('No tags — add some below.',
                 style: TextStyle(
                     color: SiftColors.textTertiary, fontSize: 13)),
           const SizedBox(height: 16),
@@ -669,7 +669,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
               Expanded(
                 child: TextField(
                   controller: _controller,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: SiftColors.textPrimary, fontSize: 14),
                   decoration: const InputDecoration(
                     hintText: 'Add tag (e.g. Finance)',
@@ -776,7 +776,7 @@ class _AppRecommendationCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: SiftColors.textSecondary, fontSize: 11),
                   ),
                 ],
@@ -844,7 +844,7 @@ class _ExtractedDataSection extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: SiftColors.textTertiary,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,

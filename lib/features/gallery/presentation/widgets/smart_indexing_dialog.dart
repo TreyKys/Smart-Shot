@@ -18,10 +18,10 @@ class SmartIndexingDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: SiftColors.surfaceElevated,
-      title: const Text('Smart Indexing',
+      title: Text('Smart Indexing',
           style: TextStyle(
               color: SiftColors.textPrimary, fontWeight: FontWeight.w700)),
-      content: const Text(
+      content: Text(
         'To protect your battery and data, Sift needs to know how to handle your gallery.\n\n'
         'Live Mode: Only process new screenshots from now on. (Recommended)\n\n'
         'Deep Scan: Slowly process your entire history in the background when the device is idle.',

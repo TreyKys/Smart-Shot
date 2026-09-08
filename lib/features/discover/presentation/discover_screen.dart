@@ -43,10 +43,10 @@ class DiscoverScreen extends ConsumerWidget {
         backgroundColor: SiftPillowyColors.surfaceContainerLowest,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Text('Discover', style: SiftPillowyText.headlineSm),
+        title: Text('Discover', style: SiftPillowyText.headlineSm),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined,
+            icon: Icon(Icons.settings_outlined,
                 color: SiftPillowyColors.onSurfaceVariant),
             tooltip: 'Settings',
             onPressed: () => Navigator.of(context).push(
@@ -114,8 +114,8 @@ class _MemoriesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 8, bottom: 10, left: 2),
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 10, left: 2),
           child: Text('On This Day', style: SiftPillowyText.headlineMd),
         ),
         ...memories.map((memory) => Padding(
@@ -316,7 +316,7 @@ class _EmptyState extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: SiftPillowyColors.assistantAvatarGradient,
                 shape: BoxShape.circle,
               ),
@@ -324,7 +324,7 @@ class _EmptyState extends StatelessWidget {
                   size: 36, color: Colors.white),
             ),
             const SizedBox(height: 20),
-            const Text('All caught up!', style: SiftPillowyText.headlineMd),
+            Text('All caught up!', style: SiftPillowyText.headlineMd),
             const SizedBox(height: 8),
             Text(
               'No duplicates, no junk to review, and no memories from '

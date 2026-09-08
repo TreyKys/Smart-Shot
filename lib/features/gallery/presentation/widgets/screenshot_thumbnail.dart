@@ -32,7 +32,7 @@ class ScreenshotThumbnail extends StatelessWidget {
           File(filePath),
           fit: fit,
           cacheWidth: 200,
-          errorBuilder: (_, __, ___) => const Center(
+          errorBuilder: (_, __, ___) => Center(
             child: Icon(Icons.broken_image,
                 color: SiftColors.textTertiary, size: 20),
           ),

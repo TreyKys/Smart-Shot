@@ -135,7 +135,7 @@ class _QuotaBarContent extends ConsumerWidget {
                   const Icon(Icons.workspace_premium_outlined,
                       color: SiftColors.proGold, size: 14),
                   const SizedBox(width: 6),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'You\'ve used all 30 scans today — Pro users never stop.',
                       style: TextStyle(

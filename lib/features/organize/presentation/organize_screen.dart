@@ -94,11 +94,11 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: SiftColors.surfaceElevated,
-        title: const Text('Delete screenshots?',
+        title: Text('Delete screenshots?',
             style: TextStyle(color: SiftColors.textPrimary)),
         content: Text(
           'This will permanently delete $count screenshot${count == 1 ? '' : 's'}.',
-          style: const TextStyle(color: SiftColors.textSecondary),
+          style: TextStyle(color: SiftColors.textSecondary),
         ),
         actions: [
           TextButton(
@@ -196,7 +196,7 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
         backgroundColor: SiftPillowyColors.surfaceContainerLowest,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Text('Organize', style: SiftPillowyText.headlineSm),
+        title: Text('Organize', style: SiftPillowyText.headlineSm),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),
@@ -205,7 +205,7 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined,
+            icon: Icon(Icons.settings_outlined,
                 color: SiftPillowyColors.onSurfaceVariant),
             tooltip: 'Settings',
             onPressed: () => Navigator.of(context).push(
@@ -277,7 +277,7 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
       appBar: AppBar(
         backgroundColor: SiftColors.background,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: SiftColors.textSecondary),
+          icon: Icon(Icons.arrow_back, color: SiftColors.textSecondary),
           onPressed: _backToClusters,
         ),
         title: selectedTag != null
@@ -291,7 +291,7 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               )
-            : const Text('All Screenshots',
+            : Text('All Screenshots',
                 style: TextStyle(
                     color: SiftColors.textPrimary,
                     fontSize: 17,
@@ -318,7 +318,7 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
                   });
                 });
               },
-              child: const Text('Select All',
+              child: Text('Select All',
                   style:
                       TextStyle(color: SiftColors.textSecondary, fontSize: 13)),
             ),
@@ -329,7 +329,7 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
             ),
           ] else ...[
             IconButton(
-              icon: const Icon(Icons.sync, color: SiftColors.textSecondary),
+              icon: Icon(Icons.sync, color: SiftColors.textSecondary),
               tooltip: 'Sync gallery',
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -357,12 +357,12 @@ class _OrganizeScreenState extends ConsumerState<OrganizeScreen> {
               hintText: 'Search screenshots…',
               onChanged: (v) =>
                   ref.read(searchQueryProvider.notifier).setQuery(v),
-              leading: const Icon(Icons.search,
+              leading: Icon(Icons.search,
                   color: SiftColors.textTertiary, size: 18),
               trailing: searchQuery.isNotEmpty
                   ? [
                       IconButton(
-                        icon: const Icon(Icons.clear,
+                        icon: Icon(Icons.clear,
                             color: SiftColors.textSecondary, size: 18),
                         onPressed: () =>
                             ref.read(searchQueryProvider.notifier).setQuery(''),
@@ -531,7 +531,7 @@ class _AllGalleryButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.grid_view_rounded,
+              Icon(Icons.grid_view_rounded,
                   size: 15, color: SiftPillowyColors.onSurfaceVariant),
               const SizedBox(width: 6),
               Text('All Gallery',
@@ -557,10 +557,10 @@ class _ClustersEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.style_outlined,
+            Icon(Icons.style_outlined,
                 size: 48, color: SiftPillowyColors.onSurfaceVariant),
             const SizedBox(height: 16),
-            const Text('No tags yet', style: SiftPillowyText.headlineMd),
+            Text('No tags yet', style: SiftPillowyText.headlineMd),
             const SizedBox(height: 8),
             Text(
               total == null || total == 0
@@ -717,7 +717,7 @@ class _ScreenshotCard extends ConsumerWidget {
                     File(screenshot.filePath),
                     cacheWidth: 300,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Center(
+                    errorBuilder: (_, __, ___) => Center(
                       child: Icon(Icons.broken_image,
                           color: SiftColors.textTertiary, size: 32),
                     ),
@@ -876,7 +876,7 @@ class _BulkActionsFab extends StatelessWidget {
           onPressed: onTag,
           backgroundColor: SiftColors.surfaceElevated,
           icon: const Icon(Icons.label_outline, color: SiftColors.accent),
-          label: const Text(
+          label: Text(
             'Tag Selected',
             style: TextStyle(
                 color: SiftColors.textPrimary, fontWeight: FontWeight.w600),
@@ -888,7 +888,7 @@ class _BulkActionsFab extends StatelessWidget {
           onPressed: onAddToCollection,
           backgroundColor: SiftColors.surfaceElevated,
           icon: const Icon(Icons.folder_outlined, color: SiftColors.accent),
-          label: const Text(
+          label: Text(
             'Add to Collection',
             style: TextStyle(
                 color: SiftColors.textPrimary, fontWeight: FontWeight.w600),
@@ -899,7 +899,7 @@ class _BulkActionsFab extends StatelessWidget {
           heroTag: 'bulk_cancel',
           onPressed: onCancel,
           backgroundColor: SiftColors.surfaceElevated,
-          child: const Icon(Icons.close, color: SiftColors.textSecondary),
+          child: Icon(Icons.close, color: SiftColors.textSecondary),
         ),
       ],
     );
@@ -948,7 +948,7 @@ class _ProcessingBanner extends ConsumerWidget {
           Expanded(
             child: Text(
               'Sifting ${p.current} of ${p.total} screenshots…',
-              style: const TextStyle(
+              style: TextStyle(
                   color: SiftColors.textSecondary, fontSize: 12),
             ),
           ),
@@ -1011,7 +1011,7 @@ class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
             ),
             GestureDetector(
               onTap: () => setState(() => _dismissed = true),
-              child: const Icon(Icons.close,
+              child: Icon(Icons.close,
                   color: SiftColors.textTertiary, size: 16),
             ),
           ],
@@ -1041,12 +1041,12 @@ class _GridEmptyState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             isSearching ? 'No results found.' : 'No screenshots yet.',
-            style: const TextStyle(
+            style: TextStyle(
                 color: SiftColors.textSecondary, fontSize: 15),
           ),
           if (!isSearching) ...[
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Tap the sync button to scan your gallery.',
               style: TextStyle(color: SiftColors.textTertiary, fontSize: 13),
             ),
@@ -1068,7 +1068,7 @@ class _BulkTagSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tagsAsync = ref.watch(uniqueTagsProvider);
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: SiftColors.surfaceElevated,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1093,7 +1093,7 @@ class _BulkTagSheet extends ConsumerWidget {
               ),
             ),
           ),
-          const Text('Add Tag to Selected',
+          Text('Add Tag to Selected',
               style: TextStyle(
                   color: SiftColors.textPrimary,
                   fontSize: 17,
@@ -1101,13 +1101,13 @@ class _BulkTagSheet extends ConsumerWidget {
           const SizedBox(height: 12),
           _BulkTagInput(onApply: onApply),
           const SizedBox(height: 16),
-          const Text('Or pick an existing tag:',
+          Text('Or pick an existing tag:',
               style: TextStyle(color: SiftColors.textTertiary, fontSize: 12)),
           const SizedBox(height: 8),
           tagsAsync.when(
             data: (tags) {
               if (tags.isEmpty) {
-                return const Text('No tags yet.',
+                return Text('No tags yet.',
                     style: TextStyle(
                         color: SiftColors.textTertiary, fontSize: 13));
               }
@@ -1185,7 +1185,7 @@ class _BulkTagInputState extends State<_BulkTagInput> {
           child: TextField(
             controller: _controller,
             style:
-                const TextStyle(color: SiftColors.textPrimary, fontSize: 14),
+                TextStyle(color: SiftColors.textPrimary, fontSize: 14),
             decoration: const InputDecoration(
               hintText: 'New tag (e.g. Finance)',
               prefixText: '# ',

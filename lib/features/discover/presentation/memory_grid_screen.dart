@@ -20,7 +20,7 @@ class MemoryGridScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: SiftPillowyColors.surfaceContainerLowest,
         elevation: 0,
-        iconTheme: const IconThemeData(color: SiftPillowyColors.onSurface),
+        iconTheme: IconThemeData(color: SiftPillowyColors.onSurface),
         title: Text(title, style: SiftPillowyText.headlineSm),
       ),
       body: GridView.builder(

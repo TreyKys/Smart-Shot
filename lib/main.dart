@@ -12,6 +12,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/navigation.dart';
 import 'package:sift/core/theme/app_theme.dart';
+import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
 import 'package:sift/features/monetization/consent_service.dart';
@@ -128,7 +129,7 @@ class SiftApp extends ConsumerStatefulWidget {
   ConsumerState<SiftApp> createState() => _SiftAppState();
 }
 
-class _SiftAppState extends ConsumerState<SiftApp> {
+class _SiftAppState extends ConsumerState<SiftApp> with WidgetsBindingObserver {
   late StreamSubscription _intentSubscription;
   bool _onboardingComplete = false;
   bool _initDone = false;
@@ -136,6 +137,7 @@ class _SiftAppState extends ConsumerState<SiftApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
 
     _intentSubscription =
@@ -148,6 +150,14 @@ class _SiftAppState extends ConsumerState<SiftApp> {
         .getInitialMedia()
         .then(_handleSharedFiles);
   }
+
+  // Only matters in SiftThemeMode.system — that's the one case where a
+  // color the app renders depends on something outside its own state
+  // (the OS-level brightness switch), so it's the one case that needs an
+  // explicit rebuild trigger rather than Riverpod's normal
+  // watch-and-rebuild handling everything else here.
+  @override
+  void didChangePlatformBrightness() => setState(() {});
 
   Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -180,16 +190,31 @@ class _SiftAppState extends ConsumerState<SiftApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _intentSubscription.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // SiftColors' structural tokens (background/surface/text/etc.) are
+    // brightness-aware getters, not compile-time constants — every screen
+    // in the app reads them directly rather than going through
+    // Theme.of(context), so this is the one place that has to decide what
+    // they currently mean and set that *before* anything below tries to
+    // read one while building. resolveBrightness() folds "System" down to
+    // whatever the OS reports right now.
+    final themeMode = ref.watch(themeModeProvider);
+    final platformBrightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final brightness = resolveBrightness(themeMode, platformBrightness);
+    SiftColors.setBrightness(brightness);
+
     if (!_initDone) {
       return MaterialApp(
+        key: ValueKey(brightness),
         theme: buildSiftTheme(),
-        home: const Scaffold(
+        home: Scaffold(
           backgroundColor: SiftColors.background,
           body: Center(
             child: CircularProgressIndicator(color: SiftColors.accent),
@@ -199,18 +224,19 @@ class _SiftAppState extends ConsumerState<SiftApp> {
     }
 
     return MaterialApp(
+      // A plain rebuild only reruns build() methods — it doesn't force
+      // widgets whose own build() didn't call anything reactive to
+      // actually rerun (most screens here just read SiftColors.xxx
+      // directly, not through a watched provider), so a mode flip alone
+      // wouldn't visibly repaint most of the app without this. Keying the
+      // whole MaterialApp on the resolved brightness forces Flutter to
+      // treat it as a brand-new subtree on a real change — a full
+      // remount, not an animated cross-fade, but correctness here matters
+      // far more than that transition would.
+      key: ValueKey(brightness),
       title: 'Sift',
       navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
-      // One theme, not a light/dark pair behind a toggle — every screen in
-      // the app already hardcodes this same dark palette directly rather
-      // than reading it from the ambient Theme, and nothing in the UI ever
-      // switches ThemeMode. A light `theme:` here used to be default-active
-      // and silently caught anything that DIDN'T hardcode its own colors
-      // (Settings, the Diagnostics Log, the first-run indexing dialog all
-      // rendered light while everything else was dark) — the real fix for
-      // that class of bug is making the one theme this app actually runs
-      // on match what every screen already assumes.
       theme: buildSiftTheme(),
       home: _onboardingComplete
           ? MainShell(key: mainShellKey)

@@ -97,8 +97,8 @@ class _JunkReviewScreenState extends ConsumerState<JunkReviewScreen> {
       appBar: AppBar(
         backgroundColor: SiftPillowyColors.surfaceContainerLowest,
         elevation: 0,
-        iconTheme: const IconThemeData(color: SiftPillowyColors.onSurface),
-        title: const Text('Review Junk', style: SiftPillowyText.headlineSm),
+        iconTheme: IconThemeData(color: SiftPillowyColors.onSurface),
+        title: Text('Review Junk', style: SiftPillowyText.headlineSm),
         actions: [
           if (batch != null && batch.isNotEmpty)
             Padding(
@@ -353,7 +353,7 @@ class _DoneState extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: SiftPillowyColors.assistantAvatarGradient,
                 shape: BoxShape.circle,
               ),
@@ -361,7 +361,7 @@ class _DoneState extends StatelessWidget {
                   size: 36, color: Colors.white),
             ),
             const SizedBox(height: 20),
-            const Text('All caught up!', style: SiftPillowyText.headlineMd),
+            Text('All caught up!', style: SiftPillowyText.headlineMd),
             const SizedBox(height: 8),
             Text('Kept $kept, deleted $deleted.',
                 style: SiftPillowyText.bodyMd

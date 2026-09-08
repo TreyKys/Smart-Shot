@@ -85,7 +85,7 @@ class _CollectionPickerSheetState
     final count = widget.screenshotIds.length;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: SiftColors.surfaceElevated,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -112,7 +112,7 @@ class _CollectionPickerSheetState
           ),
           Text(
             'Add $count screenshot${count == 1 ? '' : 's'} to…',
-            style: const TextStyle(
+            style: TextStyle(
                 color: SiftColors.textPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.w700),
@@ -121,8 +121,8 @@ class _CollectionPickerSheetState
           collectionsAsync.when(
             data: (collections) {
               if (collections.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     'No collections yet — create your first one below.',
                     style:
@@ -151,7 +151,7 @@ class _CollectionPickerSheetState
                             color: Color(c.colorValue), size: 18),
                       ),
                       title: Text(c.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: SiftColors.textPrimary, fontSize: 14)),
                       onTap: _busy ? null : () => _addTo(c),
                     );
@@ -169,7 +169,7 @@ class _CollectionPickerSheetState
                 style: TextStyle(color: SiftColors.danger)),
           ),
           const SizedBox(height: 12),
-          const Divider(color: SiftColors.border, height: 1),
+          Divider(color: SiftColors.border, height: 1),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -177,7 +177,7 @@ class _CollectionPickerSheetState
                 child: TextField(
                   controller: _controller,
                   enabled: !_busy,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: SiftColors.textPrimary, fontSize: 14),
                   decoration: const InputDecoration(
                     hintText: 'New collection name',
