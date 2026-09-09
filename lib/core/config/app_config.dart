@@ -6,12 +6,11 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   const AppConfig._();
 
-  /// Only used for the BYOK (bring-your-own-key) path, where the user
-  /// supplies their own Mistral AI key in Settings — their key, their cost,
-  /// their risk to accept. The app's own shared quota uses a key fetched at
-  /// runtime instead: see SharedKeyService.
-  static const String mistralApiKey =
-      String.fromEnvironment('MISTRAL_API_KEY');
+  // Note: the BYOK (bring-your-own-key) Mistral key is entered at runtime in
+  // Settings and stored in SharedPreferences (see EconomyService.setByokKey)
+  // — it's per-user, not a build-time secret, so it has no field here. The
+  // app's own shared quota uses a key fetched at runtime instead: see
+  // SharedKeyService.
 
   static const String revenueCatAndroidApiKey =
       String.fromEnvironment('REVENUECAT_ANDROID_API_KEY');

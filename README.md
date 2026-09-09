@@ -1,7 +1,7 @@
 # Sift
 
 Sift automatically organizes and tags your screenshots using on-device OCR
-(Google ML Kit) and AI-powered classification (Gemini). Package:
+(Google ML Kit) and AI-powered classification (Mistral AI). Package:
 `com.neurodevlabs.sift`.
 
 ## Getting started
@@ -21,8 +21,11 @@ cp dart_define.example.json dart_define.json   # fill in real values, gitignored
 flutter run --dart-define-from-file=dart_define.json
 ```
 
-See `dart_define.example.json` for the full list of keys (Gemini API key,
-RevenueCat API keys, AdMob rewarded ad unit ID).
+See `dart_define.example.json` for the full list of keys (RevenueCat API
+keys, AdMob rewarded ad unit ID). The AI classification key itself isn't a
+build-time secret — the app's shared quota fetches it at runtime via Firebase
+Remote Config (see `lib/core/config/shared_key_service.dart`), and power
+users can supply their own in Settings (BYOK) instead.
 
 ### Release signing
 

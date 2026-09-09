@@ -7,10 +7,10 @@ else), read the "What can go wrong" subsections before you start, not after
 you're stuck.
 
 Scope: Play Console app setup, release signing, building and uploading the
-AAB, and RevenueCat/Play Billing integration. For app-internal architecture
-decisions (Remote Config, background sync, etc.), see the commit history —
-this doc is specifically the external-service, "why is Play Console yelling
-at me" knowledge.
+AAB, RevenueCat/Play Billing integration, and AdMob. For app-internal
+architecture decisions (Remote Config, background sync, etc.), see the
+commit history — this doc is specifically the external-service, "why is
+Play Console yelling at me" knowledge.
 
 ---
 
@@ -278,7 +278,7 @@ Cloud service account — not your personal login.
 3. **IAM & Admin → Service Accounts → Create Service Account.**
 4. Grant it **Pub/Sub Editor** and **Monitoring Viewer** roles.
 5. **Keys → Add Key → Create new key → JSON.** Download it — treat this file
-   as a credential, same care as the Gemini key or the upload keystore.
+   as a credential, same care as the upload keystore.
 
 ### 4.2 Grant Play Console access to that service account
 
@@ -385,13 +385,82 @@ Real purchases can't be tested with your own regular Google account.
 
 ---
 
+## 5. AdMob rewarded ads
+
+Sift shows exactly one ad format — a rewarded ad that grants AI energy — no
+banners, no interstitials. Two different IDs are involved and it's easy to
+mix them up because both start with `ca-app-pub-`.
+
+### 5.1 Prerequisite: AdMob account + app
+
+1. Sign in at admob.google.com → **Apps → Add app** → Android. If the app
+   isn't listed on Play yet, choose "No" when asked; you can link the Play
+   listing later once it exists.
+2. This creates the app's **App ID**, shaped like
+   `ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY` (note the `~`) — visible under
+   **App settings** for the app you just created.
+
+### 5.2 Creating the rewarded ad unit
+
+**Ad units → Add ad unit → Rewarded** → name it (e.g. "AI Energy Refill") →
+**Create ad unit**. This gives an **Ad unit ID**, shaped like
+`ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ` (note the `/`, not `~`, and a
+different number after it than the App ID) — a distinct value from the App
+ID, scoped to this one ad placement.
+
+### 5.3 Wiring both IDs into the build
+
+- **App ID** → `android/key.properties` (gitignored, copy from
+  `android/key.properties.example`):
+  ```
+  admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+  ```
+  Read by `android/app/build.gradle.kts`, which injects it into
+  `AndroidManifest.xml` as the `com.google.android.gms.ads.APPLICATION_ID`
+  meta-data value. Falls back to the `ADMOB_APP_ID` environment variable if
+  `key.properties` doesn't set it, and to Google's shared test App ID if
+  neither is set — a release build falling back prints a Gradle warning
+  during the build (`no real AdMob App ID configured...`), easy to miss in a
+  long build log if you're not looking for it.
+
+- **Ad unit ID** → `dart_define.json` (gitignored, copy from
+  `dart_define.example.json`):
+  ```json
+  "ADMOB_REWARDED_AD_UNIT_ID": "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ"
+  ```
+  Read by `AppConfig.rewardedAdUnitId` in `lib/core/config/app_config.dart`,
+  which falls back to Google's public test rewarded unit whenever this is
+  empty **or** the build isn't `kReleaseMode` — so debug/profile builds
+  always show test ads no matter what's in this file, and a *release* build
+  with this left blank silently ships test ads too, with nothing in the UI
+  to indicate it.
+
+### What can go wrong
+
+- **App ID and ad unit ID swapped.** They look nearly identical; the only
+  visible difference is `~` (App ID) vs `/` (ad unit ID). Pasting one where
+  the other belongs fails at the SDK level — `RewardedAd.load` returns an
+  error code rather than crashing — so it can go unnoticed until someone
+  actually tries to watch a rewarded ad on a release build.
+- **A brand-new AdMob app needs review time.** A freshly created app/ad unit
+  can take up to 24-48h before it reliably serves real ad fill; in that
+  window a release build may show no ad or a house/test creative. Don't
+  chase this as a code bug the same day the App ID was created — check back
+  after the review window first.
+- **Per-machine, same as the RevenueCat keys and the keystore.** Neither
+  `key.properties` nor `dart_define.json` syncs via git — every environment
+  that builds a release AAB needs its own copy with the real IDs filled in
+  (see the Quick-reference table below).
+
+---
+
 ## Quick-reference: what lives where, and what doesn't sync
 
 | File | Tracked in git? | Notes |
 |---|---|---|
 | `android/key.properties` | No (gitignored) | Per-machine. Keystore path/passwords. |
 | `android/app/upload-keystore.jks` | No (gitignored) | Per-machine. **Back this up separately, outside any single workspace.** |
-| `dart_define.json` | No (gitignored) | Per-machine. RevenueCat/Gemini/AdMob keys. |
+| `dart_define.json` | No (gitignored) | Per-machine. RevenueCat + AdMob ad unit ID. |
 | `dart_define.example.json` | Yes | Template — copy this to create `dart_define.json` on a new machine. |
 | `android/key.properties.example` | Yes | Template for `key.properties`. |
 

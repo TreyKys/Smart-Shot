@@ -178,9 +178,9 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                 child: CircularProgressIndicator(color: SiftColors.accent),
               )
             else if (_packages.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildStaticTiles(),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: _UnavailableState(),
               )
             else
               Padding(
@@ -247,80 +247,6 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
     );
   }
 
-  Widget _buildStaticTiles() {
-    // Fallback when RevenueCat isn't configured yet
-    final tiers = [
-      ('Monthly', r'$5.99/mo', null),
-      ('Annual', r'$49.99/yr', 'BEST VALUE — SAVE 30%'),
-      ('Lifetime', r'$129.99', 'OWN IT FOREVER'),
-    ];
-    return Column(
-      children: List.generate(tiers.length, (i) {
-        final (title, price, badge) = tiers[i];
-        final isSelected = i == _selectedIndex;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedIndex = i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isSelected ? SiftColors.accent.withOpacity(0.1) : SiftColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? SiftColors.accent : SiftColors.border,
-                width: isSelected ? 1.5 : 0.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (badge != null)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: SiftColors.proGold.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            badge,
-                            style: const TextStyle(
-                              color: SiftColors.proGold,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      Text(title,
-                          style: TextStyle(
-                            color: isSelected ? SiftColors.accent : SiftColors.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          )),
-                    ],
-                  ),
-                ),
-                Text(
-                  price,
-                  style: TextStyle(
-                    color: isSelected ? SiftColors.accent : SiftColors.textSecondary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
   String? _badgeFor(Package pkg) {
     final id = pkg.packageType;
     if (id == PackageType.annual) return 'BEST VALUE — SAVE 30%';
@@ -341,6 +267,47 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
     } catch (e) {
       debugPrint('Purchase error: $e');
     }
+  }
+}
+
+class _UnavailableState extends StatelessWidget {
+  const _UnavailableState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+        color: SiftColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: SiftColors.border, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.cloud_off_rounded, color: SiftColors.textTertiary, size: 28),
+          const SizedBox(height: 12),
+          Text(
+            'Pricing isn\'t available right now',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: SiftColors.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Check your connection and try again in a moment.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: SiftColors.textSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
