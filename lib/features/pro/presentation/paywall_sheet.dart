@@ -6,6 +6,26 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/pro/pro_service.dart';
 
+/// This sheet is a fixed dark "premium" surface on purpose — the near-black
+/// background and gold accents below don't change with the app's Settings
+/// theme choice, the same way most apps' upgrade paywalls stay on-brand
+/// regardless of system theme. SiftColors' structural tokens (textPrimary,
+/// border, surfaceElevated, ...) are brightness-aware and flip to light-mode
+/// values when the user picks Light — reading them here left near-black text
+/// sitting on this sheet's always-black background in Light mode, unreadable.
+/// These are fixed local tokens instead, the exact values SiftColors' dark
+/// mode already used before it became theme-aware, so this sheet keeps
+/// looking exactly as it always has no matter what the rest of the app is
+/// set to.
+class _PaywallColors {
+  _PaywallColors._();
+  static const textPrimary = Color(0xFFF5F7FC);
+  static const textSecondary = Color(0xFF8C9BB5);
+  static const textTertiary = Color(0xFF4E5C74);
+  static const border = Color(0xFF243044);
+  static const surfaceElevated = Color(0xFF1A2436);
+}
+
 void showPaywallSheet(
   BuildContext context, {
   String? triggerFeature,
@@ -88,7 +108,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
         decoration: BoxDecoration(
           color: const Color(0xFF0E0E0E).withOpacity(0.97),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: SiftColors.border, width: 0.5),
+          border: Border.all(color: _PaywallColors.border, width: 0.5),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -99,7 +119,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
               height: 4,
               margin: const EdgeInsets.only(top: 12, bottom: 24),
               decoration: BoxDecoration(
-                color: SiftColors.border,
+                color: _PaywallColors.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -131,7 +151,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                     Text(
                       '${widget.triggerFeature} is a Pro feature',
                       style: TextStyle(
-                        color: SiftColors.textSecondary,
+                        color: _PaywallColors.textSecondary,
                         fontSize: 14,
                       ),
                       textAlign: TextAlign.center,
@@ -142,7 +162,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                     'Unlimited AI. Zero Ads.\nOwn your data.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: SiftColors.textPrimary,
+                      color: _PaywallColors.textPrimary,
                       fontSize: 26,
                       fontWeight: FontWeight.w800,
                       height: 1.2,
@@ -236,7 +256,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
               },
               child: Text(
                 'Restore Purchases',
-                style: TextStyle(color: SiftColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: _PaywallColors.textSecondary, fontSize: 13),
               ),
             ),
 
@@ -278,19 +298,19 @@ class _UnavailableState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-        color: SiftColors.surfaceElevated,
+        color: _PaywallColors.surfaceElevated,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: SiftColors.border, width: 0.5),
+        border: Border.all(color: _PaywallColors.border, width: 0.5),
       ),
       child: Column(
         children: [
-          Icon(Icons.cloud_off_rounded, color: SiftColors.textTertiary, size: 28),
+          Icon(Icons.cloud_off_rounded, color: _PaywallColors.textTertiary, size: 28),
           const SizedBox(height: 12),
           Text(
             'Pricing isn\'t available right now',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: SiftColors.textPrimary,
+              color: _PaywallColors.textPrimary,
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
@@ -300,7 +320,7 @@ class _UnavailableState extends StatelessWidget {
             'Check your connection and try again in a moment.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: SiftColors.textSecondary,
+              color: _PaywallColors.textSecondary,
               fontSize: 13,
               height: 1.4,
             ),
@@ -326,7 +346,7 @@ class _FeatureRow extends StatelessWidget {
           const SizedBox(width: 12),
           Text(text,
               style: TextStyle(
-                color: SiftColors.textPrimary,
+                color: _PaywallColors.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               )),
@@ -358,10 +378,10 @@ class _PackageTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? SiftColors.accent.withOpacity(0.1) : SiftColors.surfaceElevated,
+          color: isSelected ? SiftColors.accent.withOpacity(0.1) : _PaywallColors.surfaceElevated,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? SiftColors.accent : SiftColors.border,
+            color: isSelected ? SiftColors.accent : _PaywallColors.border,
             width: isSelected ? 1.5 : 0.5,
           ),
         ),
@@ -394,7 +414,7 @@ class _PackageTile extends StatelessWidget {
                         ? package.storeProduct.title
                         : package.identifier,
                     style: TextStyle(
-                      color: isSelected ? SiftColors.accent : SiftColors.textPrimary,
+                      color: isSelected ? SiftColors.accent : _PaywallColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -405,7 +425,7 @@ class _PackageTile extends StatelessWidget {
             Text(
               package.storeProduct.priceString,
               style: TextStyle(
-                color: isSelected ? SiftColors.accent : SiftColors.textSecondary,
+                color: isSelected ? SiftColors.accent : _PaywallColors.textSecondary,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),

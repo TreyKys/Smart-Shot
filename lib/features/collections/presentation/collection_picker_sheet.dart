@@ -190,11 +190,11 @@ class _CollectionPickerSheetState
               ElevatedButton(
                 onPressed: _busy ? null : _createAndAdd,
                 child: _busy
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.black))
+                            strokeWidth: 2, color: SiftColors.background))
                     : const Text('Create'),
               ),
             ],

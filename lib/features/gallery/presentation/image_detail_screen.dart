@@ -693,11 +693,11 @@ class _TagEditSheetState extends State<_TagEditSheet> {
             child: ElevatedButton(
               onPressed: _saving ? null : _save,
               child: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.black))
+                          strokeWidth: 2, color: SiftColors.background))
                   : const Text('Save'),
             ),
           ),

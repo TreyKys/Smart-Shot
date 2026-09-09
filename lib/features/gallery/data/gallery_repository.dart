@@ -513,8 +513,13 @@ class GalleryRepository {
         byokKey.isNotEmpty || SharedKeyService.isConfigured;
 
     if (!canAttemptAi) {
-      debugPrint('No BYOK key and GEMINI_PROXY_URL not configured - OCR '
-          'and local tags only.');
+      // A DiagnosticLog entry, not just debugPrint: this is the single most
+      // useful fact for someone wondering why nothing ever gets tagged (and
+      // #Junk/Organize/Discover stay empty as a result) — it needs to show
+      // up in Settings > Diagnostics on a release build, not just a
+      // debugger console nobody but a developer has attached.
+      DiagnosticLog.warn('No BYOK key and shared AI key not configured - OCR '
+          'and local tags only; nothing will be AI-classified this run.');
     }
 
     // Newest first: the user is looking at recent screenshots, so those are the
