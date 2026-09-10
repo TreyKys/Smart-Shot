@@ -471,6 +471,22 @@ class GalleryRepository {
     return clusters;
   }
 
+  /// Reactive count of screenshots that haven't been through their first
+  /// OCR/AI pass yet (see [_processAllPendingInner]'s `isProcessedEqualTo`
+  /// query — same flag). Discover's processing-status card uses this to
+  /// tell "actively working through a fresh batch" apart from "stuck, and
+  /// nothing else on this screen will populate until this does" — a plain
+  /// count on its own can't distinguish those, which is what
+  /// [processingProgressProvider] is for alongside it.
+  Stream<int> watchUnprocessedCount() async* {
+    final isar = await _ref.read(isarProvider.future);
+    yield* isar.screenshots
+        .filter()
+        .isProcessedEqualTo(false)
+        .watch(fireImmediately: true)
+        .map((shots) => shots.length);
+  }
+
   /// Overwrites the tags list for a given screenshot.
   Future<void> updateTags(int id, List<String> tags) async {
     final isar = await _ref.read(isarProvider.future);

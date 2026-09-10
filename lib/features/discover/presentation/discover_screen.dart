@@ -6,17 +6,27 @@ import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/features/discover/presentation/memory_grid_screen.dart';
 import 'package:sift/features/duplicates/duplicate_service.dart';
 import 'package:sift/features/duplicates/presentation/duplicate_review_screen.dart';
+import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
+import 'package:sift/features/gallery/presentation/providers/unprocessed_count_provider.dart';
 import 'package:sift/features/junk_review/junk_review_service.dart';
 import 'package:sift/features/junk_review/presentation/junk_review_screen.dart';
+import 'package:sift/features/learning/tag_correction_service.dart';
 import 'package:sift/features/memories/memories_service.dart';
+import 'package:sift/features/purge/purge_service.dart';
+import 'package:sift/features/settings/diagnostic_log_screen.dart';
 import 'package:sift/features/settings/settings_screen.dart';
 
 /// Home tab — real, already-computed signals surfaced in one place instead
 /// of requiring the drawer or a notification to find them: today's "on this
 /// day" memories (real timestamps), duplicate clusters (the dHash index
-/// this app already maintains), and unreviewed junk (the existing Junk
-/// Review pipeline). No streaks, no XP, no fabricated "curator level" — see
-/// the design conversation this screen came out of for why.
+/// this app already maintains), unreviewed junk (the existing Junk Review
+/// pipeline), whether the library still has a processing backlog (so an
+/// otherwise-empty screen explains itself instead of just looking broken),
+/// reclaimable storage (the same query PurgeService already runs), and
+/// how many tag corrections the learning system has actually recorded
+/// recently. No streaks, no XP, no fabricated "curator level" — every card
+/// here reads a real, already-computed number, never one invented for the
+/// screen. See the design conversation this screen came out of for why.
 class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
 
@@ -28,14 +38,35 @@ class DiscoverScreen extends ConsumerWidget {
           data: (n) => n,
           orElse: () => 0,
         );
+    final processing = ref.watch(processingProgressProvider);
+    final unprocessedCount = ref.watch(unprocessedCountProvider).maybeWhen(
+          data: (n) => n,
+          orElse: () => 0,
+        );
+    final purgeResult = ref.watch(purgeServiceProvider).maybeWhen(
+          data: (r) => r,
+          orElse: () => null,
+        );
+    final recentCorrections =
+        ref.watch(recentCorrectionCountProvider).maybeWhen(
+              data: (n) => n,
+              orElse: () => 0,
+            );
 
     final hasMemories =
         memoriesAsync.maybeWhen(data: (m) => m.isNotEmpty, orElse: () => false);
     final duplicateCount = duplicatesAsync.maybeWhen(
         data: (clusters) => clusters.length, orElse: () => 0);
+    final hasBacklog = processing.active || unprocessedCount > 0;
+    final hasPurgeable = purgeResult != null && purgeResult.count > 0;
     final isLoading = memoriesAsync.isLoading || duplicatesAsync.isLoading;
-    final hasNothingToShow =
-        !isLoading && !hasMemories && duplicateCount == 0 && junkCount == 0;
+    final hasNothingToShow = !isLoading &&
+        !hasMemories &&
+        duplicateCount == 0 &&
+        junkCount == 0 &&
+        !hasBacklog &&
+        !hasPurgeable &&
+        recentCorrections == 0;
 
     return Scaffold(
       backgroundColor: SiftPillowyColors.surface,
@@ -61,6 +92,28 @@ class DiscoverScreen extends ConsumerWidget {
             : ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
+                  if (processing.active)
+                    _ProcessingCard(progress: processing)
+                  else if (unprocessedCount > 0)
+                    _ActionCard(
+                      icon: Icons.hourglass_top_rounded,
+                      // Amber, not the same green _ProcessingCard uses above
+                      // — this branch only shows when nothing is actually
+                      // running, which is the "needs attention" case, not
+                      // the "in progress, all fine" one.
+                      accent: SiftColors.warning,
+                      accentSoft: SiftColors.warning,
+                      title: '$unprocessedCount screenshot'
+                          '${unprocessedCount == 1 ? '' : 's'} waiting to '
+                          'be analyzed',
+                      subtitle: 'Tagging is stuck — usually a used-up AI '
+                          'quota or no key configured yet.',
+                      cta: 'Check Diagnostics',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const DiagnosticLogScreen()),
+                      ),
+                    ),
                   if (duplicateCount > 0)
                     _ActionCard(
                       icon: Icons.content_copy_rounded,
@@ -91,6 +144,18 @@ class DiscoverScreen extends ConsumerWidget {
                             builder: (_) => const JunkReviewScreen()),
                       ),
                     ),
+                  if (hasPurgeable)
+                    _ActionCard(
+                      icon: Icons.delete_sweep_outlined,
+                      accent: SiftPillowyColors.error,
+                      accentSoft: SiftPillowyColors.error,
+                      title: '${purgeResult.formattedSize} reclaimable',
+                      subtitle: '${purgeResult.count} old junk/meme/to-do '
+                          'screenshot${purgeResult.count == 1 ? '' : 's'}, '
+                          'over 30 days old, nobody has acted on.',
+                      cta: 'Review & delete',
+                      onTap: () => _confirmPurge(context, ref, purgeResult),
+                    ),
                   memoriesAsync.when(
                     data: (memories) => memories.isEmpty
                         ? const SizedBox.shrink()
@@ -98,10 +163,60 @@ class DiscoverScreen extends ConsumerWidget {
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => const SizedBox.shrink(),
                   ),
+                  if (recentCorrections > 0)
+                    _LearningCard(correctionCount: recentCorrections),
                 ],
               ),
       ),
     );
+  }
+}
+
+/// Same confirm-then-delete flow as PurgeBanner (Organize's version of this
+/// same PurgeService), reused here rather than re-derived — the risk of a
+/// destructive action needing its own logic twice is a mismatch, not a
+/// styling difference. Deliberately doesn't hardcode a dialog background or
+/// text color the way the old banner's AlertDialog did — the app's default
+/// dialog theme already resolves from SiftColors' current brightness, so
+/// leaving it unstyled is what keeps this correct in both Light and Dark
+/// instead of risking the exact hardcoded-color mismatch the paywall sheet
+/// had.
+Future<void> _confirmPurge(
+    BuildContext context, WidgetRef ref, PurgeResult result) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete these screenshots?'),
+      content: Text(
+        'This permanently deletes ${result.count} screenshot'
+        '${result.count == 1 ? '' : 's'} tagged as junk, memes, or to-do '
+        'items that are over 30 days old (${result.formattedSize} freed). '
+        'This can\'t be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: SiftPillowyColors.error,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true && context.mounted) {
+    final deleted = await ref.read(purgeServiceProvider.notifier).executePurge();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $deleted screenshots.')),
+      );
+    }
   }
 }
 
@@ -294,6 +409,115 @@ class _ActionCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Live progress, not a static count — [_ActionCard] above covers the
+/// "stuck with a backlog" case with a tappable diagnostics link, but there's
+/// nothing to tap while a batch is actually running (see
+/// ProcessingProgressNotifier — the same live current/total Organize's own
+/// processing banner already shows, adapted into a Discover-shaped card
+/// instead of that banner's compact strip).
+class _ProcessingCard extends StatelessWidget {
+  final ProcessingProgressState progress;
+  const _ProcessingCard({required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = SiftPillowyColors.tertiary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: SiftPillowyColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withOpacity(0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.18),
+              shape: BoxShape.circle,
+            ),
+            child: const CircularProgressIndicator(
+                strokeWidth: 2.5, color: accent),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Analyzing ${progress.current} of ${progress.total} '
+                    'screenshots', style: SiftPillowyText.headlineSm),
+                const SizedBox(height: 4),
+                Text(
+                  'Tags, duplicates, and junk review will fill in as each '
+                  'one finishes.',
+                  style: SiftPillowyText.bodySm,
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress.fraction,
+                    minHeight: 4,
+                    backgroundColor: SiftPillowyColors.surfaceContainerHigh,
+                    color: accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small "did you know" fact, not an action card — nothing to tap, since
+/// the point is just making the previously-invisible correction-learning
+/// system (TagCorrectionService) visible somewhere for the first time.
+/// Real count, no invented streak or running total: exactly what
+/// [TagCorrectionService.recentCorrectionCount] found in the local log.
+class _LearningCard extends StatelessWidget {
+  final int correctionCount;
+  const _LearningCard({required this.correctionCount});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: SiftPillowyColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.psychology_outlined,
+              color: SiftPillowyColors.onSurfaceVariant, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Sift learned from $correctionCount tag correction'
+              '${correctionCount == 1 ? '' : 's'} you made this week.',
+              style: SiftPillowyText.bodySm,
             ),
           ),
         ],

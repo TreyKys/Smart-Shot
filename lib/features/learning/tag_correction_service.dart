@@ -54,6 +54,16 @@ final tagCorrectionServiceProvider = Provider<TagCorrectionService>((ref) {
   return TagCorrectionService(ref);
 });
 
+/// Real count of corrections this device has recorded in the last 7 days —
+/// Discover's "Sift is learning" card reads this. Not a running total or a
+/// fabricated streak: exactly what [TagCorrectionService.recentCorrectionCount]
+/// finds in the same local log [TagCorrectionService.recordCorrection]
+/// appends to. autoDispose since it's a point-in-time read, not something
+/// worth keeping warm between visits to Discover.
+final recentCorrectionCountProvider = FutureProvider.autoDispose<int>((ref) {
+  return ref.watch(tagCorrectionServiceProvider).recentCorrectionCount();
+});
+
 /// Records what users correct the AI's tagging to, rewards them for it, and
 /// feeds those corrections back into future tagging as a prompt hint.
 ///
@@ -193,6 +203,16 @@ class TagCorrectionService {
             'TagCorrectionService: Firestore write failed: $e');
       }
     }());
+  }
+
+  /// Real count of corrections recorded to the local log in the last [days]
+  /// days — used by Discover's "Sift is learning" card. Doesn't distinguish
+  /// ones that also reached Firestore from ones that didn't; either way the
+  /// user actually made the edit, which is the thing being surfaced here.
+  Future<int> recentCorrectionCount({int days = 7}) async {
+    final all = await _loadLocal();
+    final cutoff = DateTime.now().subtract(Duration(days: days));
+    return all.where((c) => c.timestamp.isAfter(cutoff)).length;
   }
 
   /// The local-log gate described in this class's doc comment — only a hit
