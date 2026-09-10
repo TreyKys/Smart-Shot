@@ -6,11 +6,11 @@ import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
-import 'package:sift/features/settings/diagnostic_log_screen.dart';
 
 // Mirrors legal/privacy-policy.html and legal/terms.html in this repo — kept
 // in sync manually, since neurodevlabs.cloud is built from a separate repo.
-const String kPrivacyPolicyUrl = 'https://neurodevlabs.cloud/sift/privacy-policy.html';
+const String kPrivacyPolicyUrl =
+    'https://neurodevlabs.cloud/sift/privacy-policy.html';
 const String kTermsOfServiceUrl = 'https://neurodevlabs.cloud/sift/terms.html';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -26,7 +26,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _byokController.text = ref.read(economyServiceProvider.notifier).getByokKey() ?? '';
+    _byokController.text =
+        ref.read(economyServiceProvider.notifier).getByokKey() ?? '';
   }
 
   @override
@@ -44,7 +45,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // button off the stale `ai_energy` pref would misrepresent a BYOK user's
     // actual (unlimited) quota. Reads the persisted key, not the draft text
     // field, so this only flips once Save has actually taken effect.
-    final savedByokKey = ref.watch(economyServiceProvider.notifier).getByokKey();
+    final savedByokKey = ref
+        .watch(economyServiceProvider.notifier)
+        .getByokKey();
     final hasByok = (savedByokKey ?? '').isNotEmpty;
 
     return Scaffold(
@@ -87,21 +90,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Text(
                     'Unlock infinite AI fuel, deep backlog sweeping, custom vaults, and advanced exports.',
                     style: TextStyle(
-                        color: SiftColors.textSecondary, fontSize: 13),
+                      color: SiftColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () =>
                         showPaywallSheet(context, triggerFeature: 'Settings'),
                     child: const Text('Upgrade to Pro'),
-                  )
+                  ),
                 ] else ...[
                   Text(
                     'Thank you for supporting Sift! You have unlimited access to all features.',
                     style: TextStyle(
-                        color: SiftColors.textSecondary, fontSize: 13),
+                      color: SiftColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
-                ]
+                ],
               ],
             ),
           ),
@@ -109,8 +116,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // APPEARANCE
           _SettingsTile(
-            leading: Icon(Icons.palette_outlined,
-                color: SiftColors.textSecondary),
+            leading: Icon(
+              Icons.palette_outlined,
+              color: SiftColors.textSecondary,
+            ),
             title: 'Appearance',
             subtitle: 'Dark, light, or match your device.',
           ),
@@ -170,7 +179,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         .setByokKey(_byokController.text);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Key saved!')));
+                        const SnackBar(content: Text('Key saved!')),
+                      );
                     }
                   },
                   child: const Text('Save'),
@@ -182,36 +192,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Divider(color: SiftColors.border, height: 1),
           const SizedBox(height: 8),
 
-          // DIAGNOSTICS
-          _SettingsTile(
-            leading: Icon(Icons.bug_report_outlined,
-                color: SiftColors.textSecondary),
-            title: 'Diagnostics Log',
-            subtitle:
-                'See whether AI tagging is actually succeeding on this device.',
-            trailing: Icon(Icons.chevron_right,
-                color: SiftColors.textTertiary),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const DiagnosticLogScreen()),
-            ),
-          ),
-          Divider(color: SiftColors.border, height: 24),
-
           // LEGAL
           _SettingsTile(
-            leading: Icon(Icons.privacy_tip_outlined,
-                color: SiftColors.textSecondary),
+            leading: Icon(
+              Icons.privacy_tip_outlined,
+              color: SiftColors.textSecondary,
+            ),
             title: 'Privacy Policy',
-            trailing: Icon(Icons.open_in_new,
-                size: 18, color: SiftColors.textTertiary),
+            trailing: Icon(
+              Icons.open_in_new,
+              size: 18,
+              color: SiftColors.textTertiary,
+            ),
             onTap: () => _openUrl(context, kPrivacyPolicyUrl),
           ),
           _SettingsTile(
-            leading: Icon(Icons.description_outlined,
-                color: SiftColors.textSecondary),
+            leading: Icon(
+              Icons.description_outlined,
+              color: SiftColors.textSecondary,
+            ),
             title: 'Terms of Service',
-            trailing: Icon(Icons.open_in_new,
-                size: 18, color: SiftColors.textTertiary),
+            trailing: Icon(
+              Icons.open_in_new,
+              size: 18,
+              color: SiftColors.textTertiary,
+            ),
             onTap: () => _openUrl(context, kTermsOfServiceUrl),
           ),
         ],
@@ -221,12 +226,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _openUrl(BuildContext context, String url) async {
     final uri = Uri.parse(url);
-    final launched =
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link.')));
     }
   }
 }
@@ -279,7 +283,9 @@ class _SettingsTile extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: TextStyle(
-                          color: SiftColors.textSecondary, fontSize: 12),
+                        color: SiftColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ],
@@ -337,7 +343,9 @@ class _EnergyTile extends ConsumerWidget {
                         ? 'Depleted for today'
                         : '$energy / $kDailyFreeExtractions remaining today',
                     style: TextStyle(
-                        color: SiftColors.textSecondary, fontSize: 12),
+                      color: SiftColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -351,7 +359,8 @@ class _EnergyTile extends ConsumerWidget {
             value: fraction,
             backgroundColor: SiftColors.border,
             valueColor: AlwaysStoppedAnimation<Color>(
-                isDepleted ? SiftColors.textTertiary : SiftColors.accent),
+              isDepleted ? SiftColors.textTertiary : SiftColors.accent,
+            ),
             minHeight: 3,
           ),
         ),
@@ -387,20 +396,25 @@ class _EnergyTile extends ConsumerWidget {
   void _watchAd(BuildContext context, WidgetRef ref) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Loading ad... watch $kAdsRequiredForReward to earn '
-            '+$kAdRewardExtractions scans.'),
+        content: Text(
+          'Loading ad... watch $kAdsRequiredForReward to earn '
+          '+$kAdRewardExtractions scans.',
+        ),
       ),
     );
-    ref.read(economyServiceProvider.notifier).showRewardedAd(
-      onBlockCompleted: () {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('+$kAdRewardExtractions AI scans unlocked!')),
-          );
-        }
-      },
-    );
+    ref
+        .read(economyServiceProvider.notifier)
+        .showRewardedAd(
+          onBlockCompleted: () {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('+$kAdRewardExtractions AI scans unlocked!'),
+                ),
+              );
+            }
+          },
+        );
   }
 }
 
@@ -435,11 +449,13 @@ class _ThemeModeSelector extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon,
-                    size: 18,
-                    color: selected
-                        ? SiftColors.accent
-                        : SiftColors.textSecondary),
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected
+                      ? SiftColors.accent
+                      : SiftColors.textSecondary,
+                ),
                 const SizedBox(height: 4),
                 Text(
                   label,
@@ -464,8 +480,7 @@ class _ThemeModeSelector extends ConsumerWidget {
         const SizedBox(width: 8),
         segment(SiftThemeMode.light, Icons.light_mode_outlined, 'Light'),
         const SizedBox(width: 8),
-        segment(SiftThemeMode.system, Icons.brightness_auto_outlined,
-            'System'),
+        segment(SiftThemeMode.system, Icons.brightness_auto_outlined, 'System'),
       ],
     );
   }
