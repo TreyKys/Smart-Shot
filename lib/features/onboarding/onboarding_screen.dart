@@ -186,6 +186,16 @@ class _PageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Onboarding is fixed near-black gradients on purpose (see _pages'
+    // hex constants) — same reasoning as the paywall sheet, this is a
+    // branded "first impression" surface that shouldn't flip with the
+    // app's theme. But the text used to read SiftColors.textPrimary /
+    // textSecondary, which ARE theme-aware — in Light mode that was
+    // near-black text on a near-black background, unreadable on the very
+    // first screens a new user sees. Fixed hex constants here now, same
+    // pattern _PaywallColors uses in paywall_sheet.dart.
+    const onDarkPrimary = Color(0xFFF5F7FC);
+    const onDarkSecondary = Color(0xFF8C9BB5);
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -217,8 +227,8 @@ class _PageContent extends StatelessWidget {
             Text(
               page.title,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: SiftColors.textPrimary,
+              style: const TextStyle(
+                color: onDarkPrimary,
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
                 height: 1.2,
@@ -232,8 +242,8 @@ class _PageContent extends StatelessWidget {
             Text(
               page.subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: SiftColors.textSecondary,
+              style: const TextStyle(
+                color: onDarkSecondary,
                 fontSize: 16,
                 height: 1.5,
               ),
