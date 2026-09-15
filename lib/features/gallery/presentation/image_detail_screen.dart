@@ -586,6 +586,11 @@ class _TagEditSheetState extends State<_TagEditSheet> {
   }
 
   Future<void> _save() async {
+    // Commit whatever's still sitting in the text field, typed but never
+    // confirmed with Enter or the + button — without this, tapping Save
+    // right after typing a tag silently discards it: _tags never picked it
+    // up, so onSave saves the list as it was before the user typed anything.
+    _addTag();
     setState(() => _saving = true);
     await widget.onSave(_tags);
     if (mounted) Navigator.pop(context);
