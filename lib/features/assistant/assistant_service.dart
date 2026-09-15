@@ -130,6 +130,58 @@ class AssistantService {
     _pendingAction = null;
   }
 
+  /// Snapshot of conversation history for persistence — the UI layer writes
+  /// this to SharedPreferences so a restart resumes the same conversation
+  /// the model was in the middle of.
+  List<Map<String, String>> exportHistory() =>
+      _history.map((h) => Map<String, String>.from(h)).toList();
+
+  /// Restore a previously-exported history — inverse of [exportHistory].
+  /// Overwrites whatever's currently in memory rather than merging; the UI
+  /// only calls this once at startup, and mid-session merging would produce
+  /// weirder conversation state than either half alone.
+  void restoreHistory(List<Map<String, String>> saved) {
+    _history
+      ..clear()
+      ..addAll(saved);
+    _lastSearchResults = null;
+    _highlightTags = [];
+    _pendingAction = null;
+  }
+
+  /// Records the outcome of a pending action into the AI's history so the
+  /// model actually knows what happened on its next turn — without this, the
+  /// AI proposed a deletion, the user tapped Confirm (or replied "yes"
+  /// affirmatively — see the screen's auto-confirm path), the deletion ran,
+  /// and the next chat turn's AI had zero record any of that happened. On
+  /// "have you deleted the rest" the model would then either say "no" (true
+  /// only from its perspective) or hallucinate "already deleted". Either
+  /// answer read as broken to the user. Now it sees an assistant-role note
+  /// that says exactly what happened and can answer honestly.
+  void recordActionOutcome(String note) {
+    _addToHistory('assistant', '[$note]');
+  }
+
+  /// Labels shown to the user while a specific tool is running — replaces
+  /// the generic "Thinking…" with something that describes what's actually
+  /// happening (a `find_duplicates` on a large library is O(n²) and can
+  /// take real time, and calling that "Thinking…" reads as "stuck").
+  static const Map<String, String> _toolLabels = {
+    'search_screenshots': 'Searching your library…',
+    'count_screenshots': 'Counting matches…',
+    'propose_delete': 'Preparing deletion…',
+    'propose_add_to_collection': 'Preparing to file…',
+    'create_collection': 'Preparing to create the collection…',
+    'find_duplicates': 'Scanning for duplicates — this can take a moment…',
+    'library_stats': 'Analyzing your library…',
+    'find_untagged': 'Finding untagged screenshots…',
+  };
+
+  /// Human label for [toolName], or a generic fallback if we ever add a
+  /// tool and forget to label it here.
+  static String toolLabel(String toolName) =>
+      _toolLabels[toolName] ?? 'Working on it…';
+
   // ── Tool definitions ──
 
   /// Mistral function-calling tool definitions — each describes one
@@ -371,7 +423,8 @@ RULES:
 4. For compound requests, call the tools you need in order — you'll see results between calls so you can adjust.
 5. Always search or count BEFORE proposing delete — never delete blind.
 6. If the user asks something conversational ("thanks", "hello", "what can you do?"), just reply directly without calling any tools.
-7. Be natural and conversational in your final reply — brief but warm. Don't narrate what tools you called.''';
+7. Be natural and conversational in your final reply — brief but warm. Don't narrate what tools you called.
+8. NEVER say something was deleted, added, or changed unless a prior turn shows an explicit outcome note in brackets (e.g. "[The user confirmed and N screenshots were deleted]"). The `propose_*` tools only prepare an action — the user has to tap Confirm in the UI for it to actually run. If you already called `propose_delete` and the user is asking whether it happened, tell them honestly that they need to tap the Confirm/Delete button on your previous message, or reply "yes" / "delete them" to confirm. Do NOT re-call `propose_delete` for the same set — the previous proposal is still waiting.''';
 
   // ── Filtering ──
 
@@ -663,6 +716,11 @@ RULES:
     required List<String> availableCollections,
     String? byokApiKey,
     Future<List<List<Screenshot>>> Function()? findDuplicates,
+    // Fires when the model decides to call a specific tool — the UI uses
+    // this to replace the generic "Thinking…" with a live label describing
+    // what's actually happening ("Searching your library…", "Scanning for
+    // duplicates…"). See [toolLabel] for the current mapping.
+    void Function(String label)? onStage,
   }) async {
     final hasByok = byokApiKey != null &&
         byokApiKey.isNotEmpty &&
@@ -710,7 +768,15 @@ RULES:
       model: _kAssistantModel,
       messages: messages,
       tools: _toolDefinitions,
-      executor: (name, args) => _executeTool(name, args, allScreenshots),
+      executor: (name, args) async {
+        // Fire the stage callback BEFORE the tool actually runs, so the UI
+        // updates the moment the model decides to call that tool — not
+        // after the tool's result comes back. On a slow tool like
+        // find_duplicates, waiting until after the run defeats the whole
+        // point of showing progress.
+        onStage?.call(toolLabel(name));
+        return _executeTool(name, args, allScreenshots);
+      },
       priority: RequestPriority.interactive,
     );
     final elapsed = DateTime.now().difference(callStarted);
