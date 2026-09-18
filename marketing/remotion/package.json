@@ -1,0 +1,25 @@
+{
+  "name": "sift-marketing-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion source for Sift's video ads — 5 x 20s + 2 x 60s. See README.md.",
+  "scripts": {
+    "dev": "remotion studio",
+    "render:all": "remotion render SearchFrustration out/01-search-frustration.mp4 && remotion render DuplicateTrap out/02-duplicate-trap.mp4 && remotion render JunkPile out/03-junk-pile.mp4 && remotion render MemoryLane out/04-memory-lane.mp4 && remotion render AskInPlainEnglish out/05-ask-plain-english.mp4 && remotion render ChaosStory out/06-chaos-story.mp4 && remotion render TimeRecovery out/07-time-recovery.mp4",
+    "render:shorts": "remotion render SearchFrustration out/01-search-frustration.mp4 && remotion render DuplicateTrap out/02-duplicate-trap.mp4 && remotion render JunkPile out/03-junk-pile.mp4 && remotion render MemoryLane out/04-memory-lane.mp4 && remotion render AskInPlainEnglish out/05-ask-plain-english.mp4",
+    "render:longs": "remotion render ChaosStory out/06-chaos-story.mp4 && remotion render TimeRecovery out/07-time-recovery.mp4"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.320",
+    "@remotion/cli": "4.0.320",
+    "@remotion/renderer": "4.0.320",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.320"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "typescript": "5.4.5"
+  }
+}
