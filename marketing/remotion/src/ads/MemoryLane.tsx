@@ -1,134 +1,84 @@
 import React from 'react';
-import {AbsoluteFill, Sequence, useCurrentFrame, interpolate, spring, useVideoConfig} from 'remotion';
-import {theme, fonts, SEC} from '../theme';
-import {BgGradient} from '../components/BgGradient';
-import {Screenshot} from '../components/Screenshot';
-import {Kicker} from '../components/Kicker';
-import {Logo} from '../components/Logo';
-import {useFadeIn} from '../components/anim';
+import {AbsoluteFill, Sequence} from 'remotion';
+import {c, SEC} from '../theme';
+import {Stage} from '../components/Stage';
+import {Eyebrow, Headline, Body} from '../components/type';
+import {Card, Tile} from '../components/cards';
+import {EndCard} from '../components/EndCard';
 
 // ─────────────────────────────────────────────────────────────────────────
-// AD 4 · "On This Day" · 20s
-// Angle: nostalgic. That message from a friend, that concert ticket, that
-// menu from a trip — you screenshotted them and forgot they existed. Sift
-// resurfaces the ones from years past on the day they matter.
+// AD 4 · "On this day" · 20s · 16:9
+// The warm one. Screenshots you forgot you saved, resurfaced on the day
+// they matter. Softer motion, gold accent instead of blue for warmth.
 // ─────────────────────────────────────────────────────────────────────────
 
-const MEMORIES = [
-  {hue: theme.tag.social, icon: '💬', label: 'A text · 2 years ago', year: '2024'},
-  {hue: theme.tag.travel, icon: '✈️', label: 'Boarding pass · 3 years', year: '2023'},
-  {hue: theme.tag.finance, icon: '🎫', label: 'Concert ticket · 1 year', year: '2025'},
-  {hue: theme.tag.memes, icon: '📸', label: 'Sunset photo · 2 years', year: '2024'},
-];
-
-const MemoryCard: React.FC<{
-  from: number;
-  item: {hue: string; icon: string; label: string; year: string};
-}> = ({from, item}) => {
-  const frame = useCurrentFrame() - from;
-  const {fps} = useVideoConfig();
-  const inSpring = spring({frame, fps, config: {damping: 16, stiffness: 100}});
-  const outAt = SEC(2.2);
-  const outT = interpolate(frame, [outAt, outAt + 15], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const scale = interpolate(inSpring, [0, 1], [0.75, 1]);
-  const opIn = interpolate(inSpring, [0, 1], [0, 1]);
-  const opOut = interpolate(outT, [0, 1], [1, 0]);
-  const yOut = interpolate(outT, [0, 1], [0, -60]);
-  return (
-    <div
-      style={{
-        opacity: opIn * opOut,
-        transform: `translateY(${yOut}px) scale(${scale})`,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 20,
-      }}
-    >
-      <div
-        style={{
-          padding: '8px 20px',
-          borderRadius: 999,
-          background: `${theme.accent}22`,
-          border: `1px solid ${theme.accent}55`,
-          color: theme.accent,
-          fontWeight: 700,
-          fontSize: 20,
-          letterSpacing: 1,
-        }}
-      >
-        ON THIS DAY · {item.year}
+const MemoryCard: React.FC<{from: number; label: string; sub: string; hue: string}> = ({
+  from,
+  label,
+  sub,
+  hue,
+}) => (
+  <Card from={from} width={340} pad={0}>
+    <div style={{padding: 0}}>
+      <Tile from={from + 4} hue={hue} w={340 - 3} ratio={0.7} />
+      <div style={{padding: '20px 24px'}}>
+        <div
+          style={{
+            fontSize: 18,
+            fontWeight: 700,
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+            color: c.gold,
+            marginBottom: 8,
+          }}
+        >
+          {sub}
+        </div>
+        <div style={{fontSize: 28, fontWeight: 700, color: c.ink}}>{label}</div>
       </div>
-      <Screenshot hue={item.hue} icon={item.icon} label={item.label} size={340} />
     </div>
-  );
-};
+  </Card>
+);
 
 export const MemoryLane: React.FC = () => {
   return (
-    <AbsoluteFill style={{background: theme.bg, fontFamily: fonts.ui}}>
-      <BgGradient from={theme.tag.memes} intensity={0.18} />
-
-      {/* Beat 1 (0-3s): setup */}
-      <Sequence from={0} durationInFrames={SEC(3)}>
-        <AbsoluteFill
-          style={{justifyContent: 'center', alignItems: 'center'}}
-        >
-          <Kicker
-            headline={"Remember this?"}
-            sub={"You screenshotted it. Then forgot."}
-            from={SEC(0.3)}
-          />
-        </AbsoluteFill>
+    <AbsoluteFill>
+      {/* Beat 1 (0-4s) */}
+      <Sequence from={0} durationInFrames={SEC(4.2)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26}}>
+            <Eyebrow from={SEC(0.2)} color={c.gold}>two years ago today</Eyebrow>
+            <Headline from={SEC(0.5)}>you forgot you saved this.</Headline>
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Beat 2 (3-14s): a stream of forgotten memories. Each memory
-          gets its own Sequence — child `from` is always Sequence-local. */}
-      {MEMORIES.map((m, i) => (
-        <Sequence
-          key={i}
-          from={SEC(3 + i * 2.5)}
-          durationInFrames={SEC(3)}
-        >
-          <AbsoluteFill
-            style={{justifyContent: 'center', alignItems: 'center'}}
-          >
-            <MemoryCard from={0} item={m} />
-          </AbsoluteFill>
-        </Sequence>
-      ))}
-
-      {/* Beat 3 (14-18s): the promise */}
-      <Sequence from={SEC(14)} durationInFrames={SEC(4)}>
-        <AbsoluteFill
-          style={{
-            background: theme.bg,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Kicker
-            headline={"Sift brings them back."}
-            sub={"On the day they mattered."}
-            from={0}
-          />
-        </AbsoluteFill>
+      {/* Beat 2 (4-14s): a row of resurfaced memories */}
+      <Sequence from={SEC(4)} durationInFrames={SEC(10)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 44}}>
+            <Eyebrow from={SEC(0.2)} color={c.gold}>on this day</Eyebrow>
+            <div style={{display: 'flex', gap: 28}}>
+              <MemoryCard from={SEC(0.6)} sub="3 years ago" label="A concert ticket" hue={c.accentBright} />
+              <MemoryCard from={SEC(1.3)} sub="2 years ago" label="A note from a friend" hue={c.gold} />
+              <MemoryCard from={SEC(2)} sub="4 years ago" label="A trip you took" hue={c.success} />
+            </div>
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Beat 4 (18-20s): logo */}
-      <Sequence from={SEC(18)} durationInFrames={SEC(2)}>
-        <AbsoluteFill
-          style={{
-            background: theme.bg,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Logo from={0} tagline="Every screenshot, remembered." />
-        </AbsoluteFill>
+      {/* Beat 3 (14-15.5s): the line */}
+      <Sequence from={SEC(14)} durationInFrames={SEC(1.7)}>
+        <Stage>
+          <Headline from={SEC(0.2)} size={116}>Sift brings them back.</Headline>
+        </Stage>
+      </Sequence>
+
+      {/* Beat 4 (15.5-20s) */}
+      <Sequence from={SEC(15.5)} durationInFrames={SEC(4.5)}>
+        <Stage>
+          <EndCard from={SEC(0.3)} tagline="Every screenshot, remembered." />
+        </Stage>
       </Sequence>
     </AbsoluteFill>
   );

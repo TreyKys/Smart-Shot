@@ -1,52 +1,76 @@
-// Brand palette pulled from the app's SiftColors (lib/core/theme/app_theme.dart)
-// — same navy background and electric-blue accent that ship in every actual
-// screen of the app, so an ad and the app read as one product.
+import {continueRender, delayRender, staticFile} from 'remotion';
 
-export const theme = {
-  // Structural (dark side of SiftColors)
-  bg: '#0A0F1E',
-  surface: '#111827',
-  surfaceElev: '#1A2436',
-  border: '#243044',
+// ── Font: self-hosted Inter ──────────────────────────────────────────────
+// Google Fonts is fetched over the network at render time, which fails in
+// sandboxes where the render browser doesn't trust the egress proxy's CA
+// (ERR_CERT_AUTHORITY_INVALID on fonts.gstatic.com). So Inter's woff2 files
+// are bundled in public/fonts and registered with a local @font-face — no
+// render-time network dependency, works anywhere. FontFace is loaded with a
+// delayRender handle so frames don't render before the glyphs are ready.
+export const FONT = 'Inter';
 
-  // Brand
-  accent: '#4C8DFF',
-  accentDim: '#2F6FED',
-  proGold: '#FFD700',
-  proGoldWarm: '#FFA500',
+let fontsLoaded = false;
+export function ensureFonts() {
+  if (fontsLoaded || typeof document === 'undefined') return;
+  fontsLoaded = true;
+  const weights = [400, 500, 600, 700, 800];
+  const handle = delayRender('Loading Inter');
+  Promise.all(
+    weights.map((w) => {
+      const face = new FontFace(
+        'Inter',
+        `url(${staticFile(`fonts/inter-${w}.woff2`)}) format('woff2')`,
+        {weight: String(w), style: 'normal', display: 'swap'},
+      );
+      return face.load().then((loaded) => {
+        // document.fonts is a FontFaceSet; .add exists at runtime but the
+        // DOM lib types it on the wrong interface in this TS version.
+        (document.fonts as unknown as {add: (f: FontFace) => void}).add(loaded);
+      });
+    }),
+  )
+    .catch(() => {
+      // Fall back silently to the system stack if anything fails — never
+      // block the whole render on a font.
+    })
+    .finally(() => continueRender(handle));
+}
 
-  // Text
-  textPrimary: '#F5F7FC',
-  textSecondary: '#8C9BB5',
-  textTertiary: '#4E5C74',
+// ── Palette ────────────────────────────────────────────────────────────────
+// Editorial / light-first, adapted to Sift. The reference is warm cream +
+// amber; this keeps that airy, high-whitespace feel but swaps in Sift's own
+// cool neutrals and electric-blue accent (which doubles as a very "Google"
+// blue), with the navy brand color reserved for full-bleed contrast beats.
+export const c = {
+  // Light canvas
+  paper: '#F4F6FA',
+  card: '#FFFFFF',
+  chip: '#FFFFFF',
+  line: '#E2E7F0',
+  lineSoft: '#EDF1F7',
 
-  // Semantic
-  danger: '#FF4757',
-  warning: '#FFA502',
+  // Ink (text on light)
+  ink: '#0F1626',
+  inkSoft: '#4C5A72',
+  inkFaint: '#94A1B8',
+
+  // Accent — the single highlight color
+  accent: '#2F6FED',
+  accentBright: '#4C8DFF',
+  accentWash: '#E8EFFF',
+
+  // Dark full-bleed beats (Sift's real brand navy)
+  navy: '#0A0F1E',
+  navyCard: '#141B2E',
+  navyLine: '#243044',
+  onNavy: '#F5F7FC',
+  onNavySoft: '#8C9BB5',
+
+  // Sparing warm emphasis
+  gold: '#E8A33D',
   success: '#2ED573',
-
-  // Tag palette (matches SiftColors.forTag)
-  tag: {
-    finance: '#2ED573',
-    memes: '#AE6EFD',
-    junk: '#FF4757',
-    todo: '#FFA502',
-    travel: '#4C8DFF',
-    web3: '#FF6B81',
-    code: '#38BDF8',
-    social: '#FC5C7D',
-    default: '#8C9BB5',
-  },
+  danger: '#FF5A67',
 };
 
-export const fonts = {
-  // System-first stack — no webfont fetch means the render doesn't stall
-  // waiting on a network request, and this is what the app ships with too.
-  ui: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`,
-  mono: `ui-monospace, "SF Mono", Menlo, Consolas, monospace`,
-};
-
-// One canonical set of durations so a "beat" reads the same across ads.
-// Frame math throughout assumes 30fps — see Root.tsx.
 export const FPS = 30;
 export const SEC = (n: number) => Math.round(n * FPS);

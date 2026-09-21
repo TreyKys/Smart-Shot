@@ -1,82 +1,81 @@
 # Sift marketing — Remotion
 
-Seven video ads as code. Everything renders locally to `out/*.mp4`; no
-uploads, no cloud, no accounts required.
+Eight video ads as code, in a modern editorial style (big bold Inter
+headlines, tiny letter-spaced eyebrows, clean cards, one blue accent, lots
+of whitespace, navy full-bleed beats for contrast). Everything renders
+locally to `out/*.mp4`.
 
-- 5 × 20 s shorts — each targets one pain point
-- 2 × 60 s films — same product, two angles
+- 5 × 20 s shorts — each one pain point
+- 3 × 60 s films — Chaos Story + a second angle + the time-economics angle
 
-All vertical (1080 × 1920), 30 fps, H.264 CRF 18. Vertical is the shared
-format for Reels/Shorts/TikTok/Play Store trailers — any surface that
-takes 16:9 also takes a centred 9:16.
+All **16:9 (1920 × 1080)**, 30 fps, H.264 CRF 18.
 
-## First-time setup
+## Setup
 
 ```bash
 cd marketing/remotion
-npm install
+npm install --legacy-peer-deps
 ```
 
-Remotion pulls in a headless Chromium the first time. If the download
-stalls behind a proxy, set `PUPPETEER_DOWNLOAD_BASE_URL` before install.
+Fonts are **self-hosted** — Inter's woff2 files live in `public/fonts/` and
+load via a local `@font-face` (see `src/theme.ts`). No render-time network
+fetch, so it works behind restrictive proxies where Google Fonts fails.
 
-## Preview
-
-Live-editing browser preview — pick a composition from the sidebar and
-scrub:
+## Preview / render
 
 ```bash
-npm run dev
+npm run dev            # live browser preview
+npm run render:all     # all 8
+npm run render:shorts  # the five 20s ads
+npm run render:longs   # the three 60s films
 ```
 
-## Render
+Single: `npx remotion render <CompositionId> out/name.mp4`
 
-```bash
-npm run render:all       # all 7
-npm run render:shorts    # just the five 20-second ads
-npm run render:longs     # just the two 60-second films
-```
+## The 8 ads
 
-Or one at a time:
+| # | Composition ID      | Length | Angle                                            |
+|---|---------------------|--------|--------------------------------------------------|
+| 1 | `SearchFrustration` | 20 s   | "Where's that receipt?" → just ask                |
+| 2 | `DuplicateTrap`     | 20 s   | "Just one more" → keep the best, lose the rest    |
+| 3 | `JunkPile`          | 20 s   | The camera-roll basement → clear it in a break    |
+| 4 | `MemoryLane`        | 20 s   | On this day → forgotten screenshots resurfaced    |
+| 5 | `AskInPlainEnglish` | 20 s   | Talk to your gallery like a person                |
+| 6 | `ChaosStory`        | 60 s   | A normal day → the pile → Sift answers (narrative)|
+| 7 | `TheReliableOne`    | 60 s   | Everyone asks you → be the one who always has it  |
+| 8 | `TimeRecovery`      | 60 s   | 4 hrs/month lost → Sift hands it back             |
 
-```bash
-npx remotion render SearchFrustration out/01-search-frustration.mp4
-```
+6 and 7 are the two Chaos-Story angles: 6 is personal frustration, 7 is the
+social "always be the reliable one" angle.
 
-Rendered files land in `out/` (gitignored). A ~20-second clip on a
-modern laptop takes ~1 minute; the 60-second films take ~3 minutes each.
+## Design system (`src/`)
 
-## The 7 ads
+- `theme.ts` — palette (`c.*`) + self-hosted Inter loader. Change colors in
+  one place.
+- `components/type.tsx` — `Eyebrow`, `Headline`, `Body`.
+- `components/Chip.tsx` — the soft word-chips (filenames, junk types).
+- `components/cards.tsx` — `Card`, `AskCard`, `ReceiptCard`, `ChatCard`,
+  `Tile`. Real UI mocks, **no emoji** anywhere.
+- `components/EndCard.tsx` — closing lockup: app icon, name, Google Play
+  badge, maker credit.
+- `components/Stage.tsx` — the light/dark canvas every beat sits on; also
+  registers the fonts.
+- `components/anim.ts` — fade/spring primitives.
 
-| # | Composition ID       | Length | Pain point                                              |
-|---|----------------------|--------|---------------------------------------------------------|
-| 1 | `SearchFrustration`  | 20 s   | "Where's that receipt?" scrolling through 3,000 shots    |
-| 2 | `DuplicateTrap`      | 20 s   | Five near-identical takes eating storage                 |
-| 3 | `JunkPile`           | 20 s   | Years of dead memes / expired coupons / old URLs        |
-| 4 | `MemoryLane`         | 20 s   | Forgotten screenshots from years past                    |
-| 5 | `AskInPlainEnglish`  | 20 s   | The AI chat — no folders, no filters                     |
-| 6 | `ChaosStory`         | 60 s   | Everyday narrative angle                                 |
-| 7 | `TimeRecovery`       | 60 s   | Hours-per-month economics angle                          |
+**Timing convention:** `useCurrentFrame()` is Sequence-local, so every
+`from={...}` passed to a child of a `<Sequence>` is relative to that
+Sequence's start (0 = its first frame). Getting this wrong makes fades
+silently never fire.
 
-## Editing
+## Portrait / square cuts
 
-- **Colors** — `src/theme.ts` (mirrored from the app's `SiftColors`).
-  Change once, propagates through every ad.
-- **Copy** — each ad's `.tsx` file has the text inline near the beat it
-  belongs to. Comments at the top document the intended narration cue
-  per beat, so a voice-over recording can time to the same beats.
-- **Timing** — `SEC(n)` (from `theme.ts`) is the "seconds → frames"
-  helper. Every timing in every ad reads in seconds.
-- **New ad** — copy any file in `src/ads/`, register it in
-  `src/Root.tsx` with a new `Composition` id, add a render entry in
-  `package.json`'s `render:all`. That's all three touch points.
+These are 16:9 to match the reference. For 9:16 (Reels/Shorts) or 1:1, add
+a second `Composition` per ad in `src/Root.tsx` with the same component and
+the new size — the layouts key off the canvas, but the editorial split
+beats (headline beside a card) are designed for landscape and would want
+their flex direction switched for portrait.
 
 ## Voice-over
 
-Every ad renders silently — Remotion supports audio via `<Audio>` in a
-composition, but shipping the ads muted means anyone can drop in their
-own VO or music without re-rendering visuals. If you generate narration
-with a TTS service, place the audio next to the composition file and
-add an `<Audio src={staticFile('...')} />` inside the outer
-`<AbsoluteFill>`. See the top-of-file comments in
-`ChaosStory.tsx` for the intended narration cues per beat.
+Ads render silent. Each long-form ad documents its intended narration cues
+in a header comment, timed to the beats, so a VO recording lines up.

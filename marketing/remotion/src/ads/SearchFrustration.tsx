@@ -1,295 +1,133 @@
 import React from 'react';
-import {AbsoluteFill, Sequence, useCurrentFrame, interpolate} from 'remotion';
-import {theme, fonts, SEC} from '../theme';
-import {BgGradient} from '../components/BgGradient';
-import {PhoneFrame} from '../components/PhoneFrame';
-import {Screenshot} from '../components/Screenshot';
-import {Logo} from '../components/Logo';
-import {useFadeIn, useFadeInOut} from '../components/anim';
+import {AbsoluteFill, Sequence} from 'remotion';
+import {c, SEC} from '../theme';
+import {Stage} from '../components/Stage';
+import {Eyebrow, Headline, Body} from '../components/type';
+import {Chip} from '../components/Chip';
+import {AskCard, ReceiptCard} from '../components/cards';
+import {EndCard} from '../components/EndCard';
 
 // ─────────────────────────────────────────────────────────────────────────
-// AD 1 · "The 5-Minute Search" · 20s
-// Angle: everyone has that receipt / voucher / boarding pass buried
-// somewhere in 3,000 screenshots and can't find it when they need it.
+// AD 1 · "Never scroll again" · 20s · 16:9
+// Structure mirrors the reference film: relatable question → a grid of the
+// mess filling in (background darkens, one item highlights) → bold headline
+// beside a clean answer card → end lockup. No emoji; the content is real
+// filenames, a real query, a real receipt card.
 //
-// IMPORTANT: `useCurrentFrame()` inside a <Sequence> is Sequence-LOCAL
-// (frame 0 at the Sequence's `from` boundary). All `from={...}` values
-// passed to child components below are therefore Sequence-local — never
-// composition-absolute. The initial version of this file used absolute
-// frames and nothing inside any Sequence ever faded in.
-//
-// Narration cue (optional VO):
-//   0-4s  "Where's that Uber receipt?"
-//   4-9s  "Was it March? April? …It's in here somewhere."
-//   9-14s "3,247 screenshots. One receipt."
-//  14-18s "Sift finds it in three seconds."
-//  18-20s "Sift. Just ask."
+// Reminder: useCurrentFrame() is Sequence-LOCAL — every `from` passed to a
+// child of a <Sequence> is relative to that Sequence's start.
 // ─────────────────────────────────────────────────────────────────────────
 
-const ScrollingGrid: React.FC = () => {
-  const frame = useCurrentFrame();
-  const y = interpolate(frame, [0, SEC(9)], [0, -1400]);
-  const tiles = Array.from({length: 60});
-  const colors = [
-    theme.tag.finance,
-    theme.tag.memes,
-    theme.tag.travel,
-    theme.tag.junk,
-    theme.tag.social,
-    theme.tag.todo,
-    theme.tag.web3,
-    theme.tag.code,
-  ];
-  const icons = ['🧾', '💬', '🎫', '📸', '📍', '💳', '🎥', '🔗', '📝', '📦'];
-  return (
-    <div style={{width: '100%', height: '100%', overflow: 'hidden', position: 'relative'}}>
-      <div
-        style={{
-          position: 'absolute',
-          top: 20,
-          left: 20,
-          right: 20,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 10,
-          transform: `translateY(${y}px)`,
-        }}
-      >
-        {tiles.map((_, i) => (
-          <Screenshot
-            key={i}
-            hue={colors[i % colors.length]}
-            icon={icons[i % icons.length]}
-            size={112}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
+// The overwhelm: what your gallery actually looks like — anonymous
+// filenames, not neat categories.
+const FILENAMES = [
+  'Screenshot_0417',
+  'IMG_2831',
+  'Screen Recording',
+  'Photo_4102',
+  'Screenshot_1120',
+  'IMG_9930',
+  'Screenshot_0038',
+  'IMG_2288',
+  'Screenshot_7741',
+  'Photo_0916',
+  'IMG_5502',
+  'Screenshot_3390',
+];
 
-const AskResult: React.FC = () => {
-  const chipsIn = useFadeIn(0, 20);
+const ChipGrid: React.FC = () => {
   return (
     <div
       style={{
-        padding: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-        opacity: chipsIn,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 20,
+        width: 1400,
       }}
     >
-      <div
-        style={{
-          background: theme.surfaceElev,
-          borderRadius: 20,
-          padding: '14px 18px',
-          color: theme.textPrimary,
-          fontSize: 22,
-          border: `1px solid ${theme.border}`,
-          alignSelf: 'flex-end',
-          maxWidth: '85%',
-          fontFamily: fonts.ui,
-        }}
-      >
-        find my uber receipts from march
-      </div>
-      <div
-        style={{
-          background: `linear-gradient(135deg, ${theme.accent}, ${theme.accentDim})`,
-          borderRadius: 20,
-          padding: '14px 18px',
-          color: '#fff',
-          fontSize: 22,
-          alignSelf: 'flex-start',
-          maxWidth: '85%',
-          fontFamily: fonts.ui,
-          fontWeight: 500,
-        }}
-      >
-        Found 4 receipts. Total $87.50.
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 8,
-          marginTop: 6,
-        }}
-      >
-        {[0, 1, 2, 3].map((i) => (
-          <Screenshot
-            key={i}
-            hue={theme.tag.finance}
-            icon="🧾"
-            size={80}
-            tag="#Receipt"
-            tagColor={theme.tag.finance}
+      {FILENAMES.map((name, i) => {
+        const isTarget = i === 6; // the one you actually need
+        return (
+          <Chip
+            key={name}
+            label={isTarget ? 'Uber · receipt' : name}
+            from={SEC(0.3) + i * 4}
+            highlighted={isTarget}
+            onDark
           />
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
 
 export const SearchFrustration: React.FC = () => {
   return (
-    <AbsoluteFill style={{background: theme.bg, fontFamily: fonts.ui}}>
-      <BgGradient from={theme.danger} intensity={0.15} />
-
-      {/* Beat 1 (0-9s): the frantic scroll */}
-      <Sequence from={0} durationInFrames={SEC(9.2)}>
-        <AbsoluteFill style={{justifyContent: 'center', alignItems: 'center'}}>
-          <PhoneFrame width={520}>
-            <ScrollingGrid />
-          </PhoneFrame>
-        </AbsoluteFill>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-            paddingTop: 140,
-            pointerEvents: 'none',
-          }}
-        >
-          <FrustrationOverlay />
-        </AbsoluteFill>
+    <AbsoluteFill>
+      {/* Beat 1 (0-3.5s): the relatable question on paper */}
+      <Sequence from={0} durationInFrames={SEC(3.7)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26}}>
+            <Eyebrow from={SEC(0.2)}>you, looking for one thing</Eyebrow>
+            <Headline from={SEC(0.5)}>where's that receipt?</Headline>
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Beat 2 (9-14s): the number lands */}
-      <Sequence from={SEC(9)} durationInFrames={SEC(5)}>
-        <AbsoluteFill
-          style={{
-            background: theme.bg,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <NumberPunch />
-        </AbsoluteFill>
+      {/* Beat 2 (3.5-9s): the mess fills in; canvas darkens; one highlights */}
+      <Sequence from={SEC(3.5)} durationInFrames={SEC(5.5)}>
+        <Stage dark pad={80}>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 46}}>
+            <Eyebrow from={SEC(0.2)} color={c.onNavySoft}>
+              three thousand, one hundred and four
+            </Eyebrow>
+            <ChipGrid />
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Beat 3 (14-18s): the answer arrives */}
-      <Sequence from={SEC(14)} durationInFrames={SEC(4)}>
-        <AbsoluteFill style={{justifyContent: 'center', alignItems: 'center'}}>
-          <PhoneFrame width={520}>
-            <AskResult />
-          </PhoneFrame>
-        </AbsoluteFill>
+      {/* Beat 3 (9-15.5s): bold headline + the answer, back on paper */}
+      <Sequence from={SEC(9)} durationInFrames={SEC(6.5)}>
+        <Stage justify="center" pad={110}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              maxWidth: 1680,
+              gap: 80,
+            }}
+          >
+            <div style={{flexShrink: 0}}>
+              <Eyebrow from={SEC(0.3)} align="left">
+                one question. one answer.
+              </Eyebrow>
+              <div style={{height: 18}} />
+              <Headline from={SEC(0.5)} align="left" size={120} maxWidth={720}>
+                just ask.
+              </Headline>
+            </div>
+            <AskCard
+              from={SEC(1)}
+              query="find my uber receipts from march"
+              answer={
+                <span>
+                  4 receipts · <span style={{color: c.accent}}>$87.50</span> total.
+                </span>
+              }
+              width={760}
+            />
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Beat 4 (18-20s): logo */}
-      <Sequence from={SEC(18)} durationInFrames={SEC(2)}>
-        <AbsoluteFill
-          style={{
-            background: theme.bg,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Logo from={0} tagline="Just ask." />
-        </AbsoluteFill>
+      {/* Beat 4 (15.5-20s): end lockup */}
+      <Sequence from={SEC(15.5)} durationInFrames={SEC(4.5)}>
+        <Stage>
+          <EndCard from={SEC(0.3)} tagline="Find any screenshot, just by asking." />
+        </Stage>
       </Sequence>
     </AbsoluteFill>
-  );
-};
-
-const FrustrationOverlay: React.FC = () => {
-  const l1 = useFadeInOut(SEC(0.5), SEC(4));
-  const l2 = useFadeInOut(SEC(3), SEC(7));
-  const l3 = useFadeInOut(SEC(6), SEC(9));
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 20,
-        alignItems: 'center',
-        textShadow: '0 3px 20px rgba(0,0,0,0.9)',
-      }}
-    >
-      <div
-        style={{
-          opacity: l1,
-          fontSize: 72,
-          fontWeight: 800,
-          color: theme.textPrimary,
-          letterSpacing: -1.5,
-          textAlign: 'center',
-        }}
-      >
-        Where's that receipt?
-      </div>
-      <div
-        style={{
-          opacity: l2,
-          fontSize: 44,
-          color: theme.textSecondary,
-          fontWeight: 600,
-        }}
-      >
-        …was it March? April?
-      </div>
-      <div
-        style={{
-          opacity: l3,
-          fontSize: 38,
-          color: theme.danger,
-          fontWeight: 700,
-          letterSpacing: 1,
-        }}
-      >
-        it's in here somewhere.
-      </div>
-    </div>
-  );
-};
-
-const NumberPunch: React.FC = () => {
-  // Sequence-local: this component lives inside a Sequence from SEC(9), so
-  // its own frame 0 = the composition's SEC(9) mark. Fades start at
-  // Sequence-local 0 and 1.5s.
-  const numOp = useFadeIn(0, 8);
-  const subOp = useFadeIn(SEC(1.5), 10);
-  return (
-    <div style={{textAlign: 'center', fontFamily: fonts.ui}}>
-      <div
-        style={{
-          opacity: numOp,
-          fontSize: 320,
-          fontWeight: 800,
-          color: theme.accent,
-          letterSpacing: -10,
-          lineHeight: 1,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        3,247
-      </div>
-      <div
-        style={{
-          opacity: numOp,
-          fontSize: 52,
-          color: theme.textPrimary,
-          fontWeight: 600,
-          marginTop: 8,
-        }}
-      >
-        screenshots.
-      </div>
-      <div
-        style={{
-          opacity: subOp,
-          fontSize: 68,
-          color: theme.danger,
-          fontWeight: 800,
-          marginTop: 26,
-          letterSpacing: -1,
-        }}
-      >
-        One receipt.
-      </div>
-    </div>
   );
 };

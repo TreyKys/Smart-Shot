@@ -1,161 +1,76 @@
 import React from 'react';
-import {AbsoluteFill, Sequence, useCurrentFrame, interpolate, spring, useVideoConfig} from 'remotion';
-import {theme, fonts, SEC} from '../theme';
-import {BgGradient} from '../components/BgGradient';
-import {PhoneFrame} from '../components/PhoneFrame';
-import {Screenshot} from '../components/Screenshot';
-import {Kicker} from '../components/Kicker';
-import {Logo} from '../components/Logo';
-import {useFadeIn, useFadeInOut} from '../components/anim';
+import {AbsoluteFill, Sequence, interpolate, useCurrentFrame} from 'remotion';
+import {c, SEC, FONT} from '../theme';
+import {Stage} from '../components/Stage';
+import {Eyebrow, Headline, Body} from '../components/type';
+import {Card} from '../components/cards';
+import {EndCard} from '../components/EndCard';
 
 // ─────────────────────────────────────────────────────────────────────────
-// AD 7 · "Get Your Time Back" · 60s (angle: time / economics)
-//
-// A colder, punchier angle than the Chaos Story. Puts a real number on
-// how much time gets lost re-finding what you already saved, then closes
-// on what that time could be worth.
-//
-// 0-8s   The number: hours per month lost to screenshot chaos.
-// 8-18s  What that time actually is (coffee, a walk, sleep).
-// 18-30s The mechanism: auto-tag, dedupe, ask-in-english.
-// 30-42s The proof: before/after storage + a clean search.
-// 42-52s The recovered time — same graph, minutes not hours.
-// 52-60s CTA.
+// AD 8 · "Get your time back" · 60s · 16:9
+// The economics angle: a real number of hours lost to re-finding what you
+// already saved, what that time could be, then Sift handing it back.
 // ─────────────────────────────────────────────────────────────────────────
 
-const AnimatedCounter: React.FC<{
-  from: number;
-  duration: number;
-  to: number;
-  suffix?: string;
-  style?: React.CSSProperties;
-}> = ({from, duration, to, suffix = '', style}) => {
+const BigNumber: React.FC<{from: number; to: number; suffix: string; color: string}> = ({
+  from,
+  to,
+  suffix,
+  color,
+}) => {
   const frame = useCurrentFrame() - from;
-  const t = interpolate(frame, [0, duration], [0, to], {
+  const v = interpolate(frame, [0, SEC(1.4)], [0, to], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
+  const op = interpolate(frame, [0, 10], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   return (
-    <span style={{fontVariantNumeric: 'tabular-nums', ...style}}>
-      {Math.round(t)}
+    <span
+      style={{
+        opacity: op,
+        fontFamily: FONT,
+        fontWeight: 800,
+        fontSize: 300,
+        lineHeight: 1,
+        letterSpacing: -12,
+        color,
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {Math.round(v)}
       {suffix}
     </span>
   );
 };
 
-const BigStat: React.FC<{
-  from: number;
-  n: number;
-  suffix: string;
-  label: string;
-  color?: string;
-}> = ({from, n, suffix, label, color = theme.danger}) => {
-  const op = useFadeIn(from, 10);
-  return (
-    <div style={{opacity: op, textAlign: 'center'}}>
-      <div
-        style={{
-          fontSize: 240,
-          fontWeight: 800,
-          lineHeight: 1,
-          color,
-          letterSpacing: -8,
-        }}
-      >
-        <AnimatedCounter from={from} duration={SEC(1.5)} to={n} suffix={suffix} />
-      </div>
-      <div
-        style={{
-          fontSize: 34,
-          fontWeight: 600,
-          color: theme.textPrimary,
-          marginTop: 12,
-          letterSpacing: 0.5,
-        }}
-      >
-        {label}
-      </div>
+const AltCard: React.FC<{from: number; big: string; small: string}> = ({from, big, small}) => (
+  <Card from={from} width={360}>
+    <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center'}}>
+      <div style={{fontSize: 44, fontWeight: 800, color: c.ink}}>{big}</div>
+      <div style={{fontSize: 24, fontWeight: 500, color: c.inkSoft}}>{small}</div>
     </div>
-  );
-};
+  </Card>
+);
 
-const AlternativeUse: React.FC<{
-  from: number;
-  icon: string;
-  text: string;
-  delay?: number;
-}> = ({from, icon, text, delay = 0}) => {
-  const frame = useCurrentFrame() - from - delay;
-  const {fps} = useVideoConfig();
-  const s = spring({frame, fps, config: {damping: 14, stiffness: 100}});
-  const scale = interpolate(s, [0, 1], [0.7, 1]);
-  const op = interpolate(s, [0, 1], [0, 1]);
+const Feature: React.FC<{from: number; title: string; body: string}> = ({from, title, body}) => {
+  const frame = useCurrentFrame() - from;
+  const op = interpolate(frame, [0, 14], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+  const x = interpolate(frame, [0, 14], [20, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   return (
     <div
       style={{
         opacity: op,
-        transform: `scale(${scale})`,
+        transform: `translateX(${x}px)`,
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 16,
-        padding: '30px 40px',
-        background: theme.surface,
-        borderRadius: 28,
-        border: `1px solid ${theme.border}`,
-        minWidth: 240,
+        alignItems: 'baseline',
+        gap: 20,
+        width: 900,
       }}
     >
-      <div style={{fontSize: 72}}>{icon}</div>
-      <div style={{fontSize: 24, color: theme.textPrimary, fontWeight: 600}}>{text}</div>
-    </div>
-  );
-};
-
-const Mechanism: React.FC<{
-  from: number;
-  icon: string;
-  title: string;
-  body: string;
-}> = ({from, icon, title, body}) => {
-  const op = useFadeIn(from, 12);
-  const y = interpolate(useFadeIn(from, 12), [0, 1], [30, 0]);
-  return (
-    <div
-      style={{
-        opacity: op,
-        transform: `translateY(${y}px)`,
-        width: 700,
-        padding: 32,
-        background: theme.surface,
-        borderRadius: 28,
-        border: `1px solid ${theme.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 24,
-      }}
-    >
-      <div
-        style={{
-          width: 84,
-          height: 84,
-          borderRadius: 22,
-          background: `${theme.accent}22`,
-          border: `1px solid ${theme.accent}55`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 44,
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
+      <div style={{width: 14, height: 14, borderRadius: 999, background: c.accentBright, flexShrink: 0, transform: 'translateY(2px)'}} />
       <div>
-        <div style={{fontSize: 32, fontWeight: 700, color: theme.textPrimary, marginBottom: 6}}>
-          {title}
-        </div>
-        <div style={{fontSize: 20, color: theme.textSecondary, lineHeight: 1.4}}>{body}</div>
+        <span style={{fontFamily: FONT, fontSize: 40, fontWeight: 700, color: c.ink}}>{title}</span>
+        <span style={{fontFamily: FONT, fontSize: 40, fontWeight: 500, color: c.inkSoft}}> — {body}</span>
       </div>
     </div>
   );
@@ -163,187 +78,103 @@ const Mechanism: React.FC<{
 
 export const TimeRecovery: React.FC = () => {
   return (
-    <AbsoluteFill style={{background: theme.bg, fontFamily: fonts.ui}}>
-      <BgGradient from={theme.accent} intensity={0.18} />
-
-      {/* Act 1 (0-8s): the number. Act 1's Sequence starts at 0, so
-          Sequence-local == composition-absolute here. */}
+    <AbsoluteFill>
+      {/* Act 1 (0-8s): the number (dark) */}
       <Sequence from={0} durationInFrames={SEC(8)}>
-        <AbsoluteFill
-          style={{justifyContent: 'center', alignItems: 'center'}}
-        >
-          <BigStat from={SEC(1)} n={4} suffix=" hrs" label="lost every month searching for a screenshot you already have." />
-        </AbsoluteFill>
+        <Stage dark>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10}}>
+            <Eyebrow from={SEC(0.2)} color={c.onNavySoft}>every single month</Eyebrow>
+            <BigNumber from={SEC(0.5)} to={4} suffix=" hrs" color={c.accentBright} />
+            <Body from={SEC(2.2)} color={c.onNavySoft} size={38} maxWidth={1000}>
+              lost looking for a screenshot you already had.
+            </Body>
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Act 2 (8-18s): what those hours could be. All child `from` values
-          are Sequence-local from here on. */}
+      {/* Act 2 (8-18s): what that time could be */}
       <Sequence from={SEC(8)} durationInFrames={SEC(10)}>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 40,
-          }}
-        >
-          <Kicker headline={"That's a lot of coffee."} from={SEC(0.3)} />
-          <div style={{display: 'flex', gap: 24}}>
-            <AlternativeUse from={SEC(2)} icon="☕" text="16 cups of coffee" />
-            <AlternativeUse from={SEC(2)} icon="📖" text="A whole novel" delay={SEC(0.5)} />
-            <AlternativeUse from={SEC(2)} icon="🛌" text="Half a night's sleep" delay={SEC(1)} />
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 44}}>
+            <Headline from={SEC(0.2)} size={92}>that's not nothing.</Headline>
+            <div style={{display: 'flex', gap: 28}}>
+              <AltCard from={SEC(0.8)} big="16" small="cups of coffee" />
+              <AltCard from={SEC(1.4)} big="a novel" small="start to finish" />
+              <AltCard from={SEC(2)} big="a lie-in" small="you actually earned" />
+            </div>
           </div>
-        </AbsoluteFill>
+        </Stage>
       </Sequence>
 
-      {/* Act 3 (18-30s): the mechanism (three cards) */}
+      {/* Act 3 (18-30s): how Sift takes it back */}
       <Sequence from={SEC(18)} durationInFrames={SEC(12)}>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'center',
-            alignItems: 'center',
-            flexDirection: 'column',
-            gap: 20,
-          }}
-        >
-          <Kicker
-            headline={"Sift takes it back."}
-            from={SEC(0.3)}
-          />
-          <div style={{marginTop: 30, display: 'flex', flexDirection: 'column', gap: 14}}>
-            <Mechanism
-              from={SEC(2)}
-              icon="🏷️"
-              title="Auto-tag on capture"
-              body="On-device AI reads every screenshot the moment it lands."
-            />
-            <Mechanism
-              from={SEC(4.5)}
-              icon="🧹"
-              title="Duplicates cleared, junk swiped"
-              body="Reclaim gigabytes without opening the gallery."
-            />
-            <Mechanism
-              from={SEC(7)}
-              icon="💬"
-              title="Ask like a human"
-              body='"Find that Uber receipt from October." Done in a second.'
-            />
+        <Stage align="flex-start" justify="center" pad={140}>
+          <div style={{display: 'flex', flexDirection: 'column', gap: 34, marginTop: 40}}>
+            <Headline from={SEC(0.2)} align="left" size={88}>Sift takes it back.</Headline>
+            <div style={{display: 'flex', flexDirection: 'column', gap: 24, marginTop: 10}}>
+              <Feature from={SEC(1)} title="Auto-tags on capture" body="on-device, the moment it lands" />
+              <Feature from={SEC(2)} title="Clears duplicates & junk" body="gigabytes back, no digging" />
+              <Feature from={SEC(3)} title="Answers in plain English" body="just ask, get the exact one" />
+            </div>
           </div>
-        </AbsoluteFill>
+        </Stage>
       </Sequence>
 
-      {/* Act 4 (30-42s): before/after search */}
-      <Sequence from={SEC(30)} durationInFrames={SEC(12)}>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 48,
-          }}
-        >
-          <Kicker headline={"Before vs. after."} from={SEC(0.3)} />
-          <div style={{display: 'flex', gap: 48, alignItems: 'flex-end'}}>
-            <BeforeAfterColumn
-              from={SEC(2)}
-              label="Before"
-              time="4 min 12 s"
-              color={theme.danger}
-            />
-            <div style={{fontSize: 60, color: theme.textSecondary, alignSelf: 'center'}}>→</div>
-            <BeforeAfterColumn
-              from={SEC(4)}
-              label="With Sift"
-              time="3 sec"
-              color={theme.success}
-            />
+      {/* Act 4 (30-40s): before / after */}
+      <Sequence from={SEC(30)} durationInFrames={SEC(10)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 40}}>
+            <Eyebrow from={SEC(0.2)}>finding one screenshot</Eyebrow>
+            <div style={{display: 'flex', gap: 50, alignItems: 'center'}}>
+              <BeforeAfter from={SEC(0.6)} label="before" time="4 min" color={c.danger} />
+              <div style={{fontFamily: FONT, fontSize: 70, color: c.inkFaint, fontWeight: 300}}>→</div>
+              <BeforeAfter from={SEC(1.4)} label="with sift" time="3 sec" color={c.success} />
+            </div>
           </div>
-        </AbsoluteFill>
+        </Stage>
       </Sequence>
 
-      {/* Act 5 (42-52s): the same graph, but the recovered time */}
-      <Sequence from={SEC(42)} durationInFrames={SEC(10)}>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <BigStat
-            from={SEC(1)}
-            n={4}
-            suffix=" hrs"
-            label="back. Every month. For the rest of your phone's life."
-            color={theme.success}
-          />
-        </AbsoluteFill>
+      {/* Act 5 (40-50s): the time back (dark) */}
+      <Sequence from={SEC(40)} durationInFrames={SEC(10)}>
+        <Stage dark>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10}}>
+            <BigNumber from={SEC(0.4)} to={4} suffix=" hrs" color={c.success} />
+            <Body from={SEC(2)} color={c.onNavySoft} size={38} maxWidth={1000}>
+              back. every month. for as long as you have a phone.
+            </Body>
+          </div>
+        </Stage>
       </Sequence>
 
-      {/* Act 6 (52-60s): CTA */}
-      <Sequence from={SEC(52)} durationInFrames={SEC(8)}>
-        <AbsoluteFill
-          style={{
-            background: theme.bg,
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 30,
-          }}
-        >
-          <Kicker
-            headline={"Get your time back."}
-            from={SEC(0.5)}
-          />
-          <div style={{marginTop: 40}}>
-            <Logo from={SEC(2)} tagline="Sift. On Google Play." />
-          </div>
-        </AbsoluteFill>
+      {/* Act 6 (50-60s): CTA */}
+      <Sequence from={SEC(50)} durationInFrames={SEC(4)}>
+        <Stage>
+          <Headline from={SEC(0.2)} size={124}>get your time back.</Headline>
+        </Stage>
+      </Sequence>
+      <Sequence from={SEC(54)} durationInFrames={SEC(6)}>
+        <Stage>
+          <EndCard from={SEC(0.4)} tagline="Stop searching. Start asking." />
+        </Stage>
       </Sequence>
     </AbsoluteFill>
   );
 };
 
-const BeforeAfterColumn: React.FC<{
-  from: number;
-  label: string;
-  time: string;
-  color: string;
-}> = ({from, label, time, color}) => {
-  const op = useFadeIn(from, 12);
-  return (
-    <div
-      style={{
-        opacity: op,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 20,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 22,
-          fontWeight: 700,
-          color: theme.textSecondary,
-          letterSpacing: 2,
-          textTransform: 'uppercase',
-        }}
-      >
+const BeforeAfter: React.FC<{from: number; label: string; time: string; color: string}> = ({
+  from,
+  label,
+  time,
+  color,
+}) => (
+  <Card from={from} width={420}>
+    <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14}}>
+      <div style={{fontSize: 22, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: c.inkFaint}}>
         {label}
       </div>
-      <div
-        style={{
-          padding: '36px 60px',
-          background: theme.surface,
-          borderRadius: 28,
-          border: `2px solid ${color}55`,
-          color,
-          fontSize: 72,
-          fontWeight: 800,
-          fontVariantNumeric: 'tabular-nums',
-          letterSpacing: -2,
-        }}
-      >
+      <div style={{fontFamily: FONT, fontSize: 96, fontWeight: 800, color, letterSpacing: -3, fontVariantNumeric: 'tabular-nums'}}>
         {time}
       </div>
     </div>
-  );
-};
+  </Card>
+);

@@ -5,13 +5,15 @@
   "description": "Remotion source for Sift's video ads — 5 x 20s + 2 x 60s. See README.md.",
   "scripts": {
     "dev": "remotion studio",
-    "render:all": "remotion render SearchFrustration out/01-search-frustration.mp4 && remotion render DuplicateTrap out/02-duplicate-trap.mp4 && remotion render JunkPile out/03-junk-pile.mp4 && remotion render MemoryLane out/04-memory-lane.mp4 && remotion render AskInPlainEnglish out/05-ask-plain-english.mp4 && remotion render ChaosStory out/06-chaos-story.mp4 && remotion render TimeRecovery out/07-time-recovery.mp4",
+    "render:all": "npm run render:shorts && npm run render:longs",
     "render:shorts": "remotion render SearchFrustration out/01-search-frustration.mp4 && remotion render DuplicateTrap out/02-duplicate-trap.mp4 && remotion render JunkPile out/03-junk-pile.mp4 && remotion render MemoryLane out/04-memory-lane.mp4 && remotion render AskInPlainEnglish out/05-ask-plain-english.mp4",
-    "render:longs": "remotion render ChaosStory out/06-chaos-story.mp4 && remotion render TimeRecovery out/07-time-recovery.mp4"
+    "render:longs": "remotion render ChaosStory out/06-chaos-story.mp4 && remotion render TheReliableOne out/07-the-reliable-one.mp4 && remotion render TimeRecovery out/08-time-recovery.mp4"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
     "@remotion/bundler": "4.0.320",
     "@remotion/cli": "4.0.320",
+    "@remotion/google-fonts": "^4.0.320",
     "@remotion/renderer": "4.0.320",
     "react": "19.0.0",
     "react-dom": "19.0.0",
