@@ -7,10 +7,10 @@ import {Card, CitedAnswer} from '../components/cards';
 import {EndCard} from '../components/EndCard';
 
 // ─────────────────────────────────────────────────────────────────────────
-// AD 3 · "Stop reading it. Ask it." · 20s · 9:16
-// The reframe: every dense doc you've ever needed to reference — the
-// lease, the tax form, the manual, the syllabus — you don't have to reread
-// them. You can just ask. Angle NOT covered by the existing 3 ads.
+// AD 3 · "Stop reading it. Ask it." · 60s · 9:16
+// The reframe: every dense doc you've saved — you don't have to reread
+// them. Ask instead. Three real everyday examples (lease, tax form,
+// manual), then a stack of every other doc you've kept, then the payoff.
 // ─────────────────────────────────────────────────────────────────────────
 
 const DOCS = [
@@ -22,27 +22,9 @@ const DOCS = [
   'the whitepaper',
   'the recipe book',
   'the medical form',
+  'the terms of service',
+  'the insurance policy',
 ];
-
-// A grid of "documents you've had to reread" — labeled cards, no icons,
-// no emoji. Springs in staggered so it feels like a montage rather than
-// a static slide.
-const DocsGrid: React.FC<{from: number}> = ({from}) => {
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: 20,
-        width: 780,
-      }}
-    >
-      {DOCS.map((label, i) => (
-        <DocTile key={label} from={from + i * 5} label={label} />
-      ))}
-    </div>
-  );
-};
 
 const DocTile: React.FC<{from: number; label: string}> = ({from, label}) => {
   const frame = useCurrentFrame() - from;
@@ -66,7 +48,6 @@ const DocTile: React.FC<{from: number; label: string}> = ({from, label}) => {
         fontFamily: FONT,
       }}
     >
-      {/* mini "page" mark — a folded corner, no emoji */}
       <div
         style={{
           width: 32,
@@ -90,26 +71,50 @@ const DocTile: React.FC<{from: number; label: string}> = ({from, label}) => {
           }}
         />
       </div>
-      <span style={{fontSize: 30, fontWeight: 600, color: c.ink}}>{label}</span>
+      <span style={{fontSize: 28, fontWeight: 600, color: c.ink}}>{label}</span>
     </div>
   );
 };
 
+const DocsGrid: React.FC<{from: number}> = ({from}) => (
+  <div
+    style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: 18,
+      width: 820,
+    }}
+  >
+    {DOCS.map((label, i) => (
+      <DocTile key={label} from={from + i * 4} label={label} />
+    ))}
+  </div>
+);
+
 export const StopReading: React.FC = () => {
   return (
     <AbsoluteFill>
-      {/* Beat 1 (0-3.5s): the setup */}
-      <Sequence from={0} durationInFrames={SEC(3.7)}>
+      {/* Act 1 (0-5s): the setup */}
+      <Sequence from={0} durationInFrames={SEC(5)}>
         <Stage>
           <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26}}>
             <Eyebrow from={SEC(0.2)}>you've reread it three times</Eyebrow>
-            <Headline from={SEC(0.4)} size={110}>you don't have to.</Headline>
+            <Headline from={SEC(0.4)} size={130}>and still.</Headline>
           </div>
         </Stage>
       </Sequence>
 
-      {/* Beat 2 (3.5-9s): the grid of things you've reread */}
-      <Sequence from={SEC(3.5)} durationInFrames={SEC(5.5)}>
+      {/* Act 2 (5-10s): the pivot */}
+      <Sequence from={SEC(5)} durationInFrames={SEC(5)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22}}>
+            <Headline from={SEC(0.2)} size={140}>you don't have to.</Headline>
+          </div>
+        </Stage>
+      </Sequence>
+
+      {/* Act 3 (10-18s): what "reread" looks like in real life */}
+      <Sequence from={SEC(10)} durationInFrames={SEC(8)}>
         <Stage>
           <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 34}}>
             <Eyebrow from={SEC(0.2)}>every dense doc you've kept</Eyebrow>
@@ -118,28 +123,102 @@ export const StopReading: React.FC = () => {
         </Stage>
       </Sequence>
 
-      {/* Beat 3 (9-15.5s): the reframe — a real question, a real answer */}
-      <Sequence from={SEC(9)} durationInFrames={SEC(6.5)}>
+      {/* Act 4 (18-22s): the reframe */}
+      <Sequence from={SEC(18)} durationInFrames={SEC(4)}>
+        <Stage dark>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22}}>
+            <Eyebrow from={SEC(0.2)} color={c.onNavySoft}>instead of rereading</Eyebrow>
+            <Headline from={SEC(0.5)} size={140} color={c.onNavy}>
+              just ask.
+            </Headline>
+          </div>
+        </Stage>
+      </Sequence>
+
+      {/* Act 5 (22-30s): example 1 — the lease */}
+      <Sequence from={SEC(22)} durationInFrames={SEC(8)}>
         <Stage>
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30}}>
-            <Headline from={SEC(0.2)} size={110}>ask it instead.</Headline>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22}}>
+            <Eyebrow from={SEC(0.2)}>your lease</Eyebrow>
             <CitedAnswer
-              from={SEC(0.8)}
-              width={940}
+              from={SEC(0.6)}
+              width={960}
               query="how much notice do i owe if i move out early?"
               answer={
                 <span>
                   <span style={{color: c.accent}}>Two months' rent</span> as break-fee, plus 30 days' written notice.
                 </span>
               }
-              cite="Page 7, §12"
+              cite="Cited — Page 7, §12"
             />
           </div>
         </Stage>
       </Sequence>
 
-      {/* Beat 4 (15.5-20s): end */}
-      <Sequence from={SEC(15.5)} durationInFrames={SEC(4.5)}>
+      {/* Act 6 (30-38s): example 2 — the tax form */}
+      <Sequence from={SEC(30)} durationInFrames={SEC(8)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22}}>
+            <Eyebrow from={SEC(0.2)}>the tax form</Eyebrow>
+            <CitedAnswer
+              from={SEC(0.6)}
+              width={960}
+              query="which box is the freelance income?"
+              answer={
+                <span>
+                  Line <span style={{color: c.accent}}>17b</span> — under "Self-employment", not "Other".
+                </span>
+              }
+              cite="Cited — Instructions p. 4"
+            />
+          </div>
+        </Stage>
+      </Sequence>
+
+      {/* Act 7 (38-46s): example 3 — the appliance manual */}
+      <Sequence from={SEC(38)} durationInFrames={SEC(8)}>
+        <Stage>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22}}>
+            <Eyebrow from={SEC(0.2)}>the manual</Eyebrow>
+            <CitedAnswer
+              from={SEC(0.6)}
+              width={960}
+              query="what does the flashing red light mean?"
+              answer={
+                <span>
+                  Water filter needs replacing —{' '}
+                  <span style={{color: c.accent}}>part #W10295370A</span>.
+                </span>
+              }
+              cite="Cited — Page 22, Troubleshooting"
+            />
+          </div>
+        </Stage>
+      </Sequence>
+
+      {/* Act 8 (46-52s): the payoff */}
+      <Sequence from={SEC(46)} durationInFrames={SEC(6)}>
+        <Stage dark>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22}}>
+            <Eyebrow from={SEC(0.2)} color={c.onNavySoft}>any doc you've ever kept</Eyebrow>
+            <Headline from={SEC(0.5)} size={112} color={c.onNavy}>
+              in your pocket,
+              <br />
+              forever.
+            </Headline>
+          </div>
+        </Stage>
+      </Sequence>
+
+      {/* Act 9 (52-56s): the reframe closer */}
+      <Sequence from={SEC(52)} durationInFrames={SEC(4)}>
+        <Stage>
+          <Headline from={SEC(0.2)} size={140}>stop rereading.</Headline>
+        </Stage>
+      </Sequence>
+
+      {/* Act 10 (56-60s): end lockup */}
+      <Sequence from={SEC(56)} durationInFrames={SEC(4)}>
         <Stage>
           <EndCard from={SEC(0.3)} tagline="Stop rereading. Just ask." />
         </Stage>

@@ -4,9 +4,9 @@ import {MeetingPanic} from './ads/MeetingPanic';
 import {CitedNotFabricated} from './ads/CitedNotFabricated';
 import {StopReading} from './ads/StopReading';
 
-// Vertical 9:16 — matches Magnum Opus's existing HTML ads
-// (marketing/ad_v3_*/index.html in the Magnum-Opus repo, all 1080x1920).
+// Vertical 9:16, 60s each (1800 frames at 30 fps).
 const V = {width: 1080, height: 1920};
+const LONG = SEC(60);
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -14,7 +14,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="MeetingPanic"
         component={MeetingPanic}
-        durationInFrames={SEC(20)}
+        durationInFrames={LONG}
         fps={FPS}
         width={V.width}
         height={V.height}
@@ -22,7 +22,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="CitedNotFabricated"
         component={CitedNotFabricated}
-        durationInFrames={SEC(20)}
+        durationInFrames={LONG}
         fps={FPS}
         width={V.width}
         height={V.height}
@@ -30,7 +30,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="StopReading"
         component={StopReading}
-        durationInFrames={SEC(20)}
+        durationInFrames={LONG}
         fps={FPS}
         width={V.width}
         height={V.height}
