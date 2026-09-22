@@ -1,0 +1,24 @@
+{
+  "name": "magnum-opus-marketing-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion source for Magnum Opus video ads. Editorial style shared with the Sift ads (marketing/remotion/) — same Inter type, same paper+navy palette, same blue accent — with Magnum Opus's own copy, cards, and end lockup. See README.md.",
+  "scripts": {
+    "dev": "remotion studio",
+    "render:all": "remotion render MeetingPanic out/01-meeting-panic.mp4 && remotion render CitedNotFabricated out/02-cited-not-fabricated.mp4 && remotion render StopReading out/03-stop-reading.mp4"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.0.0",
+    "@remotion/bundler": "4.0.320",
+    "@remotion/cli": "4.0.320",
+    "@remotion/renderer": "4.0.320",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.320"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "typescript": "5.4.5"
+  }
+}
