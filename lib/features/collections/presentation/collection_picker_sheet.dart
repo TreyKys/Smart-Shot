@@ -87,7 +87,7 @@ class _CollectionPickerSheetState
     return Container(
       decoration: BoxDecoration(
         color: SiftColors.surfaceElevated,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
         left: 20,
@@ -144,7 +144,7 @@ class _CollectionPickerSheetState
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: Color(c.colorValue).withOpacity(0.15),
+                          color: Color(c.colorValue).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Icons.folder_outlined,

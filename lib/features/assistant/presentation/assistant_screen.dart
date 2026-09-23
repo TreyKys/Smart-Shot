@@ -711,7 +711,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                   borderRadius: BorderRadius.circular(999),
                   boxShadow: [
                     BoxShadow(
-                      color: SiftPillowyColors.onSurface.withOpacity(0.08),
+                      color: SiftPillowyColors.onSurface.withValues(alpha: 0.08),
                       blurRadius: 24,
                       offset: const Offset(0, 8),
                     ),
@@ -729,7 +729,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                           hintText: "Ask Sift: 'Find receipts from March'…",
                           hintStyle: SiftPillowyText.bodyMd.copyWith(
                               color: SiftPillowyColors.onSurfaceVariant
-                                  .withOpacity(0.6)),
+                                  .withValues(alpha: 0.6)),
                           border: InputBorder.none,
                           isDense: true,
                         ),
@@ -773,7 +773,7 @@ class _SendButton extends StatelessWidget {
                 : [
                     BoxShadow(
                       color: SiftPillowyColors.primaryContainer
-                          .withOpacity(0.45),
+                          .withValues(alpha: 0.45),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
@@ -823,7 +823,7 @@ class _IntroCard extends ConsumerWidget {
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: SiftPillowyColors.primaryContainer.withOpacity(0.12),
+                color: SiftPillowyColors.primaryContainer.withValues(alpha: 0.12),
                 blurRadius: 32,
                 offset: const Offset(0, 12),
               ),
@@ -948,7 +948,7 @@ class _SuggestionChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-                color: SiftPillowyColors.outlineVariant.withOpacity(0.6)),
+                color: SiftPillowyColors.outlineVariant.withValues(alpha: 0.6)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1006,7 +1006,7 @@ class _MessageBubble extends ConsumerWidget {
               color: (isUser
                       ? SiftPillowyColors.primaryContainer
                       : SiftPillowyColors.onSurface)
-                  .withOpacity(isUser ? 0.25 : 0.06),
+                  .withValues(alpha: isUser ? 0.25 : 0.06),
               blurRadius: isUser ? 16 : 12,
               offset: const Offset(0, 4),
             ),
@@ -1071,7 +1071,7 @@ class _MessageBubble extends ConsumerWidget {
                                   width: 22,
                                   height: 22,
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.35),
+                                    color: Colors.black.withValues(alpha: 0.35),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -1168,7 +1168,7 @@ class _PillButton extends StatelessWidget {
               ? null
               : BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: color.withOpacity(0.4)),
+                  border: Border.all(color: color.withValues(alpha: 0.4)),
                 ),
           child: Text(
             label,

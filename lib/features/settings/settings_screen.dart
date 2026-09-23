@@ -64,12 +64,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isPro
-                  ? SiftColors.proGold.withOpacity(0.12)
+                  ? SiftColors.proGold.withValues(alpha: 0.12)
                   : SiftColors.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isPro
-                    ? SiftColors.proGold.withOpacity(0.4)
+                    ? SiftColors.proGold.withValues(alpha: 0.4)
                     : SiftColors.border,
                 width: 0.8,
               ),
@@ -371,9 +371,9 @@ class _EnergyTile extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: SiftColors.accent.withOpacity(0.12),
+              color: SiftColors.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: SiftColors.accent.withOpacity(0.4)),
+              border: Border.all(color: SiftColors.accent.withValues(alpha: 0.4)),
             ),
             child: Center(
               child: Text(
@@ -438,7 +438,7 @@ class _ThemeModeSelector extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: selected
-                  ? SiftColors.accent.withOpacity(0.15)
+                  ? SiftColors.accent.withValues(alpha: 0.15)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(

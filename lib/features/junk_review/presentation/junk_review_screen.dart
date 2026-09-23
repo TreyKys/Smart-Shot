@@ -217,9 +217,9 @@ class _ReviewStack extends StatelessWidget {
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 32),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: color.withOpacity(0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -246,7 +246,7 @@ class _JunkCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: SiftPillowyColors.primaryContainer.withOpacity(0.12),
+            color: SiftPillowyColors.primaryContainer.withValues(alpha: 0.12),
             blurRadius: 32,
             offset: const Offset(0, 12),
           ),
@@ -313,12 +313,12 @@ class _ActionButton extends StatelessWidget {
                 color: color,
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(0.35),
+                    color: color.withValues(alpha: 0.35),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
                   BoxShadow(
-                    color: Colors.white.withOpacity(0.4),
+                    color: Colors.white.withValues(alpha: 0.4),
                     blurRadius: 0,
                     offset: const Offset(0, 1),
                     spreadRadius: -1,

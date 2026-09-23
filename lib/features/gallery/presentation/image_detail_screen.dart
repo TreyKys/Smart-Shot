@@ -137,7 +137,8 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
           ),
           IconButton(
             icon: Icon(Icons.ios_share, color: SiftColors.textSecondary),
-            onPressed: () => Share.shareXFiles([XFile(_shot.filePath)]),
+            onPressed: () => SharePlus.instance
+                .share(ShareParams(files: [XFile(_shot.filePath)])),
           ),
           if (isPro)
             IconButton(
@@ -283,10 +284,10 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
+                        color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: color.withOpacity(0.4), width: 0.8),
+                            color: color.withValues(alpha: 0.4), width: 0.8),
                       ),
                       child: Text(
                         _cleanTag(tag),
@@ -542,7 +543,9 @@ class _ImageDetailScreenState extends ConsumerState<ImageDetailScreen> {
     }
     sb.writeln('\n## Content');
     sb.writeln(_shot.cleanText ?? _shot.ocrText ?? '');
-    Share.share(sb.toString(), subject: 'Sift Export');
+    SharePlus.instance.share(
+      ShareParams(text: sb.toString(), subject: 'Sift Export'),
+    );
   }
 }
 
@@ -601,7 +604,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
     return Container(
       decoration: BoxDecoration(
         color: SiftColors.surfaceElevated,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
         left: 20,
@@ -642,10 +645,10 @@ class _TagEditSheetState extends State<_TagEditSheet> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
+                      color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                       border:
-                          Border.all(color: color.withOpacity(0.4), width: 0.8),
+                          Border.all(color: color.withValues(alpha: 0.4), width: 0.8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -657,7 +660,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
                                 fontWeight: FontWeight.w600)),
                         const SizedBox(width: 4),
                         Icon(Icons.close,
-                            size: 12, color: color.withOpacity(0.7)),
+                            size: 12, color: color.withValues(alpha: 0.7)),
                       ],
                     ),
                   ),
@@ -744,15 +747,15 @@ class _AppRecommendationCard extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              const Color(0xFFAE6EFD).withOpacity(0.12),
-              const Color(0xFF6E8EFD).withOpacity(0.08),
+              const Color(0xFFAE6EFD).withValues(alpha: 0.12),
+              const Color(0xFF6E8EFD).withValues(alpha: 0.08),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-              color: const Color(0xFFAE6EFD).withOpacity(0.35), width: 0.8),
+              color: const Color(0xFFAE6EFD).withValues(alpha: 0.35), width: 0.8),
         ),
         child: Row(
           children: [
@@ -760,7 +763,7 @@ class _AppRecommendationCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFFAE6EFD).withOpacity(0.15),
+                color: const Color(0xFFAE6EFD).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: const Color(0xFFAE6EFD), size: 20),
@@ -792,10 +795,10 @@ class _AppRecommendationCard extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFAE6EFD).withOpacity(0.15),
+                color: const Color(0xFFAE6EFD).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: const Color(0xFFAE6EFD).withOpacity(0.4),
+                    color: const Color(0xFFAE6EFD).withValues(alpha: 0.4),
                     width: 0.5),
               ),
               child: const Text(
@@ -925,7 +928,7 @@ class _SmallIconButton extends StatelessWidget {
         width: 30,
         height: 30,
         decoration: BoxDecoration(
-          color: SiftColors.accent.withOpacity(0.1),
+          color: SiftColors.accent.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, size: 14, color: SiftColors.accent),

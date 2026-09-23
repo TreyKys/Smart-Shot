@@ -216,7 +216,7 @@ class _SiftAppState extends ConsumerState<SiftApp> with WidgetsBindingObserver {
         theme: buildSiftTheme(),
         home: Scaffold(
           backgroundColor: SiftColors.background,
-          body: Center(
+          body: const Center(
             child: CircularProgressIndicator(color: SiftColors.accent),
           ),
         ),

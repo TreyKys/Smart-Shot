@@ -142,7 +142,7 @@ class _PillowyBottomNav extends StatelessWidget {
         color: SiftPillowyColors.surfaceContainerLowest,
         boxShadow: [
           BoxShadow(
-            color: SiftPillowyColors.onSurface.withOpacity(0.08),
+            color: SiftPillowyColors.onSurface.withValues(alpha: 0.08),
             blurRadius: 24,
             offset: const Offset(0, -8),
           ),
@@ -246,7 +246,7 @@ class _CenterNavItem extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: SiftPillowyColors.primaryContainer.withOpacity(0.5),
+                    color: SiftPillowyColors.primaryContainer.withValues(alpha: 0.5),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),

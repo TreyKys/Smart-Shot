@@ -91,10 +91,10 @@ class _QuotaBarContent extends ConsumerWidget {
                       padding:
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: SiftColors.accent.withOpacity(0.15),
+                        color: SiftColors.accent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                         border:
-                            Border.all(color: SiftColors.accent.withOpacity(0.5)),
+                            Border.all(color: SiftColors.accent.withValues(alpha: 0.5)),
                       ),
                       child: Text(
                         label,

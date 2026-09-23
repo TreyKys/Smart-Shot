@@ -78,14 +78,18 @@ IconData iconForTag(String tag) {
   final lower = tag.toLowerCase().replaceAll('#', '');
   if (lower.contains('finance') ||
       lower.contains('receipt') ||
-      lower.contains('money')) return CupertinoIcons.money_dollar;
+      lower.contains('money')) {
+    return CupertinoIcons.money_dollar;
+  }
   if (lower.contains('travel') || lower.contains('flight')) {
     return CupertinoIcons.airplane;
   }
   if (lower.contains('web3') ||
       lower.contains('crypto') ||
       lower.contains('btc') ||
-      lower.contains('eth')) return CupertinoIcons.bitcoin;
+      lower.contains('eth')) {
+    return CupertinoIcons.bitcoin;
+  }
   if (lower.contains('code') ||
       lower.contains('dev') ||
       lower.contains('git')) {
@@ -93,19 +97,27 @@ IconData iconForTag(String tag) {
   }
   if (lower.contains('social') ||
       lower.contains('instagram') ||
-      lower.contains('twitter')) return CupertinoIcons.person_2;
+      lower.contains('twitter')) {
+    return CupertinoIcons.person_2;
+  }
   if (lower.contains('meme') || lower.contains('funny')) {
     return CupertinoIcons.smiley;
   }
   if (lower.contains('chem') ||
       lower.contains('science') ||
-      lower.contains('lab')) return CupertinoIcons.lab_flask;
+      lower.contains('lab')) {
+    return CupertinoIcons.lab_flask;
+  }
   if (lower.contains('date') ||
       lower.contains('calendar') ||
-      lower.contains('schedule')) return CupertinoIcons.calendar;
+      lower.contains('schedule')) {
+    return CupertinoIcons.calendar;
+  }
   if (lower.contains('chart') ||
       lower.contains('trading') ||
-      lower.contains('stock')) return CupertinoIcons.graph_circle;
+      lower.contains('stock')) {
+    return CupertinoIcons.graph_circle;
+  }
   if (lower.contains('news') || lower.contains('article')) {
     return CupertinoIcons.news;
   }
@@ -120,10 +132,14 @@ IconData iconForTag(String tag) {
   }
   if (lower.contains('book') ||
       lower.contains('read') ||
-      lower.contains('edu')) return CupertinoIcons.book;
+      lower.contains('edu')) {
+    return CupertinoIcons.book;
+  }
   if (lower.contains('sport') ||
       lower.contains('football') ||
-      lower.contains('soccer')) return CupertinoIcons.sportscourt;
+      lower.contains('soccer')) {
+    return CupertinoIcons.sportscourt;
+  }
   if (lower.contains('food') || lower.contains('restaurant')) {
     return CupertinoIcons.cart;
   }
@@ -264,10 +280,10 @@ class SiftPillowyText {
 
 /// Smoother, more "fluid" cross-screen transitions than the Android default
 /// (which snaps between screens). Used by both the light and dark themes.
-final _fluidPageTransitions = PageTransitionsTheme(
+const _fluidPageTransitions = PageTransitionsTheme(
   builders: {
-    TargetPlatform.android: const FadeForwardsPageTransitionsBuilder(),
-    TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+    TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
   },
 );
 

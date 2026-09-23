@@ -64,7 +64,13 @@ class ProService extends _$ProService {
 
   Future<void> purchasePackage(Package package) async {
     try {
-      final purchaseResult = await Purchases.purchasePackage(package);
+      // purchasePackage() is deprecated in purchases_flutter — the replacement
+      // is purchase(PurchaseParams) which accepts a package, an SKU, or
+      // a StoreProduct interchangeably. Wrapping the package in
+      // PurchaseParams(package:) keeps behavior identical while surviving the
+      // eventual removal of the deprecated shorthand.
+      final purchaseResult =
+          await Purchases.purchase(PurchaseParams.package(package));
       state = purchaseResult.customerInfo.entitlements.all["pro_entitlement"]?.isActive ?? false;
       await _prefs.setBool('is_pro', state);
     } catch (e) {

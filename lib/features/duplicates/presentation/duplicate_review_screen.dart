@@ -329,7 +329,7 @@ class _ClusterTile extends StatelessWidget {
           children: [
             ScreenshotThumbnail(filePath: shot.filePath),
             if (markedForDeletion)
-              Container(color: Colors.black.withOpacity(0.35)),
+              Container(color: Colors.black.withValues(alpha: 0.35)),
             Positioned(
               top: 8,
               left: 8,
@@ -359,7 +359,7 @@ class _ClusterTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
+                    color: Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
@@ -418,7 +418,7 @@ class _PillButton extends StatelessWidget {
               ? null
               : BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: color.withOpacity(0.4)),
+                  border: Border.all(color: color.withValues(alpha: 0.4)),
                 ),
           child: Text(
             label,

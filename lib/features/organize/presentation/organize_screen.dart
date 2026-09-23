@@ -447,7 +447,7 @@ class _ClusterCard extends StatelessWidget {
           color: SiftPillowyColors.surfaceContainerLowest,
           boxShadow: [
             BoxShadow(
-              color: SiftPillowyColors.primaryContainer.withOpacity(0.10),
+              color: SiftPillowyColors.primaryContainer.withValues(alpha: 0.10),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -464,8 +464,8 @@ class _ClusterCard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   stops: const [0.4, 1.0],
                   colors: [
-                    Colors.black.withOpacity(0.0),
-                    Colors.black.withOpacity(0.65),
+                    Colors.black.withValues(alpha: 0.0),
+                    Colors.black.withValues(alpha: 0.65),
                   ],
                 ),
               ),
@@ -477,7 +477,7 @@ class _ClusterCard extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(iconForTag(cluster.tag), size: 15, color: accent),
@@ -502,7 +502,7 @@ class _ClusterCard extends StatelessWidget {
                   Text(
                     '${cluster.count} screenshot${cluster.count == 1 ? '' : 's'}',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.85), fontSize: 11),
+                        color: Colors.white.withValues(alpha: 0.85), fontSize: 11),
                   ),
                 ],
               ),
@@ -612,7 +612,7 @@ class _GridFilterChipBar extends ConsumerWidget {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? color.withOpacity(0.2)
+                        ? color.withValues(alpha: 0.2)
                         : SiftColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
@@ -670,7 +670,7 @@ class _ScreenshotCard extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: SiftColors.danger.withOpacity(0.15),
+          color: SiftColors.danger.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(Icons.delete_outline,
@@ -750,7 +750,7 @@ class _ScreenshotCard extends ConsumerWidget {
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                        color: SiftColors.background.withOpacity(0.8),
+                        color: SiftColors.background.withValues(alpha: 0.8),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.push_pin,
@@ -762,8 +762,8 @@ class _ScreenshotCard extends ConsumerWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? SiftColors.accent.withOpacity(0.2)
-                            : Colors.black.withOpacity(0.3),
+                            ? SiftColors.accent.withValues(alpha: 0.2)
+                            : Colors.black.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Align(
@@ -810,7 +810,7 @@ class _ScreenshotCard extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.85),
+                            color: color.withValues(alpha: 0.85),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -920,7 +920,7 @@ class _StatusDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color.withOpacity(0.6), blurRadius: 4)],
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 4)],
       ),
     );
   }
@@ -997,7 +997,7 @@ class _ApiKeyWarningBannerState extends ConsumerState<_ApiKeyWarningBanner> {
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        color: SiftColors.warning.withOpacity(0.12),
+        color: SiftColors.warning.withValues(alpha: 0.12),
         child: Row(
           children: [
             const Icon(Icons.warning_amber_rounded,
@@ -1070,7 +1070,7 @@ class _BulkTagSheet extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         color: SiftColors.surfaceElevated,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
         left: 20,
@@ -1125,10 +1125,10 @@ class _BulkTagSheet extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
+                        color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: color.withOpacity(0.4), width: 0.8),
+                            color: color.withValues(alpha: 0.4), width: 0.8),
                       ),
                       child: Text(
                         tag.startsWith('#') ? tag.substring(1) : tag,

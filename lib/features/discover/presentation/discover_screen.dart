@@ -295,7 +295,7 @@ class _MemoryCard extends StatelessWidget {
           color: SiftPillowyColors.surfaceContainerLowest,
           boxShadow: [
             BoxShadow(
-              color: SiftPillowyColors.primaryContainer.withOpacity(0.12),
+              color: SiftPillowyColors.primaryContainer.withValues(alpha: 0.12),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
@@ -316,8 +316,8 @@ class _MemoryCard extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.0),
-                    Colors.black.withOpacity(0.55),
+                    Colors.black.withValues(alpha: 0.0),
+                    Colors.black.withValues(alpha: 0.55),
                   ],
                 ),
               ),
@@ -335,7 +335,7 @@ class _MemoryCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
@@ -395,7 +395,7 @@ class _ActionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: accentSoft.withOpacity(0.18),
+            color: accentSoft.withValues(alpha: 0.18),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -408,7 +408,7 @@ class _ActionCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: accentSoft.withOpacity(0.18),
+              color: accentSoft.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: accent, size: 22),
@@ -476,7 +476,7 @@ class _ProcessingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(0.18),
+            color: accent.withValues(alpha: 0.18),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -490,7 +490,7 @@ class _ProcessingCard extends StatelessWidget {
             height: 44,
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.18),
+              color: accent.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
             child: const CircularProgressIndicator(
@@ -595,10 +595,10 @@ class _CorrectionTipBannerState extends State<_CorrectionTipBanner> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: SiftPillowyColors.primaryContainer.withOpacity(0.14),
+        color: SiftPillowyColors.primaryContainer.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: SiftPillowyColors.primary.withOpacity(0.25),
+          color: SiftPillowyColors.primary.withValues(alpha: 0.25),
           width: 0.8,
         ),
       ),
@@ -609,10 +609,10 @@ class _CorrectionTipBannerState extends State<_CorrectionTipBanner> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: SiftPillowyColors.primary.withOpacity(0.18),
+              color: SiftPillowyColors.primary.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: const Icon(
               Icons.bolt_rounded,
               color: SiftPillowyColors.primary,
               size: 22,
@@ -667,7 +667,7 @@ class _CorrectionTipBannerState extends State<_CorrectionTipBanner> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(
+                        const Icon(
                           Icons.arrow_forward_rounded,
                           size: 16,
                           color: SiftPillowyColors.primary,
@@ -724,7 +724,7 @@ void _showCorrectionInfoSheet(BuildContext context) {
           ),
           Row(
             children: [
-              Icon(Icons.bolt_rounded, color: SiftPillowyColors.primary),
+              const Icon(Icons.bolt_rounded, color: SiftPillowyColors.primary),
               const SizedBox(width: 10),
               Text(
                 'Earn scans by correcting tags',
@@ -733,27 +733,27 @@ void _showCorrectionInfoSheet(BuildContext context) {
             ],
           ),
           const SizedBox(height: 16),
-          _InfoRow(
+          const _InfoRow(
             number: '1',
             text:
                 'Open any screenshot and edit the tags Sift assigned it — '
                 'add one it missed, remove one that\'s wrong, or swap it '
                 'for a better fit.',
           ),
-          _InfoRow(
+          const _InfoRow(
             number: '2',
             text:
                 'Saving a real change (not just re-saving the same tags) '
                 'earns +$kCorrectionRewardEnergy AI energy right away.',
           ),
-          _InfoRow(
+          const _InfoRow(
             number: '3',
             text:
                 'Capped at $kMaxCorrectionRewardPerDay energy a day from '
                 'corrections, so it rewards genuine fixes rather than '
                 'farming the same screenshot on repeat.',
           ),
-          _InfoRow(
+          const _InfoRow(
             number: '4',
             text:
                 'Your corrections also help Sift\'s tagging get smarter '
@@ -791,7 +791,7 @@ class _InfoRow extends StatelessWidget {
             height: 22,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: SiftPillowyColors.primary.withOpacity(0.15),
+              color: SiftPillowyColors.primary.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Text(

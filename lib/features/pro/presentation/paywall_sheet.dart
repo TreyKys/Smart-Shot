@@ -106,7 +106,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
           maxHeight: MediaQuery.of(context).size.height * 0.88,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF0E0E0E).withOpacity(0.97),
+          color: const Color(0xFF0E0E0E).withValues(alpha: 0.97),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           border: Border.all(color: _PaywallColors.border, width: 0.5),
         ),
@@ -150,7 +150,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                   if (widget.triggerFeature != null) ...[
                     Text(
                       '${widget.triggerFeature} is a Pro feature',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: _PaywallColors.textSecondary,
                         fontSize: 14,
                       ),
@@ -158,7 +158,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  Text(
+                  const Text(
                     'Unlimited AI. Zero Ads.\nOwn your data.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -180,11 +180,11 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  _FeatureRow(icon: Icons.all_inclusive, text: 'Infinite AI scans — no daily limit'),
-                  _FeatureRow(icon: Icons.block, text: 'Zero ads. Ever.'),
-                  _FeatureRow(icon: Icons.select_all, text: 'Batch scan up to 50 screenshots'),
-                  _FeatureRow(icon: Icons.auto_delete, text: 'Automated Smart Purge scheduling'),
-                  _FeatureRow(icon: Icons.ios_share, text: 'Advanced Markdown export'),
+                  const _FeatureRow(icon: Icons.all_inclusive, text: 'Infinite AI scans — no daily limit'),
+                  const _FeatureRow(icon: Icons.block, text: 'Zero ads. Ever.'),
+                  const _FeatureRow(icon: Icons.select_all, text: 'Batch scan up to 50 screenshots'),
+                  const _FeatureRow(icon: Icons.auto_delete, text: 'Automated Smart Purge scheduling'),
+                  const _FeatureRow(icon: Icons.ios_share, text: 'Advanced Markdown export'),
                 ].animate(interval: 60.ms).fadeIn(duration: 300.ms).slideX(begin: -0.05),
               ),
             ),
@@ -254,7 +254,7 @@ class _PaywallSheetContentState extends ConsumerState<PaywallSheetContent> {
                 await ref.read(proServiceProvider.notifier).restorePurchases();
                 if (context.mounted) Navigator.pop(context);
               },
-              child: Text(
+              child: const Text(
                 'Restore Purchases',
                 style: TextStyle(color: _PaywallColors.textSecondary, fontSize: 13),
               ),
@@ -302,10 +302,10 @@ class _UnavailableState extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _PaywallColors.border, width: 0.5),
       ),
-      child: Column(
+      child: const Column(
         children: [
           Icon(Icons.cloud_off_rounded, color: _PaywallColors.textTertiary, size: 28),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Text(
             'Pricing isn\'t available right now',
             textAlign: TextAlign.center,
@@ -315,7 +315,7 @@ class _UnavailableState extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             'Check your connection and try again in a moment.',
             textAlign: TextAlign.center,
@@ -345,7 +345,7 @@ class _FeatureRow extends StatelessWidget {
           Icon(icon, color: SiftColors.accent, size: 18),
           const SizedBox(width: 12),
           Text(text,
-              style: TextStyle(
+              style: const TextStyle(
                 color: _PaywallColors.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -378,7 +378,7 @@ class _PackageTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? SiftColors.accent.withOpacity(0.1) : _PaywallColors.surfaceElevated,
+          color: isSelected ? SiftColors.accent.withValues(alpha: 0.1) : _PaywallColors.surfaceElevated,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? SiftColors.accent : _PaywallColors.border,
@@ -396,7 +396,7 @@ class _PackageTile extends StatelessWidget {
                       margin: const EdgeInsets.only(bottom: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: SiftColors.proGold.withOpacity(0.15),
+                        color: SiftColors.proGold.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

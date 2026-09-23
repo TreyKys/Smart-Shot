@@ -213,10 +213,10 @@ class _PageContent extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: SiftColors.accent.withOpacity(0.1),
+                color: SiftColors.accent.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: SiftColors.accent.withOpacity(0.3), width: 1),
+                    color: SiftColors.accent.withValues(alpha: 0.3), width: 1),
               ),
               child: Icon(page.icon, color: SiftColors.accent, size: 40),
             )
@@ -355,7 +355,7 @@ class _ModeCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
+                color: iconColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: iconColor, size: 26),
@@ -380,7 +380,7 @@ class _ModeCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: badgeColor.withOpacity(0.15),
+                          color: badgeColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(

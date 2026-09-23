@@ -169,7 +169,7 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Color(c.colorValue).withOpacity(0.15),
+                      color: Color(c.colorValue).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(Icons.folder,

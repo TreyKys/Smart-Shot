@@ -56,33 +56,40 @@ final _allScreenshotsStreamProvider =
 /// One tag-grouping pass over [_allScreenshotsStreamProvider] — covers the
 /// drawer's plain (tag, count) list (tagCountsProvider, derived below) and
 /// the Organize hub's cluster cards (which also need a cover image).
-final tagClustersProvider = StreamProvider<List<TagCluster>>((ref) {
-  return ref.watch(_allScreenshotsStreamProvider.stream).map((screenshots) {
-    final counts = <String, int>{};
-    final covers = <String, Screenshot>{};
-    for (final s in screenshots) {
-      for (final t in s.tags ?? const []) {
-        counts[t] = (counts[t] ?? 0) + 1;
-        // watchScreenshots() with no tag filter sorts newest-first, so the
-        // first screenshot seen carrying a given tag is that tag's most
-        // recent one — exactly the cover a "what's in here lately" card
-        // should show.
-        covers.putIfAbsent(t, () => s);
-      }
+///
+/// Written as async* over the parent's AsyncValue rather than
+/// `parent.stream.map()` because `.stream` is deprecated in Riverpod 2.x
+/// and removed in 3.0. `ref.watch(parent)` still triggers a re-run of
+/// this provider on each new emission, so the yield-latest-value pattern
+/// preserves the previous behavior without depending on a going-away API.
+final tagClustersProvider = StreamProvider<List<TagCluster>>((ref) async* {
+  final screenshots = ref.watch(_allScreenshotsStreamProvider).valueOrNull;
+  if (screenshots == null) return;
+  final counts = <String, int>{};
+  final covers = <String, Screenshot>{};
+  for (final s in screenshots) {
+    for (final t in s.tags ?? const []) {
+      counts[t] = (counts[t] ?? 0) + 1;
+      // watchScreenshots() with no tag filter sorts newest-first, so the
+      // first screenshot seen carrying a given tag is that tag's most
+      // recent one — exactly the cover a "what's in here lately" card
+      // should show.
+      covers.putIfAbsent(t, () => s);
     }
-    final clusters = counts.entries
-        .map((e) =>
-            TagCluster(tag: e.key, count: e.value, cover: covers[e.key]!))
-        .toList()
-      ..sort((a, b) => b.count.compareTo(a.count));
-    return clusters;
-  });
+  }
+  final clusters = counts.entries
+      .map((e) => TagCluster(tag: e.key, count: e.value, cover: covers[e.key]!))
+      .toList()
+    ..sort((a, b) => b.count.compareTo(a.count));
+  yield clusters;
 });
 
 /// Stream of (tag, count) pairs sorted by count descending, for the drawer.
-final tagCountsProvider = StreamProvider<List<({String tag, int count})>>((ref) {
-  return ref.watch(tagClustersProvider.stream).map((clusters) =>
-      clusters.map((c) => (tag: c.tag, count: c.count)).toList());
+final tagCountsProvider =
+    StreamProvider<List<({String tag, int count})>>((ref) async* {
+  final clusters = ref.watch(tagClustersProvider).valueOrNull;
+  if (clusters == null) return;
+  yield clusters.map((c) => (tag: c.tag, count: c.count)).toList();
 });
 
 /// Unique tag names, derived from [tagCountsProvider] rather than watching
@@ -90,10 +97,10 @@ final tagCountsProvider = StreamProvider<List<({String tag, int count})>>((ref) 
 /// here would duplicate the same Isar watch query tagCountsProvider already
 /// maintains.
 @riverpod
-Stream<List<String>> uniqueTags(UniqueTagsRef ref) {
-  return ref.watch(tagCountsProvider.stream).map(
-        (counts) => counts.map((e) => e.tag).toList()..sort(),
-      );
+Stream<List<String>> uniqueTags(UniqueTagsRef ref) async* {
+  final counts = ref.watch(tagCountsProvider).valueOrNull;
+  if (counts == null) return;
+  yield counts.map((e) => e.tag).toList()..sort();
 }
 
 /// Persisted set of pinned screenshot IDs. Populated from SharedPreferences on app start.
@@ -122,8 +129,8 @@ Future<void> togglePinned(WidgetRef ref, int screenshotId) async {
 /// [tagClustersProvider] uses rather than opening a second one — see that
 /// provider's doc for why a duplicate unfiltered watch here was real,
 /// unnecessary Isar load.
-final totalScreenshotCountProvider = StreamProvider<int>((ref) {
-  return ref
-      .watch(_allScreenshotsStreamProvider.stream)
-      .map((list) => list.length);
+final totalScreenshotCountProvider = StreamProvider<int>((ref) async* {
+  final list = ref.watch(_allScreenshotsStreamProvider).valueOrNull;
+  if (list == null) return;
+  yield list.length;
 });
