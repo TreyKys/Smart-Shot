@@ -44,27 +44,6 @@ Future<void> main() async {
       debugPrint('Firebase init failed: $e\n$st');
     }
 
-    try {
-      // Play Integrity attests to Google that this is a real, unmodified
-      // build of the app — that's what Remote Config checks before handing
-      // over the shared Mistral key. The debug provider replaces that with a
-      // token registered manually in Firebase Console, since Play Integrity
-      // attestation isn't available for local/CI debug builds.
-      await FirebaseAppCheck.instance.activate(
-        providerAndroid: kDebugMode
-            ? const AndroidDebugProvider()
-            : const AndroidPlayIntegrityProvider(),
-      );
-    } catch (e, st) {
-      debugPrint('App Check init failed: $e\n$st');
-    }
-
-    // After App Check, so the fetch carries an attestation token — that's what
-    // lets Remote Config refuse to hand the shared key to a repackaged build.
-    // Throws only when REQUIRE_SHARED_AI_KEY is set and no key came back, so
-    // this is a no-op for local and CI debug runs.
-    await SharedKeyService.initialize();
-
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       debugPrint('FlutterError: ${details.exceptionAsString()}');
@@ -85,33 +64,65 @@ Future<void> main() async {
 
     // Each startup step is isolated: a single SDK failing to initialize
     // (ads, notifications, background tasks) must not blank the whole app.
-    try {
-      // Runs the GDPR/UK consent flow (where applicable) before ads init.
-      await ConsentService.instance.requestConsentAndInitAds();
-    } catch (e, st) {
-      debugPrint('Ads/consent init failed: $e\n$st');
-    }
-
-    try {
-      // Was previously fire-and-forget: initialize() returns a real Future
-      // backed by a platform-channel round trip to native WorkManager setup,
-      // not a Future that resolves immediately. Without this await, runApp()
-      // — and therefore the onboarding screen, which can call
-      // scheduleBackgroundSync() as soon as its first dialog is tapped — could
-      // render before native init actually finished, so registerPeriodicTask
-      // hit "WorkManager Package... not properly initialized" on a fast tap.
-      // Exactly this race is what an integration test caught once Live Mode
-      // started calling scheduleBackgroundSync() too.
-      await Workmanager().initialize(callbackDispatcher);
-    } catch (e, st) {
-      debugPrint('Workmanager init failed: $e\n$st');
-    }
-
-    try {
-      await NotificationService.instance.init();
-    } catch (e, st) {
-      debugPrint('NotificationService init failed: $e\n$st');
-    }
+    // Everything below runs in parallel because none of these SDKs depend
+    // on each other's completion — previously they were awaited one after
+    // the other, so a slow Remote Config fetch (SharedKeyService's 10s
+    // timeout) held Ads, WorkManager and Notifications' native init from
+    // even starting. Cold start now runs at max(step) instead of sum(step).
+    await Future.wait([
+      // App Check + shared key stay sequential within this lane — the
+      // Remote Config fetch inside initialize() has to carry an App Check
+      // attestation token or the console just refuses to hand back a key.
+      // The AppCheck failure is swallowed (matches the original per-step
+      // try/catch) but SharedKeyService.initialize's requireSharedKey
+      // StateError is deliberately NOT — that's the guard that keeps a
+      // release build with --dart-define=REQUIRE_SHARED_AI_KEY=true from
+      // silently shipping with the shared quota off.
+      () async {
+        try {
+          await FirebaseAppCheck.instance.activate(
+            providerAndroid: kDebugMode
+                ? const AndroidDebugProvider()
+                : const AndroidPlayIntegrityProvider(),
+          );
+        } catch (e, st) {
+          debugPrint('App Check init failed: $e\n$st');
+        }
+        await SharedKeyService.initialize();
+      }(),
+      () async {
+        try {
+          // Runs the GDPR/UK consent flow (where applicable) before ads init.
+          await ConsentService.instance.requestConsentAndInitAds();
+        } catch (e, st) {
+          debugPrint('Ads/consent init failed: $e\n$st');
+        }
+      }(),
+      () async {
+        try {
+          // Was previously fire-and-forget: initialize() returns a real
+          // Future backed by a platform-channel round trip to native
+          // WorkManager setup, not a Future that resolves immediately.
+          // Without this await, runApp() — and therefore the onboarding
+          // screen, which can call scheduleBackgroundSync() as soon as its
+          // first dialog is tapped — could render before native init
+          // actually finished, so registerPeriodicTask hit "WorkManager
+          // Package... not properly initialized" on a fast tap. Exactly
+          // this race is what an integration test caught once Live Mode
+          // started calling scheduleBackgroundSync() too.
+          await Workmanager().initialize(callbackDispatcher);
+        } catch (e, st) {
+          debugPrint('Workmanager init failed: $e\n$st');
+        }
+      }(),
+      () async {
+        try {
+          await NotificationService.instance.init();
+        } catch (e, st) {
+          debugPrint('NotificationService init failed: $e\n$st');
+        }
+      }(),
+    ]);
 
     runApp(const ProviderScope(child: SiftApp()));
   }, (error, stack) {
