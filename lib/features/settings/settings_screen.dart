@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/core/theme/theme_provider.dart';
 import 'package:sift/features/economy/economy_service.dart';
+import 'package:sift/features/gallery/data/gallery_repository.dart';
+import 'package:sift/features/gallery/services/sync_status.dart';
 import 'package:sift/features/pro/pro_service.dart';
 import 'package:sift/features/pro/presentation/paywall_sheet.dart';
 
@@ -125,6 +129,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           const _ThemeModeSelector(),
+          const SizedBox(height: 16),
+          Divider(color: SiftColors.border, height: 1),
+          const SizedBox(height: 8),
+
+          // BACKGROUND SYNC — what Sift last found and a manual re-scan
+          // trigger. Without this, "did the background scan actually
+          // run today?" was an entirely opaque question, and a permission
+          // regression (say, the user revoked photo access from Android
+          // Settings months after granting it) surfaced as "Sift stopped
+          // finding my new screenshots" with no diagnostic path forward.
+          const _SyncStatusTile(),
           const SizedBox(height: 16),
           Divider(color: SiftColors.border, height: 1),
           const SizedBox(height: 8),
@@ -295,6 +310,173 @@ class _SettingsTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Sync-status row: when Sift last checked the photo library, what it
+/// found, and a "Scan now" button. The tile self-refreshes once a minute
+/// so "N min ago" stays truthful while the user is looking at the screen.
+class _SyncStatusTile extends ConsumerStatefulWidget {
+  const _SyncStatusTile();
+
+  @override
+  ConsumerState<_SyncStatusTile> createState() => _SyncStatusTileState();
+}
+
+class _SyncStatusTileState extends ConsumerState<_SyncStatusTile> {
+  SyncStatus? _status;
+  bool _loaded = false;
+  bool _scanning = false;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+    _refreshTimer =
+        Timer.periodic(const Duration(minutes: 1), (_) => _reload());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    final s = await SyncStatus.load();
+    if (!mounted) return;
+    setState(() {
+      _status = s;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _scanNow() async {
+    setState(() => _scanning = true);
+    // Fire-and-forget: syncGallery kicks off a Future.microtask internally
+    // for the "rest of the batch" ingest, so awaiting it here would only
+    // block on the fast first-10 pass anyway. The refresh below covers
+    // both by polling until the timestamp advances.
+    unawaited(ref.read(galleryRepositoryProvider).syncGallery());
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Scanning your library…')),
+      );
+    }
+    final before = _status?.at;
+    // Poll up to 30s waiting for a new SyncStatus write — that's the
+    // point the tile can honestly say the scan finished. Times out
+    // silently so a scan that runs longer than 30s (a huge library on a
+    // slow device) still leaves the button re-enabled and the tile will
+    // eventually refresh on the minute-timer.
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      final latest = await SyncStatus.load();
+      if (latest != null && latest.at != before) {
+        setState(() {
+          _status = latest;
+          _scanning = false;
+        });
+        return;
+      }
+    }
+    if (mounted) setState(() => _scanning = false);
+  }
+
+  String _timeAgo(DateTime at) {
+    final d = DateTime.now().difference(at);
+    if (d.inSeconds < 60) return 'just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
+  }
+
+  String _subtitle() {
+    final s = _status;
+    if (!_loaded) return 'Loading…';
+    if (s == null) return 'Not yet checked.';
+    if (s.failed) return 'Last check ${_timeAgo(s.at)} — ${s.error}';
+    final via = s.source == SyncSource.background ? 'in background' : 'on open';
+    final added = s.added == 0
+        ? 'no new screenshots'
+        : '${s.added} new screenshot${s.added == 1 ? '' : 's'}';
+    final deferred = s.deferred > 0 ? ' (+${s.deferred} deferred)' : '';
+    return 'Last check ${_timeAgo(s.at)} $via — $added$deferred.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _status;
+    final failed = s?.failed ?? false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              failed ? Icons.warning_amber_rounded : Icons.sync,
+              color:
+                  failed ? SiftColors.proGold : SiftColors.textSecondary,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Background Sync',
+                    style: TextStyle(
+                      color: SiftColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _subtitle(),
+                    style: TextStyle(
+                      color: failed
+                          ? SiftColors.proGold
+                          : SiftColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: _scanning ? null : _scanNow,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: SiftColors.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: SiftColors.accent.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Center(
+              child: Text(
+                _scanning ? 'Scanning…' : 'Scan now',
+                style: const TextStyle(
+                  color: SiftColors.accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

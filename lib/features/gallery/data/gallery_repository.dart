@@ -15,6 +15,7 @@ import 'package:sift/features/economy/economy_service.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 import 'package:sift/features/gallery/presentation/providers/processing_progress_provider.dart';
 import 'package:sift/features/gallery/services/dedup_service.dart';
+import 'package:sift/features/gallery/services/sync_status.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
@@ -245,11 +246,19 @@ Future<void> forgetDedupHash(String filePath) => _DedupIndex.forget(filePath);
 /// the callback to finish, not to fire off unawaited work and return early.
 Future<void> discoverNewScreenshots(Isar isar) async {
   final album = await _openAllPhotosAlbum();
-  if (album == null) return;
+  if (album == null) {
+    await SyncStatus.record(
+      source: SyncSource.background,
+      added: 0,
+      error: 'No photo access — grant "Photos and videos" in Settings.',
+    );
+    return;
+  }
 
   final count = await album.assetCountAsync;
   if (count == 0) {
     DiagnosticLog.warn('Gallery sync: album has 0 assets — nothing to scan.');
+    await SyncStatus.record(source: SyncSource.background, added: 0);
     return;
   }
 
@@ -278,6 +287,11 @@ Future<void> discoverNewScreenshots(Isar isar) async {
       '${stats.alreadyInDb}, ${stats.nonImage} not images, '
       '${stats.dedupSkipped} deduped, ${stats.fileUnavailable} unreadable, '
       '${stats.liveModeCutoff} past Live Mode cutoff.');
+  await SyncStatus.record(
+    source: SyncSource.background,
+    added: stats.added,
+    deferred: count - total,
+  );
 }
 
 /// Upper bound on pending rows pulled into memory for one processing run.
@@ -314,11 +328,22 @@ class GalleryRepository {
     debugPrint('Permission.photos: $status');
 
     final album = await _openAllPhotosAlbum();
-    if (album == null) return;
+    if (album == null) {
+      // Record the attempt even without an album so the Settings tile can
+      // say "last checked X min ago" instead of "never" — the surfaced
+      // error is what tells the user permission is the issue, not silence.
+      await SyncStatus.record(
+        source: SyncSource.foreground,
+        added: 0,
+        error: 'No photo access — grant "Photos and videos" in Settings.',
+      );
+      return;
+    }
 
     final count = await album.assetCountAsync;
     if (count == 0) {
       DiagnosticLog.warn('Gallery sync: album has 0 assets — nothing to scan.');
+      await SyncStatus.record(source: SyncSource.foreground, added: 0);
       return;
     }
 
@@ -378,6 +403,15 @@ class GalleryRepository {
         '${stats.alreadyInDb}, ${stats.nonImage} not images, '
         '${stats.dedupSkipped} deduped, ${stats.fileUnavailable} unreadable, '
         '${stats.liveModeCutoff} past Live Mode cutoff.');
+    // Fire-and-forget: the Settings tile reads this to say "last checked X
+    // min ago — N added." Never awaited from _logSyncSummary's callers,
+    // which run inside a Future.microtask; a slow prefs write should never
+    // block the microtask from returning.
+    SyncStatus.record(
+      source: SyncSource.foreground,
+      added: stats.added,
+      deferred: count - total,
+    );
   }
 
   // ── Share intent ───────────────────────────────────────────────────────────

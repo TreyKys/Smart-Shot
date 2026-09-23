@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +11,7 @@ import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/presentation/gallery_provider.dart';
 import 'package:sift/features/gallery/presentation/widgets/smart_indexing_dialog.dart';
 import 'package:sift/features/gallery/services/background_service.dart';
+import 'package:sift/features/gallery/services/sync_status.dart';
 import 'package:sift/features/organize/presentation/organize_screen.dart';
 
 /// Public so NotificationService can switch tabs from outside the widget
@@ -41,7 +44,8 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => MainShellState();
 }
 
-class MainShellState extends ConsumerState<MainShell> {
+class MainShellState extends ConsumerState<MainShell>
+    with WidgetsBindingObserver {
   int _index = kDiscoverTabIndex;
 
   static const _tabs = [
@@ -64,6 +68,7 @@ class MainShellState extends ConsumerState<MainShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _checkSmartIndexingConsent();
       ref.read(galleryRepositoryProvider).reprocessGarbageTags();
@@ -72,6 +77,35 @@ class MainShellState extends ConsumerState<MainShell> {
       final ids = raw.map((e) => int.tryParse(e)).whereType<int>().toSet();
       if (mounted) ref.read(pinnedIdsProvider.notifier).state = ids;
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// WorkManager's Android floor is 15 min per scan and battery/network
+  /// constraints delay it further, so a user who takes a screenshot,
+  /// backgrounds Sift for two minutes, and reopens it can otherwise wait
+  /// the rest of a scan window before the new shot appears. Foreground
+  /// resume is the only "OS just handed us control back" hook we have —
+  /// gate it on real elapsed time (per [_kResumeMinInterval]) so a rapid
+  /// switcher-app dance doesn't kick off a scan every couple of seconds.
+  static const Duration _kResumeMinInterval = Duration(minutes: 2);
+
+  @override
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state != AppLifecycleState.resumed) return;
+    final last = await SyncStatus.load();
+    if (last != null &&
+        DateTime.now().difference(last.at) < _kResumeMinInterval) {
+      return;
+    }
+    if (!mounted) return;
+    // syncGallery does its own permission recheck and quiet no-op if the
+    // library is empty, so it's safe to call unconditionally here.
+    unawaited(ref.read(galleryRepositoryProvider).syncGallery());
   }
 
   Future<void> _checkSmartIndexingConsent() async {

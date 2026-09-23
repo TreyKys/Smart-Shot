@@ -10,6 +10,7 @@ import 'package:sift/core/diagnostics/diagnostic_log.dart';
 import 'package:sift/features/gallery/data/gallery_repository.dart'
     show discoverNewScreenshots;
 import 'package:sift/features/gallery/domain/screenshot.dart';
+import 'package:sift/features/gallery/services/sync_status.dart';
 import 'package:sift/features/ingestion/domain/tag_vocabulary.dart';
 import 'package:sift/features/ingestion/services/llm_service.dart';
 import 'package:sift/features/ingestion/services/ocr_service.dart';
@@ -199,6 +200,17 @@ Future<bool> _processDeepScanBatch() async {
   } catch (e) {
     debugPrint("Background task failed: $e");
     DiagnosticLog.error('Background scan: task failed entirely — $e');
+    // A background scan that failed before discoverNewScreenshots could
+    // record its own outcome (Isar.open threw, Firebase init blew up, …)
+    // would otherwise leave the Settings tile stuck on the previous run
+    // and hide the fact that the whole task is broken.
+    try {
+      await SyncStatus.record(
+        source: SyncSource.background,
+        added: 0,
+        error: e.toString(),
+      );
+    } catch (_) {}
     return false;
   }
 }
