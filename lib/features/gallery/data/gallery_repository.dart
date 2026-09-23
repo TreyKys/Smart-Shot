@@ -433,6 +433,193 @@ class GalleryRepository {
     return isar.screenshots.where().sortByTimestampDesc().findAll();
   }
 
+  // ── Lazy, DB-backed queries for the Assistant ─────────────────────────
+  //
+  // The chat pipeline used to call [allScreenshots] once per turn and then
+  // filter in Dart. On a 3,000-shot library that means pulling every
+  // Screenshot object (ocrText, cleanText, urls, emails, phone numbers,
+  // dates, crypto addresses, suggested actions, tags — all populated) into
+  // memory just to answer "receipts from March." The methods below push
+  // the same filters into Isar so only matching rows are ever materialized.
+
+  /// Filter screenshots by any combination of tag, keyword substring, and
+  /// date range. Sorted newest-first; capped at [limit] when set.
+  ///
+  /// Tags are the closed [TagVocabulary], stored canonically ("#Receipt"),
+  /// so an exact match works — no case-fold needed. Keywords match against
+  /// ocrText / cleanText / topic via OR (a screenshot matches if any of
+  /// those fields contains any keyword). Date range is inclusive.
+  Future<List<Screenshot>> queryScreenshots({
+    List<String>? tags,
+    List<String>? keywords,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    int? limit,
+  }) async {
+    final isar = await _ref.read(isarProvider.future);
+    final q = _buildScreenshotQuery(
+      isar: isar,
+      tags: tags,
+      keywords: keywords,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+    );
+    final sorted = q.sortByTimestampDesc();
+    if (limit != null) return sorted.limit(limit).findAll();
+    return sorted.findAll();
+  }
+
+  /// COUNT the same filter set without materializing the rows — Isar keeps
+  /// this to an index walk when the filter allows it, and it's what the
+  /// assistant's `count_screenshots` tool should ever need to hit.
+  Future<int> countScreenshots({
+    List<String>? tags,
+    List<String>? keywords,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
+    final isar = await _ref.read(isarProvider.future);
+    return _buildScreenshotQuery(
+      isar: isar,
+      tags: tags,
+      keywords: keywords,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+    ).count();
+  }
+
+  /// Untagged (or unprocessed) screenshots, newest first, capped at [limit].
+  /// Wraps the same isProcessed / tags-null pattern the pending pipeline
+  /// uses so "still to be tagged" reads identically wherever it's shown.
+  Future<List<Screenshot>> findUntagged({int limit = 20}) async {
+    final isar = await _ref.read(isarProvider.future);
+    return isar.screenshots
+        .filter()
+        .tagsIsNull()
+        .or()
+        .tagsLengthEqualTo(0)
+        .sortByTimestampDesc()
+        .limit(limit)
+        .findAll();
+  }
+
+  Future<int> untaggedCount() async {
+    final isar = await _ref.read(isarProvider.future);
+    return isar.screenshots
+        .filter()
+        .tagsIsNull()
+        .or()
+        .tagsLengthEqualTo(0)
+        .count();
+  }
+
+  /// Aggregate stats the assistant's `library_stats` tool returns — every
+  /// number here is a COUNT or MIN/MAX query, no full-table materialisation.
+  /// Tag breakdown iterates paged rows for the tag lists only (Isar can't
+  /// GROUP BY a list field), so it caps the paging cost via [tagBreakdownCap].
+  Future<AssistantLibraryStats> libraryStats({int tagBreakdownCap = 5000}) async {
+    final isar = await _ref.read(isarProvider.future);
+    final total = await isar.screenshots.count();
+    final processed =
+        await isar.screenshots.filter().isProcessedEqualTo(true).count();
+    final untagged = await untaggedCount();
+
+    // Timestamps for the range: two directed limit-1 queries beat scanning
+    // the whole library — Isar walks the timestamp index either way.
+    final oldestList = await isar.screenshots
+        .where()
+        .sortByTimestamp()
+        .limit(1)
+        .findAll();
+    final newestList = await isar.screenshots
+        .where()
+        .sortByTimestampDesc()
+        .limit(1)
+        .findAll();
+
+    // Tag breakdown — the one place we still have to touch rows, since Isar
+    // has no aggregate over list-field elements. Bounded and lightweight
+    // (only tags, no ocrText/cleanText), so it stays fast on large libraries.
+    final rows = await isar.screenshots
+        .where()
+        .sortByTimestampDesc()
+        .limit(tagBreakdownCap)
+        .findAll();
+    final tagCounts = <String, int>{};
+    for (final s in rows) {
+      for (final t in s.tags ?? const <String>[]) {
+        tagCounts[t] = (tagCounts[t] ?? 0) + 1;
+      }
+    }
+
+    return AssistantLibraryStats(
+      total: total,
+      processed: processed,
+      unprocessed: total - processed,
+      untagged: untagged,
+      oldest: oldestList.isEmpty ? null : oldestList.first.timestamp,
+      newest: newestList.isEmpty ? null : newestList.first.timestamp,
+      tagCounts: tagCounts,
+    );
+  }
+
+  /// Build the shared Isar filter chain the query/count methods derive
+  /// from. Kept private and untyped so callers can't accidentally add a
+  /// sort/limit before the filter closes — every public method above sorts
+  /// consistently newest-first.
+  ///
+  /// The keyword branch is an OR-group across topic/cleanText/ocrText — an
+  /// external OR list Isar wouldn't otherwise flatten cleanly.
+  QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>
+      _buildScreenshotQuery({
+    required Isar isar,
+    List<String>? tags,
+    List<String>? keywords,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) {
+    var q = isar.screenshots.filter().idGreaterThan(-1);
+
+    if (tags != null && tags.isNotEmpty) {
+      q = q.and().group((qb) {
+        var inner = qb.tagsElementEqualTo(tags.first);
+        for (final t in tags.skip(1)) {
+          inner = inner.or().tagsElementEqualTo(t);
+        }
+        return inner;
+      });
+    }
+
+    if (keywords != null && keywords.isNotEmpty) {
+      q = q.and().group((qb) {
+        QueryBuilder<Screenshot, Screenshot, QAfterFilterCondition>? inner;
+        for (final k in keywords) {
+          final one = qb
+              .ocrTextContains(k, caseSensitive: false)
+              .or()
+              .topicContains(k, caseSensitive: false)
+              .or()
+              .cleanTextContains(k, caseSensitive: false);
+          inner = inner == null ? one : inner.or().group((_) => one);
+        }
+        return inner ?? qb.idGreaterThan(-1);
+      });
+    }
+
+    if (dateFrom != null) {
+      q = q.and().timestampGreaterThan(
+            dateFrom.subtract(const Duration(microseconds: 1)),
+          );
+    }
+    if (dateTo != null) {
+      q = q.and().timestampLessThan(dateTo.add(const Duration(days: 1)));
+    }
+
+    return q;
+  }
+
+  // ── Duplicate clustering ─────────────────────────────────────────────
+
   /// Groups near-perceptually-identical screenshots using the same dHash
   /// index and Hamming threshold that already keep re-ingested duplicates
   /// out at scan time (see [_DedupIndex]/[DedupService]) — no new hashing,
@@ -942,6 +1129,28 @@ class GalleryRepository {
       default: return 'https://neurodevlabs.com';
     }
   }
+}
+
+/// Snapshot of the library the assistant's `library_stats` tool returns.
+/// Plain data — no Isar objects, safe to json-encode.
+class AssistantLibraryStats {
+  final int total;
+  final int processed;
+  final int unprocessed;
+  final int untagged;
+  final DateTime? oldest;
+  final DateTime? newest;
+  final Map<String, int> tagCounts;
+
+  const AssistantLibraryStats({
+    required this.total,
+    required this.processed,
+    required this.unprocessed,
+    required this.untagged,
+    required this.oldest,
+    required this.newest,
+    required this.tagCounts,
+  });
 }
 
 /// In-memory perceptual-hash index for the duration of one sync run.

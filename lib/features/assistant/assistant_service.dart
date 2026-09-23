@@ -5,6 +5,7 @@ import 'package:sift/core/ai/mistral_client.dart';
 import 'package:sift/core/ai/rate_limited_queue.dart';
 import 'package:sift/core/config/shared_key_service.dart';
 import 'package:sift/core/diagnostics/diagnostic_log.dart';
+import 'package:sift/features/gallery/data/gallery_repository.dart';
 import 'package:sift/features/gallery/domain/screenshot.dart';
 
 // Back on ministral-8b-2512 — the same model tagging already uses — after
@@ -426,63 +427,36 @@ RULES:
 7. Be natural and conversational in your final reply — brief but warm. Don't narrate what tools you called.
 8. NEVER say something was deleted, added, or changed unless a prior turn shows an explicit outcome note in brackets (e.g. "[The user confirmed and N screenshots were deleted]"). The `propose_*` tools only prepare an action — the user has to tap Confirm in the UI for it to actually run. If you already called `propose_delete` and the user is asking whether it happened, tell them honestly that they need to tap the Confirm/Delete button on your previous message, or reply "yes" / "delete them" to confirm. Do NOT re-call `propose_delete` for the same set — the previous proposal is still waiting.''';
 
-  // ── Filtering ──
+  // ── Tool-call argument parsing ──
+  //
+  // The model's tool call comes back as a `Map<String, dynamic>` decoded from
+  // JSON — every accessor is untyped and every entry may be absent. These
+  // helpers extract the four filter fields (tags / keywords / date range)
+  // once, so each tool case below reads as `tags: _tagsArg(args)` instead of
+  // the same `whereType<String>().toList()` incantation six times over.
 
-  /// Runs entirely on-device against fields every screenshot already has —
-  /// the same tags/topic/cleanText/ocrText/timestamp the normal tagging
-  /// pipeline populates. Mirrors search_provider.dart's in-memory filtering
-  /// approach rather than inventing a new matching strategy.
-  List<Screenshot> _filterScreenshots(
-    List<Screenshot> all,
-    Map<String, dynamic> args,
-  ) {
-    Iterable<Screenshot> pool = all;
-
-    final tags = (args['tags'] as List?)?.whereType<String>().toList();
-    if (tags != null && tags.isNotEmpty) {
-      final wanted =
-          tags.map((t) => t.toLowerCase().replaceFirst('#', '')).toSet();
-      pool = pool.where((s) => (s.tags ?? const []).any(
-          (t) => wanted.contains(t.toLowerCase().replaceFirst('#', ''))));
-      // Track which tags were used for highlight chips
-      _highlightTags = tags;
-    }
-
-    final keywords =
-        (args['keywords'] as List?)?.whereType<String>().toList();
-    if (keywords != null && keywords.isNotEmpty) {
-      pool = pool.where((s) {
-        final combined = [
-          s.topic ?? '',
-          s.cleanText ?? '',
-          s.ocrText ?? '',
-          ...(s.tags ?? const []),
-        ].join(' ').toLowerCase();
-        return keywords.any((k) => combined.contains(k.toLowerCase()));
-      });
-    }
-
-    final dateFrom =
-        DateTime.tryParse(args['date_from'] as String? ?? '');
-    if (dateFrom != null) {
-      pool = pool.where((s) => !s.timestamp.isBefore(dateFrom));
-    }
-
-    final dateTo = DateTime.tryParse(args['date_to'] as String? ?? '');
-    if (dateTo != null) {
-      final toEnd = dateTo.add(const Duration(days: 1));
-      pool = pool.where((s) => s.timestamp.isBefore(toEnd));
-    }
-
-    return pool.toList();
+  static List<String>? _tagsArg(Map<String, dynamic> args) {
+    final raw = (args['tags'] as List?)?.whereType<String>().toList();
+    return (raw == null || raw.isEmpty) ? null : raw;
   }
+
+  static List<String>? _keywordsArg(Map<String, dynamic> args) {
+    final raw = (args['keywords'] as List?)?.whereType<String>().toList();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  static DateTime? _dateArg(dynamic v) =>
+      v is String && v.isNotEmpty ? DateTime.tryParse(v) : null;
 
   // ── Tool executor ──
 
-  /// Callback to find duplicate clusters — supplied by the caller (who has
-  /// access to [GalleryRepository]) so this service doesn't depend on it
-  /// directly. Returns groups of 2+ visually similar screenshots.
-  Future<List<List<Screenshot>>> Function()? _findDuplicates;
+  /// Cap on rows any single tool materialises. Prevents "delete every
+  /// screenshot with no tag on a 5,000-shot library" from pulling the whole
+  /// table into memory just so the model can reason about it. 200 comfortably
+  /// covers real requests without blowing the chat bubble's thumbnail strip
+  /// up into an unusable wall — anyone wanting a bigger set should browse
+  /// the Gallery view directly, which is what it's for.
+  static const int _kResultCap = 200;
 
   /// Executes one tool call from the model, returning the result string
   /// the model will see on the next round. Non-destructive tools (search,
@@ -490,16 +464,44 @@ RULES:
   /// (propose_delete, propose_add_to_collection, create_collection) record
   /// a [PendingAction] and return "pending_confirmation" so the model can
   /// tell the user what it wants to do without actually doing it.
+  ///
+  /// Every filter runs against Isar via [GalleryRepository]'s lazy query
+  /// methods — the previous version took `List<Screenshot> allScreenshots`
+  /// and filtered in Dart, which meant pulling every row (ocrText,
+  /// cleanText, urls, phone numbers, dates, all populated) into memory
+  /// each turn just so `_filterScreenshots` could throw most of them away.
+  /// On a 3,000-shot library that was the assistant's real bottleneck.
   Future<String> _executeTool(
     String name,
     Map<String, dynamic> args,
-    List<Screenshot> allScreenshots,
+    GalleryRepository gallery,
   ) async {
     switch (name) {
       case 'search_screenshots':
-        final results = _filterScreenshots(allScreenshots, args);
+        final tags = _tagsArg(args);
+        final keywords = _keywordsArg(args);
+        final dateFrom = _dateArg(args['date_from']);
+        final dateTo = _dateArg(args['date_to']);
+        if (tags != null) _highlightTags = tags;
+        final results = await gallery.queryScreenshots(
+          tags: tags,
+          keywords: keywords,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+          limit: _kResultCap,
+        );
+        // Skip the extra COUNT walk when we already know the exact number
+        // from the row list — only ambiguous when the limit clipped it.
+        final total = results.length < _kResultCap
+            ? results.length
+            : await gallery.countScreenshots(
+                tags: tags,
+                keywords: keywords,
+                dateFrom: dateFrom,
+                dateTo: dateTo,
+              );
         _lastSearchResults = results;
-        if (results.isEmpty) {
+        if (total == 0) {
           return jsonEncode(
               {'count': 0, 'message': 'No screenshots matched.'});
         }
@@ -513,18 +515,45 @@ RULES:
               'date': s.timestamp.toIso8601String().substring(0, 10),
             }).toList();
         return jsonEncode({
-          'count': results.length,
+          'count': total,
           'showing': summaries.length,
           'screenshots': summaries,
         });
 
       case 'count_screenshots':
-        final results = _filterScreenshots(allScreenshots, args);
-        _lastSearchResults = results;
-        return jsonEncode({'count': results.length});
+        final tags = _tagsArg(args);
+        final keywords = _keywordsArg(args);
+        final dateFrom = _dateArg(args['date_from']);
+        final dateTo = _dateArg(args['date_to']);
+        if (tags != null) _highlightTags = tags;
+        final count = await gallery.countScreenshots(
+          tags: tags,
+          keywords: keywords,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+        );
+        // COUNT alone doesn't populate the thumbnail strip. If the user
+        // follows up with "show me those", the model will call
+        // search_screenshots and we'll materialise rows then — no reason to
+        // eagerly load them here just because we might be asked next.
+        _lastSearchResults = null;
+        return jsonEncode({'count': count});
 
       case 'propose_delete':
-        final results = _filterScreenshots(allScreenshots, args);
+        final tags = _tagsArg(args);
+        final keywords = _keywordsArg(args);
+        final dateFrom = _dateArg(args['date_from']);
+        final dateTo = _dateArg(args['date_to']);
+        if (tags != null) _highlightTags = tags;
+        // Capped like search: if the user really wants to delete >200
+        // screenshots in one go the model should propose narrower filters.
+        final results = await gallery.queryScreenshots(
+          tags: tags,
+          keywords: keywords,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+          limit: _kResultCap,
+        );
         if (results.isEmpty) {
           return jsonEncode({
             'status': 'no_matches',
@@ -553,7 +582,18 @@ RULES:
             'message': 'No collection name provided.',
           });
         }
-        final results = _filterScreenshots(allScreenshots, args);
+        final tags = _tagsArg(args);
+        final keywords = _keywordsArg(args);
+        final dateFrom = _dateArg(args['date_from']);
+        final dateTo = _dateArg(args['date_to']);
+        if (tags != null) _highlightTags = tags;
+        final results = await gallery.queryScreenshots(
+          tags: tags,
+          keywords: keywords,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+          limit: _kResultCap,
+        );
         if (results.isEmpty) {
           return jsonEncode({
             'status': 'no_matches',
@@ -595,12 +635,7 @@ RULES:
         });
 
       case 'find_duplicates':
-        if (_findDuplicates == null) {
-          return jsonEncode({
-            'error': 'Duplicate detection is not available right now.',
-          });
-        }
-        final clusters = await _findDuplicates!();
+        final clusters = await gallery.findDuplicateClusters();
         if (clusters.isEmpty) {
           return jsonEncode({
             'cluster_count': 0,
@@ -628,53 +663,27 @@ RULES:
         });
 
       case 'library_stats':
-        final total = allScreenshots.length;
-        final processed =
-            allScreenshots.where((s) => s.isProcessed).length;
-        final unprocessed = total - processed;
-        // Tag breakdown
-        final tagCounts = <String, int>{};
-        for (final s in allScreenshots) {
-          for (final t in s.tags ?? const <String>[]) {
-            tagCounts[t] = (tagCounts[t] ?? 0) + 1;
-          }
-        }
-        final noTags =
-            allScreenshots.where((s) => s.tags == null || s.tags!.isEmpty).length;
-        // Date range
-        DateTime? oldest, newest;
-        for (final s in allScreenshots) {
-          if (oldest == null || s.timestamp.isBefore(oldest)) {
-            oldest = s.timestamp;
-          }
-          if (newest == null || s.timestamp.isAfter(newest)) {
-            newest = s.timestamp;
-          }
-        }
-        // Sort tags by count descending
-        final sortedTags = tagCounts.entries.toList()
+        final stats = await gallery.libraryStats();
+        final sortedTags = stats.tagCounts.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
         return jsonEncode({
-          'total': total,
-          'processed': processed,
-          'unprocessed': unprocessed,
-          'untagged': noTags,
+          'total': stats.total,
+          'processed': stats.processed,
+          'unprocessed': stats.unprocessed,
+          'untagged': stats.untagged,
           'date_range': {
-            'oldest': oldest?.toIso8601String().substring(0, 10),
-            'newest': newest?.toIso8601String().substring(0, 10),
+            'oldest': stats.oldest?.toIso8601String().substring(0, 10),
+            'newest': stats.newest?.toIso8601String().substring(0, 10),
           },
           'tag_breakdown': {
             for (final e in sortedTags.take(20)) e.key: e.value,
           },
-          'unique_tag_count': tagCounts.length,
+          'unique_tag_count': stats.tagCounts.length,
         });
 
       case 'find_untagged':
         final limit = (args['limit'] as int?) ?? 20;
-        final untagged = allScreenshots
-            .where((s) => s.tags == null || s.tags!.isEmpty)
-            .take(limit)
-            .toList();
+        final untagged = await gallery.findUntagged(limit: limit);
         _lastSearchResults = untagged;
         if (untagged.isEmpty) {
           return jsonEncode({
@@ -682,17 +691,17 @@ RULES:
             'message': 'All screenshots have tags — nothing to tag!',
           });
         }
+        // Separate COUNT so the model can say "showing 20 of 143 untagged"
+        // instead of pretending the shown page is the whole set.
+        final total = await gallery.untaggedCount();
         final summaries = untagged.map((s) => {
               'id': s.id,
               'topic': s.topic ?? 'untitled',
               'date': s.timestamp.toIso8601String().substring(0, 10),
               'processed': s.isProcessed,
             }).toList();
-        final totalUntagged = allScreenshots
-            .where((s) => s.tags == null || s.tags!.isEmpty)
-            .length;
         return jsonEncode({
-          'count': totalUntagged,
+          'count': total,
           'showing': summaries.length,
           'screenshots': summaries,
         });
@@ -709,13 +718,16 @@ RULES:
   /// (seeing real results between calls), and returns the model's final
   /// conversational reply along with any screenshots it found and any
   /// pending action it proposed.
+  ///
+  /// [gallery] is queried lazily for every tool call rather than materialised
+  /// once up front — see [_executeTool]'s doc for why "load everything, then
+  /// filter" was the assistant's real bottleneck on big libraries.
   Future<AssistantResult> chat(
     String message, {
-    required List<Screenshot> allScreenshots,
+    required GalleryRepository gallery,
     required List<String> availableTags,
     required List<String> availableCollections,
     String? byokApiKey,
-    Future<List<List<Screenshot>>> Function()? findDuplicates,
     // Fires when the model decides to call a specific tool — the UI uses
     // this to replace the generic "Thinking…" with a live label describing
     // what's actually happening ("Searching your library…", "Scanning for
@@ -731,9 +743,6 @@ RULES:
       return AssistantResult.unavailable;
     }
 
-    // Store the duplicate-finder callback for this turn
-    _findDuplicates = findDuplicates;
-
     // Reset per-turn state
     _lastSearchResults = null;
     _highlightTags = [];
@@ -743,12 +752,16 @@ RULES:
     // its own prior responses leading up to this new message.
     _addToHistory('user', message);
 
+    // One cheap indexed COUNT for the system prompt — beats loading every
+    // screenshot just to read `.length` on it.
+    final totalScreenshots = await gallery.countScreenshots();
+
     // Build the full message list: system prompt → history → current message
     final messages = <Map<String, dynamic>>[
       {
         'role': 'system',
         'content': _systemPrompt(
-          totalScreenshots: allScreenshots.length,
+          totalScreenshots: totalScreenshots,
           availableTags: availableTags,
           availableCollections: availableCollections,
         ),
@@ -775,7 +788,7 @@ RULES:
         // find_duplicates, waiting until after the run defeats the whole
         // point of showing progress.
         onStage?.call(toolLabel(name));
-        return _executeTool(name, args, allScreenshots);
+        return _executeTool(name, args, gallery);
       },
       priority: RequestPriority.interactive,
     );

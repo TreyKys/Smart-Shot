@@ -464,7 +464,6 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         },
       );
       final byokKey = ref.read(economyServiceProvider.notifier).getByokKey();
-      final all = await repo.allScreenshots();
 
       DiagnosticLog.info('AssistantScreen: calling AssistantService.chat()…');
       // A real ceiling so a genuine hang — anywhere in chat(), not just a
@@ -479,11 +478,10 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       final result = await _service
           .chat(
             text,
-            allScreenshots: all,
+            gallery: repo,
             availableTags: tags,
             availableCollections: collections.map((c) => c.name).toList(),
             byokApiKey: byokKey,
-            findDuplicates: () => repo.findDuplicateClusters(),
             onStage: (label) {
               if (mounted) setState(() => _stage = label);
             },
