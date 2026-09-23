@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sift/core/theme/app_theme.dart';
 import 'package:sift/core/theme/theme_provider.dart';
@@ -452,29 +453,69 @@ class _SyncStatusTileState extends ConsumerState<_SyncStatusTile> {
           ],
         ),
         const SizedBox(height: 10),
-        GestureDetector(
-          onTap: _scanning ? null : _scanNow,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: SiftColors.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: SiftColors.accent.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Center(
-              child: Text(
-                _scanning ? 'Scanning…' : 'Scan now',
-                style: const TextStyle(
-                  color: SiftColors.accent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: _scanning ? null : _scanNow,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: SiftColors.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: SiftColors.accent.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _scanning ? 'Scanning…' : 'Scan now',
+                      style: const TextStyle(
+                        color: SiftColors.accent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            // When the last scan failed because photos aren't granted, the
+            // "Scan now" button alone can't fix that — the fix lives in the
+            // OS Settings app. openAppSettings() takes the user there
+            // directly instead of leaving them hunting through Android's
+            // Settings maze.
+            if (failed) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    await openAppSettings();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: SiftColors.proGold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: SiftColors.proGold.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Open Settings',
+                        style: TextStyle(
+                          color: SiftColors.proGold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );
