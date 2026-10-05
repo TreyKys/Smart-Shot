@@ -8,12 +8,14 @@ import {AskInPlainEnglish} from './ads/AskInPlainEnglish';
 import {ChaosStory} from './ads/ChaosStory';
 import {TheReliableOne} from './ads/TheReliableOne';
 import {TimeRecovery} from './ads/TimeRecovery';
+import {AllYouNeed} from './ads/AllYouNeed';
 
 // 16:9 landscape (1920x1080) — matches the reference film. The editorial
 // split layouts (bold headline beside a card) are inherently landscape.
 const L = {width: 1920, height: 1080};
 const short = SEC(20);
 const long = SEC(60);
+const mid = SEC(45);
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -26,6 +28,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition id="ChaosStory" component={ChaosStory} durationInFrames={long} fps={FPS} width={L.width} height={L.height} />
       <Composition id="TheReliableOne" component={TheReliableOne} durationInFrames={long} fps={FPS} width={L.width} height={L.height} />
       <Composition id="TimeRecovery" component={TimeRecovery} durationInFrames={long} fps={FPS} width={L.width} height={L.height} />
+      <Composition id="AllYouNeed" component={AllYouNeed} durationInFrames={mid} fps={FPS} width={L.width} height={L.height} />
     </>
   );
 };
