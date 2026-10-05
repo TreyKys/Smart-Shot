@@ -17,15 +17,25 @@ import {EndCard} from '../components/EndCard';
 // ─────────────────────────────────────────────────────────────────────────
 // AD 10 · "The Face You Remember" · 24s · 16:9
 // The capability gap the earlier "All You Need" ad deliberately stepped
-// around: finding a specific PERSON in your gallery, not just a tagged or
-// keyword-matched screenshot. This ad is written for the cross-reference
-// search planned in the follow-up build — see the commit message — and
-// should stay out of any live ad account until that function ships.
+// around: identifying a specific PUBLIC FIGURE in an uncaptioned gallery
+// photo via reverse image search, not just a tagged or keyword-matched
+// screenshot. This ad is written for the reverse-image-search build
+// planned as a follow-up — see the commit message — and should stay out
+// of any live ad account until that function ships.
+//
+// Worked example is deliberately real: a user search for "gyökeres" that
+// already succeeds today via a text/topic keyword match on a screenshot
+// that HAS a headline (see the reference screenshot in this session). The
+// gap this feature closes is the photo that has no caption at all — the
+// local keyword/tag search genuinely can't find that one, so the ad's ask
+// is specifically the no-caption case, not the one that already works.
 //
 // The hero beat isn't just "it found him" — it's SHOWING the reasoning
-// that triggered the deeper search (no tag match / query names a person /
-// gallery is full of faces) before the scan itself. That's the actual
-// product idea: not a black box, a visible decision.
+// that triggered the deeper search (no tag match / query names someone
+// specific / could be a public figure) before the scan itself. That's the
+// actual product idea: not a black box, a visible decision — and the
+// trigger signals here are scoped to what reverse image search can
+// actually resolve (public/web-indexed identities), not private people.
 // ─────────────────────────────────────────────────────────────────────────
 
 const QueryPill: React.FC<{from: number; children: React.ReactNode; width?: number}> = ({
@@ -117,7 +127,11 @@ const FaceDotGrid: React.FC<{from: number; count?: number}> = ({from, count = 32
 // Fast climb to target, eased to a soft stop — same shape as the
 // word-count counter in the Magnum Opus "Six Hours" ad, reused here for
 // the "scanning N photos" readout.
-const ScanCounter: React.FC<{from: number; target: number}> = ({from, target}) => {
+const ScanCounter: React.FC<{from: number; target: number; label?: string}> = ({
+  from,
+  target,
+  label = 'photos checked',
+}) => {
   const frame = useCurrentFrame() - from;
   const settle = 70;
   const t = Math.min(1, Math.max(0, frame) / settle);
@@ -138,7 +152,7 @@ const ScanCounter: React.FC<{from: number; target: number}> = ({from, target}) =
         color: c.onNavy,
       }}
     >
-      {n.toLocaleString()} photos checked
+      {n.toLocaleString()} {label}
     </div>
   );
 };
@@ -156,14 +170,14 @@ export const TheFaceYouRemember: React.FC = () => {
         </Stage>
       </Sequence>
 
-      {/* Act 2 (3-8s): the ask — no tags, no filename, just a person */}
+      {/* Act 2 (3-8s): the ask — a photo with nothing to search against */}
       <Sequence from={SEC(3)} durationInFrames={SEC(5)}>
         <Stage>
           <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24}}>
-            <Eyebrow from={SEC(0.2)}>ask like you'd ask a friend</Eyebrow>
+            <Eyebrow from={SEC(0.2)}>the one with no caption</Eyebrow>
             <QueryPill from={SEC(0.6)}>
               <Typewriter
-                text="the guy from Jake's wedding — not the groom, the other one"
+                text="the gyökeres pic — the one with no caption on it"
                 from={SEC(0.2)}
                 dur={SEC(2.2)}
               />
@@ -179,15 +193,15 @@ export const TheFaceYouRemember: React.FC = () => {
             <Eyebrow from={SEC(0.1)} color={c.onNavySoft}>how sift knew to look deeper</Eyebrow>
             <div style={{display: 'flex', gap: 14}}>
               <Chip from={SEC(0.3)} label="no tag match" onDark />
-              <Chip from={SEC(0.9)} label="query names a person" onDark />
-              <Chip from={SEC(1.5)} label="your gallery is full of faces" onDark highlighted />
+              <Chip from={SEC(0.9)} label="query names someone specific" onDark />
+              <Chip from={SEC(1.5)} label="could be a public figure" onDark highlighted />
             </div>
             <div style={{marginTop: 8}}>
               <FaceDotGrid from={SEC(2.4)} count={32} />
             </div>
-            <ScanCounter from={SEC(2.6)} target={1842} />
+            <ScanCounter from={SEC(2.6)} target={240} label="public matches compared" />
             <div style={{marginTop: 2}}>
-              <Chip from={SEC(5.6)} label="4 matches found" onDark highlighted />
+              <Chip from={SEC(5.6)} label="identity confirmed" onDark highlighted />
             </div>
           </div>
         </Stage>
@@ -200,11 +214,11 @@ export const TheFaceYouRemember: React.FC = () => {
             <Eyebrow from={SEC(0.2)}>found him</Eyebrow>
             <Card from={SEC(0.5)} width={1000}>
               <div style={{marginBottom: 18}}>
-                <Chip from={SEC(0.3)} label="Matched · 4 photos" highlighted />
+                <Chip from={SEC(0.3)} label="Confirmed · Viktor Gyökeres" highlighted />
               </div>
               <div style={{fontSize: 32, fontWeight: 600, color: c.ink, lineHeight: 1.4, fontFamily: FONT}}>
-                <span style={{color: c.accent}}>Marcus</span> — best man, back row. tagged
-                automatically.
+                Forward, <span style={{color: c.accent}}>Arsenal</span>. 3 more photos in your
+                gallery, tagged automatically.
               </div>
             </Card>
           </div>
