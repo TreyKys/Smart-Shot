@@ -355,30 +355,13 @@ export const TheThread: React.FC = () => {
         </Shell>
       </Sequence>
 
-      {/* Act 3 (10-14s): the panic — searching the thread */}
+      {/* Act 3 (10-14s): hold on the full thread — no fake search bar,
+          no overlay. The nested "wait what was it" ending and Lauren's
+          "rate is in the first email" already carry the "nobody can find
+          anything" story on their own */}
       <Sequence from={SEC(10)} durationInFrames={SEC(4)}>
         <Shell>
-          <div
-            style={{
-              padding: '28px 44px',
-              borderBottom: `1px solid ${C.divider}`,
-              fontFamily: FONT,
-            }}
-          >
-            <div
-              style={{
-                background: '#FFF59D',
-                padding: '12px 20px',
-                borderRadius: 10,
-                fontSize: 24,
-                color: C.red,
-                fontWeight: 600,
-                display: 'inline-block',
-              }}
-            >
-              what's the actual rate again?
-            </div>
-          </div>
+          <SubjectHeader title="Re: Re: Fwd: Re: Re: Lease renewal — ACTION REQUIRED" count={11} />
           <div
             style={{
               flex: 1,

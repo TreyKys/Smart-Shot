@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, Sequence, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Sequence, interpolate, useCurrentFrame} from 'remotion';
 import {SEC, FONT, c} from '../theme';
 import {EndCard} from '../components/EndCard';
 
@@ -205,44 +205,6 @@ const Desktop: React.FC<{children: React.ReactNode}> = ({children}) => (
   </AbsoluteFill>
 );
 
-// Floating caption, white on a dark bar at the bottom — like TikTok
-// captions. Positioned with explicit absolute coords rather than
-// flex-end/justify-center, because the earlier flex-on-AbsoluteFill
-// version drifted to the right side of the viewport on landscape
-// renders — safer to pin the pill to bottom-center directly and let
-// translate(-50%, …) hold it there regardless of its own width.
-const Caption: React.FC<{from: number; text: string}> = ({from, text}) => {
-  const frame = useCurrentFrame() - from;
-  const {fps} = useVideoConfig();
-  const s = spring({frame, fps, config: {damping: 20, stiffness: 140, mass: 0.7}});
-  const op = interpolate(s, [0, 1], [0, 1]);
-  const y = interpolate(s, [0, 1], [14, 0]);
-  return (
-    <AbsoluteFill>
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 80,
-          left: '50%',
-          transform: `translate(-50%, ${y}px)`,
-          opacity: op,
-          background: 'rgba(0,0,0,0.85)',
-          color: '#fff',
-          padding: '18px 36px',
-          borderRadius: 14,
-          fontFamily: FONT,
-          fontSize: 36,
-          fontWeight: 700,
-          letterSpacing: 0.3,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {text}
-      </div>
-    </AbsoluteFill>
-  );
-};
-
 // Magnum Opus mock-up — mimics the question/answer surface the real app has
 const MoMock: React.FC = () => {
   const frame = useCurrentFrame();
@@ -338,37 +300,39 @@ const MoMock: React.FC = () => {
 export const WhichOneIsIt: React.FC = () => {
   return (
     <AbsoluteFill>
-      {/* Act 1 (0-4s): window opens, first files appear */}
-      <Sequence from={0} durationInFrames={SEC(4)}>
+      {/* Act 1 (0-5s): window opens, first files appear slowly — one every
+          0.6s so the viewer actually reads each filename as it lands */}
+      <Sequence from={0} durationInFrames={SEC(5)}>
         <Desktop>
           <WindowFrame>
-            {FILES.slice(0, 4).map((f, i) => (
-              <FileRowView key={f.name} from={SEC(0.6 + i * 0.4)} file={f} index={i} />
+            {FILES.slice(0, 5).map((f, i) => (
+              <FileRowView key={f.name} from={SEC(0.5 + i * 0.6)} file={f} index={i} />
             ))}
           </WindowFrame>
         </Desktop>
-        <Caption from={SEC(1.2)} text="which version is live?" />
       </Sequence>
 
-      {/* Act 2 (4-9s): the hall of shame fills in */}
-      <Sequence from={SEC(4)} durationInFrames={SEC(5)}>
+      {/* Act 2 (5-10s): the rest pile on faster — the "wait, how many are
+          there" beat. First 5 already present, 6–10 land every 0.5s */}
+      <Sequence from={SEC(5)} durationInFrames={SEC(5)}>
         <Desktop>
           <WindowFrame>
             {FILES.slice(0, 10).map((f, i) => (
               <FileRowView
                 key={f.name}
-                from={i < 4 ? -100 : SEC(0.2 + (i - 4) * 0.35)}
+                from={i < 5 ? -100 : SEC(0.2 + (i - 5) * 0.5)}
                 file={f}
                 index={i}
               />
             ))}
           </WindowFrame>
         </Desktop>
-        <Caption from={SEC(1.5)} text="they all say FINAL." />
       </Sequence>
 
-      {/* Act 3 (9-12s): the cursor hovers, nothing clicked */}
-      <Sequence from={SEC(9)} durationInFrames={SEC(3)}>
+      {/* Act 3 (10-13s): hold the full list — no caption, no selection,
+          just three seconds of "which one is it" tension carried entirely
+          by the filenames themselves */}
+      <Sequence from={SEC(10)} durationInFrames={SEC(3)}>
         <Desktop>
           <WindowFrame>
             {FILES.slice(0, 10).map((f, i) => (
@@ -376,11 +340,10 @@ export const WhichOneIsIt: React.FC = () => {
             ))}
           </WindowFrame>
         </Desktop>
-        <Caption from={SEC(0.3)} text="one has the arbitration clause." />
       </Sequence>
 
-      {/* Act 4 (12-14s): a selection highlight — but the WRONG one */}
-      <Sequence from={SEC(12)} durationInFrames={SEC(2)}>
+      {/* Act 4 (13-15s): the WRONG row highlights, then clears */}
+      <Sequence from={SEC(13)} durationInFrames={SEC(2)}>
         <Desktop>
           <WindowFrame>
             {FILES.slice(0, 10).map((f, i) => (
@@ -394,11 +357,10 @@ export const WhichOneIsIt: React.FC = () => {
             ))}
           </WindowFrame>
         </Desktop>
-        <Caption from={SEC(0.3)} text="not that one." />
       </Sequence>
 
-      {/* Act 5 (14-18s): Magnum Opus — the actual answer */}
-      <Sequence from={SEC(14)} durationInFrames={SEC(4)}>
+      {/* Act 5 (15-18s): Magnum Opus — the actual answer */}
+      <Sequence from={SEC(15)} durationInFrames={SEC(3)}>
         <MoMock />
       </Sequence>
 
