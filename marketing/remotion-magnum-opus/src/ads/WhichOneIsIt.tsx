@@ -205,7 +205,12 @@ const Desktop: React.FC<{children: React.ReactNode}> = ({children}) => (
   </AbsoluteFill>
 );
 
-// Floating caption, white on a dark bar at the bottom — like TikTok captions.
+// Floating caption, white on a dark bar at the bottom — like TikTok
+// captions. Positioned with explicit absolute coords rather than
+// flex-end/justify-center, because the earlier flex-on-AbsoluteFill
+// version drifted to the right side of the viewport on landscape
+// renders — safer to pin the pill to bottom-center directly and let
+// translate(-50%, …) hold it there regardless of its own width.
 const Caption: React.FC<{from: number; text: string}> = ({from, text}) => {
   const frame = useCurrentFrame() - from;
   const {fps} = useVideoConfig();
@@ -213,13 +218,14 @@ const Caption: React.FC<{from: number; text: string}> = ({from, text}) => {
   const op = interpolate(s, [0, 1], [0, 1]);
   const y = interpolate(s, [0, 1], [14, 0]);
   return (
-    <AbsoluteFill
-      style={{display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 0 80px'}}
-    >
+    <AbsoluteFill>
       <div
         style={{
+          position: 'absolute',
+          bottom: 80,
+          left: '50%',
+          transform: `translate(-50%, ${y}px)`,
           opacity: op,
-          transform: `translateY(${y}px)`,
           background: 'rgba(0,0,0,0.85)',
           color: '#fff',
           padding: '18px 36px',
@@ -228,6 +234,7 @@ const Caption: React.FC<{from: number; text: string}> = ({from, text}) => {
           fontSize: 36,
           fontWeight: 700,
           letterSpacing: 0.3,
+          whiteSpace: 'nowrap',
         }}
       >
         {text}
