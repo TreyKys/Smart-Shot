@@ -12,6 +12,7 @@ import {AllYouNeed} from './ads/AllYouNeed';
 import {TheFaceYouRemember} from './ads/TheFaceYouRemember';
 import {TheGroupChat} from './ads/TheGroupChat';
 import {TheList} from './ads/TheList';
+import {TheAlert} from './ads/TheAlert';
 
 // 16:9 landscape (1920x1080) — the editorial house-style ads live here.
 const L = {width: 1920, height: 1080};
@@ -40,6 +41,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition id="TheFaceYouRemember" component={TheFaceYouRemember} durationInFrames={face} fps={FPS} width={L.width} height={L.height} />
       <Composition id="TheGroupChat" component={TheGroupChat} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
       <Composition id="TheList" component={TheList} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
+      <Composition id="TheAlert" component={TheAlert} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
     </>
   );
 };
