@@ -7,6 +7,8 @@ import {TheSixHours} from './ads/TheSixHours';
 import {TheNightBefore} from './ads/TheNightBefore';
 import {WhichOneIsIt} from './ads/WhichOneIsIt';
 import {TheThread} from './ads/TheThread';
+import {TheClause} from './ads/TheClause';
+import {TheCharge} from './ads/TheCharge';
 
 // Vertical 9:16, 60s each (1800 frames at 30 fps) — the editorial house-
 // style ads live here.
@@ -77,6 +79,22 @@ export const RemotionRoot: React.FC = () => {
         fps={FPS}
         width={L.width}
         height={L.height}
+      />
+      <Composition
+        id="TheClause"
+        component={TheClause}
+        durationInFrames={MID}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
+      />
+      <Composition
+        id="TheCharge"
+        component={TheCharge}
+        durationInFrames={MID}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
       />
     </>
   );
