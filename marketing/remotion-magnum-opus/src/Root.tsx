@@ -9,6 +9,8 @@ import {WhichOneIsIt} from './ads/WhichOneIsIt';
 import {TheThread} from './ads/TheThread';
 import {TheClause} from './ads/TheClause';
 import {TheCharge} from './ads/TheCharge';
+import {TheClauseRemix} from './ads/TheClauseRemix';
+import {TheChargeRemix} from './ads/TheChargeRemix';
 
 // Vertical 9:16, 60s each (1800 frames at 30 fps) — the editorial house-
 // style ads live here.
@@ -92,6 +94,22 @@ export const RemotionRoot: React.FC = () => {
         id="TheCharge"
         component={TheCharge}
         durationInFrames={MID}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
+      />
+      <Composition
+        id="TheClauseRemix"
+        component={TheClauseRemix}
+        durationInFrames={SEC(24)}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
+      />
+      <Composition
+        id="TheChargeRemix"
+        component={TheChargeRemix}
+        durationInFrames={SEC(24)}
         fps={FPS}
         width={V.width}
         height={V.height}

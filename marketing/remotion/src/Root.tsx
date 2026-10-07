@@ -14,6 +14,8 @@ import {TheGroupChat} from './ads/TheGroupChat';
 import {TheList} from './ads/TheList';
 import {TheAlert} from './ads/TheAlert';
 import {TheAddress} from './ads/TheAddress';
+import {TheAlertRemix} from './ads/TheAlertRemix';
+import {TheAddressRemix} from './ads/TheAddressRemix';
 
 // 16:9 landscape (1920x1080) — the editorial house-style ads live here.
 const L = {width: 1920, height: 1080};
@@ -44,6 +46,8 @@ export const RemotionRoot: React.FC = () => {
       <Composition id="TheList" component={TheList} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
       <Composition id="TheAlert" component={TheAlert} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
       <Composition id="TheAddress" component={TheAddress} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
+      <Composition id="TheAlertRemix" component={TheAlertRemix} durationInFrames={SEC(24)} fps={FPS} width={V.width} height={V.height} />
+      <Composition id="TheAddressRemix" component={TheAddressRemix} durationInFrames={SEC(24)} fps={FPS} width={V.width} height={V.height} />
     </>
   );
 };
