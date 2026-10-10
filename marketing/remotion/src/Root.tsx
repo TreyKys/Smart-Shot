@@ -16,6 +16,8 @@ import {TheAlert} from './ads/TheAlert';
 import {TheAddress} from './ads/TheAddress';
 import {TheAlertRemix} from './ads/TheAlertRemix';
 import {TheAddressRemix} from './ads/TheAddressRemix';
+import {TheAlertBroadcast} from './ads/TheAlertBroadcast';
+import {TheAddressPoster} from './ads/TheAddressPoster';
 
 // 16:9 landscape (1920x1080) — the editorial house-style ads live here.
 const L = {width: 1920, height: 1080};
@@ -48,6 +50,8 @@ export const RemotionRoot: React.FC = () => {
       <Composition id="TheAddress" component={TheAddress} durationInFrames={chat} fps={FPS} width={V.width} height={V.height} />
       <Composition id="TheAlertRemix" component={TheAlertRemix} durationInFrames={SEC(24)} fps={FPS} width={V.width} height={V.height} />
       <Composition id="TheAddressRemix" component={TheAddressRemix} durationInFrames={SEC(24)} fps={FPS} width={V.width} height={V.height} />
+      <Composition id="TheAlertBroadcast" component={TheAlertBroadcast} durationInFrames={SEC(24)} fps={FPS} width={V.width} height={V.height} />
+      <Composition id="TheAddressPoster" component={TheAddressPoster} durationInFrames={SEC(24)} fps={FPS} width={V.width} height={V.height} />
     </>
   );
 };

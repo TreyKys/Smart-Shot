@@ -11,6 +11,8 @@ import {TheClause} from './ads/TheClause';
 import {TheCharge} from './ads/TheCharge';
 import {TheClauseRemix} from './ads/TheClauseRemix';
 import {TheChargeRemix} from './ads/TheChargeRemix';
+import {TheClauseThriller} from './ads/TheClauseThriller';
+import {TheChargeEvidence} from './ads/TheChargeEvidence';
 
 // Vertical 9:16, 60s each (1800 frames at 30 fps) — the editorial house-
 // style ads live here.
@@ -109,6 +111,22 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="TheChargeRemix"
         component={TheChargeRemix}
+        durationInFrames={SEC(24)}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
+      />
+      <Composition
+        id="TheClauseThriller"
+        component={TheClauseThriller}
+        durationInFrames={SEC(24)}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
+      />
+      <Composition
+        id="TheChargeEvidence"
+        component={TheChargeEvidence}
         durationInFrames={SEC(24)}
         fps={FPS}
         width={V.width}
